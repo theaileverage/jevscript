@@ -47,6 +47,10 @@ def main() -> None:
     result = subprocess.check_output([str(source), "--version"], text=True).strip()
     if result != f"jevscript {version()}":
         raise SystemExit(f"unexpected CLI version: {result}")
+    if args.target.startswith("darwin-"):
+        from check_macos_binary import check
+
+        check(source, args.target)
     data = source.read_bytes()
     for needle in (b"/Users/", b"/home/runner/", b"C:\\Users\\", b"TYPESAFE_API_KEY="):
         if needle in data:
