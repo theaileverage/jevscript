@@ -226,6 +226,37 @@ def test_playbook_cannot_replace_effective_project(make_host, project, monkeypat
     assert all(item["project"] != "other" for item in host.backlog.items())
 
 
+def test_unknown_supplied_project_is_settled_before_next_request(make_host):
+    host = make_host()
+    invalid = host.submit("Update the guide", project="porj", channel="general", message_id="bad-project", after=["unreleased"])
+    host.watcher.scan()
+    valid = host.submit("Update the guide", project="proj", channel="general", message_id="good-project", after=["unreleased"])
+    host.tick()
+    bad = host.threads.receipt({"source": "cli", "project": "porj", "channel": "general"}, "bad-project")
+    good = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "good-project")
+    assert bad["request_id"] == invalid["id"] and bad["route"] == "rejected" and bad["status"] == "done"
+    assert good["request_id"] == valid["id"] and good["task_id"]
+    assert [item["project"] for item in host.backlog.items()] == ["proj"]
+    assert host.wakes.find("request", invalid["id"]) is None
+
+
+def test_unknown_playbook_project_reassesses_without_stranding_work(make_host, monkeypatch):
+    host = make_host(rules=[
+        {"match": {"id": "^project$"}, "answer": {"choice": "none"}},
+        {"match": {"id": "^routine$"}, "answer": {"noul": 0.9}},
+        {"match": {"id": "^pb$"}, "answer": {"item": "docs"}},
+    ])
+    monkeypatch.setattr(host.learning.playbooks, "active", lambda: [{"name": "pb_docs", "category": "docs_change", "trigger": "docs"}])
+    monkeypatch.setattr(host.learning, "run_playbook", lambda name, request: {"matches": True, "project": "porj", "kind": "ship", "effort": "low", "profile": "default"})
+    host.submit("Update the guide", channel="general", message_id="bad-plan", after=["unreleased"])
+    host.tick()
+    assert not host.backlog.items()
+    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i0"}})
+    host.tick()
+    receipt = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "bad-plan")
+    assert receipt["task_id"] and host.backlog.get(receipt["task_id"])["project"] == "proj"
+
+
 def test_inferred_project_rejects_another_requests_message_id(make_host, project):
     host = make_host(rules=[{"match": {"id": "^project$"}, "answer": {"choice": "i1"}}])
     host.registry.add_project("other", str(project), "another scope")

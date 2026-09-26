@@ -48,6 +48,10 @@ ACTIVE_KINDS = ("", "working", "resolved")
 WAITING_EVENTS = {"carry_on", "awaiting_review", "checks_pending", "rering", "stay"}
 
 
+class UnknownProject(ValueError):
+    """Section 6.4a requires a selected project to exist in the trusted registry."""
+
+
 class Host:
     def __init__(
         self,
@@ -183,8 +187,12 @@ class Host:
                 (self.home.state / "requests" / f"{wake['subject']}.json").unlink(missing_ok=True)
                 return None
             lists = self.fleet_lists()
+            known_projects = {p["name"] for p in lists["projects"]}
+            for name in (request.get("project"), request.get("effective_project")):
+                if name and name not in known_projects:
+                    raise UnknownProject(f"unknown project `{name}`")
             lists["profiles"] = [{"name": p["name"], "rule": p["rule"]} for p in lists["profiles"]]
-            project_names = {p["name"] for p in lists["projects"]} | {"", request.get("project") or ""}
+            project_names = known_projects | {""}
             contexts = []
             for project in sorted(project_names):
                 scoped = {**request, "project": project or None, "effective_project": project or None}
@@ -280,7 +288,7 @@ class Host:
             self.decisions.record(key, f"Skill catalog blocks dispatch: {error}", ["retry", "dismiss"], {"wake": wake["id"]})
             self.wakes.pause(wake, key)
             return Episode("on_wake", wake["subject"], wake["id"], None, "", paused=key)
-        except ReceiptCollision as error:
+        except (ReceiptCollision, UnknownProject) as error:
             if wake["kind"] != "request":
                 raise
             return self._reject_request(wake, error)
@@ -299,7 +307,7 @@ class Host:
         if episode.result is not None:
             try:
                 follow_up = bool(self.persist(wake, episode))
-            except ReceiptCollision as error:
+            except (ReceiptCollision, UnknownProject) as error:
                 if wake["kind"] != "request":
                     raise
                 return self._reject_request(wake, error, episode.recording)
@@ -312,7 +320,7 @@ class Host:
             self.wakes.push("dispatch", "backlog", ["new work queued"])
         return episode
 
-    def _reject_request(self, wake: dict[str, Any], error: ReceiptCollision, recording: str = "") -> Episode:
+    def _reject_request(self, wake: dict[str, Any], error: ReceiptCollision | UnknownProject, recording: str = "") -> Episode:
         path = self.home.state / "requests" / f"{wake['subject']}.json"
         request = read_json(path, {"id": wake["subject"], "message_id": wake["subject"]})
         self.threads.reject(request, str(error))
@@ -418,6 +426,8 @@ class Host:
             return {"thread_id": previous.get("thread_id"), "task_id": previous.get("task_id")}
         request["effective_project"] = d.get("project") or request.get("project")
         self.threads.receipt_for(request)
+        if request["effective_project"] and request["effective_project"] not in {p["name"] for p in self.registry.projects()}:
+            raise UnknownProject(f"unknown project `{request['effective_project']}`")
         if route == "continue":
             thread = self.threads.get(d["thread_id"])
             if thread is None or thread["scope"] != self.threads.scope(request):
@@ -451,7 +461,10 @@ class Host:
         if route == "playbook":
             existing = next((i for i in self.backlog.items() + self.backlog.done_history() if (i.get("request") or {}).get("id") == request_id), None)
             plan = None if existing else self.learning.run_playbook(d["playbook"], request)
-            if existing or (plan and plan.get("matches") and plan.get("project") and (not request.get("effective_project") or plan["project"] == request["effective_project"])):
+            known_projects = {p["name"] for p in self.registry.projects()}
+            if existing and existing["project"] not in known_projects:
+                raise UnknownProject(f"unknown project `{existing['project']}`")
+            if existing or (plan and plan.get("matches") and plan.get("project") in known_projects and (not request.get("effective_project") or plan["project"] == request["effective_project"])):
                 self.threads.receipt_for({**request, "effective_project": existing["project"] if existing else plan["project"]})
                 item = existing or self.backlog.add(
                     {
