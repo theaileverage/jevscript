@@ -1,7 +1,8 @@
 # Registry publication of the exact bytes a passing staging run built and tested.
 # Dispatch it on the release tag with that run's ID and the reviewed SHA-256 of
 # its SHA256SUMS. Nothing is rebuilt here. npm and PyPI trust this workflow file
-# and its protected environments through OIDC; no registry token is stored.
+# and its protected environments through OIDC after npm's first authenticated
+# bootstrap. The one-time credential is a protected environment secret.
 name: publish package release
 
 on:
@@ -13,6 +14,11 @@ on:
       sums_sha256:
         description: Reviewed SHA-256 of that run's SHA256SUMS
         required: true
+      npm_bootstrap:
+        description: First release only; publish with the protected short-lived npm credential
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,9 +36,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ inputs.staging_run_id }}
+          NPM_BOOTSTRAP: ${{ inputs.npm_bootstrap }}
         run: |
           version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
           test "$GITHUB_REF_NAME" = "v$version"
+          if [ "$NPM_BOOTSTRAP" = true ]; then test "$version" = 0.1.0; fi
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
           test "$(jq -r .path <<<"$run")" = .github/workflows/release.yml
           test "$(jq -r .repository.full_name <<<"$run")" = "$GITHUB_REPOSITORY"
@@ -54,8 +62,35 @@ jobs:
           name: verified-bundle
           path: bundle/
 
-  pypi:
+  npm-bootstrap:
+    if: inputs.npm_bootstrap
     needs: verify
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/jevscript
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: verified-bundle
+          path: bundle
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.19.0
+      - name: Bootstrap npm from the exact reviewed bundle
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: python3 scripts/publish_npm.py bundle --bootstrap
+
+  pypi:
+    if: always() && needs.verify.result == 'success' && (needs['npm-bootstrap'].result == 'success' || needs['npm-bootstrap'].result == 'skipped')
+    needs: [verify, npm-bootstrap]
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -86,8 +121,10 @@ jobs:
       name: npm
       url: https://www.npmjs.com/package/jevscript
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4.2.2
       - uses: actions/download-artifact@v4.3.0
         with:
           name: verified-bundle
@@ -98,4 +135,12 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Trusted publishing needs npm 11.5.1 or later
         run: npm install -g npm@11.19.0
-      - run: npm publish bundle/jevscript-*.tgz --access public
+      - name: Publish or verify the exact reviewed npm tarball
+        env:
+          NPM_BOOTSTRAP: ${{ inputs.npm_bootstrap }}
+        run: |
+          if [ "$NPM_BOOTSTRAP" = true ]; then
+            python3 scripts/publish_npm.py bundle --require-published
+          else
+            python3 scripts/publish_npm.py bundle
+          fi

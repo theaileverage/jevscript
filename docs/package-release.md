@@ -32,8 +32,8 @@ rerunning. Package installation never invokes setup automatically.
 Target staging matrix: macOS arm64/x86_64, glibc Linux arm64/x86_64, and Windows
 x86_64. Linux wheels currently target `manylinux_2_39`, matching the configured
 Ubuntu 24.04 build runners; do not advertise older glibc compatibility. macOS
-wheel floors must be checked against the final binary's Mach-O minimum OS
-before upload. Node >=22 and Python >=3.10 are required. The only locally
+wheel floors are checked against the final binary's Mach-O minimum OS by
+`scripts/build_release_cli.py` before staging. Node >=22 and Python >=3.10 are required. The only locally
 tested release artifact so far is **macOS arm64**, as recorded below; the
 other targets require passing the staged workflow on their own runners.
 
@@ -85,20 +85,37 @@ Before a release:
    target job must pass.
 2. Download its `package-bundle`, read the archive contents and `SHA256SUMS`,
    and record the SHA-256 of `SHA256SUMS` itself.
-3. Configure trusted publishers for this repository's `publish.yml`: PyPI with
-   environment `pypi`, npm with environment `npm`. Protect both GitHub
-   environments with required reviewers. No registry token is stored.
-4. Run `publish.yml` on the same tag with the staging run ID and the recorded
-   digest. It requires that run to be a successful `release.yml` run of the
-   tag's commit and rechecks every bundle digest. Before uploading, it compares
-   any wheels already on PyPI with the verified bytes. After the upload, it
-   requires every verified wheel on PyPI to have the same SHA-256 digest, then
-   publishes the tarball to npm with provenance. A rerun skips wheels already
-   present only when their bytes match the verified bundle.
+3. Create protected GitHub environments `npm` and `pypi` with required
+   reviewers. Register a PyPI pending trusted publisher for project `jevscript`,
+   GitHub owner `theaileverage`, repository `jevscript`, workflow `publish.yml`,
+   and environment `pypi`. A pending publisher does not reserve the name.
+   Confirm the npm account can create `jevscript` and has 2FA enabled. npm
+   requires an existing package before a trusted publisher can be configured.
+4. For the first npm publication only, give the `npm` environment an
+   owner-controlled, short-lived `NPM_BOOTSTRAP_TOKEN` with publish permission.
+   Run `publish.yml` on the same tag with the staging run ID, the reviewed
+   digest, and `npm_bootstrap: true`. Its `verify` job binds the successful
+   staging run to the tag's commit and rechecks every bundle digest. The
+   protected bootstrap job publishes the exact reviewed npm tarball with
+   provenance, or accepts an existing `0.1.0` only when its registry SHA-512
+   integrity matches. The PyPI job runs after bootstrap; it compares any
+   existing wheels with the reviewed bytes, uploads missing wheels, and then
+   requires all five exact SHA-256 digests. The final npm job checks that the
+   registry holds the same tarball. Neither package is rebuilt.
+5. Once npm holds `jevscript@0.1.0`, configure its trusted publisher for
+   `theaileverage/jevscript`, workflow filename `publish.yml`, environment
+   `npm`, and permission for `npm publish`. Remove `NPM_BOOTSTRAP_TOKEN` from
+   the GitHub environment. For later releases, dispatch `publish.yml` with
+   `npm_bootstrap: false`; its normal job publishes through OIDC and accepts an
+   already published version only after the same exact-integrity check.
 
 Registry names were unclaimed by public lookup on 2026-09-26, but that does
 not reserve them. npm/PyPI versions and the packaged CLI version must match
 exactly. A broken publication needs a new patch version; never rebuild or
 overwrite an existing name/version pair. If only one registry accepts a
-version, treat it as an incident: publish the same verified bytes to the
-other registry rather than rebuilding.
+version, treat it as an incident. Read PyPI's version JSON and npm's version
+metadata, compare their wheel SHA-256 and tarball SHA-512 integrity with the
+reviewed bundle, and rerun `publish.yml` with the same tag, staging run ID,
+and digest. The workflow skips already published bytes only after matching
+them. A mismatch requires a new patch version; never rebuild or overwrite an
+existing name/version pair.
