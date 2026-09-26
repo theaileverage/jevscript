@@ -44,6 +44,25 @@ def published_state(tarball: Path, registry: str) -> str:
     return "match"
 
 
+def require_owner(expected: str, registry: str) -> None:
+    """Use npm's current writer list rather than tarball metadata as authority."""
+    result = subprocess.run(["npm", "owner", "ls", "jevscript", f"--registry={registry}"],
+                            check=True, capture_output=True, text=True)
+    owners = {line.split(maxsplit=1)[0] for line in result.stdout.splitlines() if line.strip()}
+    if expected not in owners:
+        raise ValueError(f"expected npm owner {expected} has no write access to jevscript")
+
+
+def require_bootstrap_identity(expected: str, registry: str) -> None:
+    """Bind the protected token to the owner who is expected to control npm."""
+    if not os.environ.get("NODE_AUTH_TOKEN"):
+        raise ValueError("npm bootstrap credential is absent")
+    result = subprocess.run(["npm", "whoami", f"--registry={registry}"],
+                            check=True, capture_output=True, text=True)
+    if result.stdout.strip() != expected:
+        raise ValueError("npm bootstrap credential does not belong to the expected owner")
+
+
 def main() -> None:
     """Publish once and recheck npm, or skip only on an exact digest match."""
     parser = argparse.ArgumentParser()
@@ -52,18 +71,22 @@ def main() -> None:
     parser.add_argument("--bootstrap", action="store_true")
     parser.add_argument("--require-published", action="store_true")
     args = parser.parse_args()
+    expected_owner = os.environ.get("NPM_EXPECTED_OWNER", "").strip()
+    if not expected_owner:
+        raise ValueError("NPM_EXPECTED_OWNER must name the intended npm writer")
+    if args.bootstrap:
+        require_bootstrap_identity(expected_owner, args.registry)
     tarballs = list(args.bundle.glob("jevscript-*.tgz"))
     if len(tarballs) != 1:
         raise ValueError("verified bundle must contain exactly one npm tarball")
     tarball = tarballs[0]
     state = published_state(tarball, args.registry)
     if state == "match":
+        require_owner(expected_owner, args.registry)
         print("npm already holds the exact verified tarball")
         return
     if args.require_published:
         raise ValueError("npm is missing the verified tarball")
-    if args.bootstrap and not os.environ.get("NODE_AUTH_TOKEN"):
-        raise ValueError("npm bootstrap credential is absent")
     # The explicit relative path matters: npm can parse an unprefixed path as
     # a package or Git specifier. No package build occurs in this job.
     path = os.path.relpath(tarball.resolve(), Path.cwd())
@@ -72,6 +95,7 @@ def main() -> None:
     subprocess.run(["npm", "publish", path, "--access", "public", "--provenance"], check=True)
     for attempt in range(6):
         if published_state(tarball, args.registry) == "match":
+            require_owner(expected_owner, args.registry)
             print("npm holds the exact verified tarball")
             return
         if attempt < 5:

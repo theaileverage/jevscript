@@ -36,6 +36,10 @@ wheel floors are checked against the final binary's Mach-O minimum OS by
 `scripts/build_release_cli.py` before staging. Node >=22 and Python >=3.10 are required. The only locally
 tested release artifact so far is **macOS arm64**, as recorded below; the
 other targets require passing the staged workflow on their own runners.
+That Mach-O check reads the main executable header. Before upload, inspect
+`otool -L` and `otool -l` on both final macOS binaries for linked-library
+requirements, then run the installed packages on macOS 10.15 x86_64 and
+macOS 11 arm64 or raise the wheel tags to the oldest versions actually tested.
 
 ## Local artifact proof
 
@@ -81,27 +85,35 @@ commit, and identical CLI bytes per target across npm and PyPI.
 `.github/workflows/publish.yml` uploads that bundle and rebuilds nothing.
 Before a release:
 
-1. Tag the release commit `v0.1.0` and run `release.yml` on that tag. Every
-   target job must pass.
+1. Merge the reviewed release commit into protected `main`. Protect `v*`
+   against retargeting and deletion, then tag that merged commit `v0.1.0`.
+   Run `release.yml` on the tag. Its source-ref job requires the tag's commit
+   to be in `main` history; every target job must pass.
 2. Download its `package-bundle`, read the archive contents and `SHA256SUMS`,
    and record the SHA-256 of `SHA256SUMS` itself.
 3. Create protected GitHub environments `npm` and `pypi` with required
    reviewers. Register a PyPI pending trusted publisher for project `jevscript`,
    GitHub owner `theaileverage`, repository `jevscript`, workflow `publish.yml`,
    and environment `pypi`. A pending publisher does not reserve the name.
-   Confirm the npm account can create `jevscript` and has 2FA enabled. npm
-   requires an existing package before a trusted publisher can be configured.
+   Confirm the npm account can create `jevscript` and has 2FA enabled. Set
+   `NPM_EXPECTED_OWNER` in the protected `npm` environment to that account's
+   exact npm username. npm requires an existing package before a trusted
+   publisher can be configured.
 4. For the first npm publication only, give the `npm` environment an
    owner-controlled, short-lived `NPM_BOOTSTRAP_TOKEN` with publish permission.
    Run `publish.yml` on the same tag with the staging run ID, the reviewed
    digest, and `npm_bootstrap: true`. Its `verify` job binds the successful
    staging run to the tag's commit and rechecks every bundle digest. The
-   protected bootstrap job publishes the exact reviewed npm tarball with
-   provenance, or accepts an existing `0.1.0` only when its registry SHA-512
-   integrity matches. The PyPI job runs after bootstrap; it compares any
+   protected bootstrap job checks that the credential's `npm whoami` matches
+   `NPM_EXPECTED_OWNER`. It publishes the exact reviewed npm tarball with
+   provenance, then requires that account to appear in `npm owner ls` as a
+   writer. If `0.1.0` already exists, it accepts the version only when both
+   the registry SHA-512 integrity and owner match; a same-byte package under
+   another account fails. The PyPI job runs after bootstrap; it compares any
    existing wheels with the reviewed bytes, uploads missing wheels, and then
-   requires all five exact SHA-256 digests. The final npm job checks that the
-   registry holds the same tarball. Neither package is rebuilt.
+   requires exactly the five reviewed filenames and SHA-256 digests, with no
+   sdist. The final npm job checks the same tarball and owner. Neither package
+   is rebuilt.
 5. Once npm holds `jevscript@0.1.0`, configure its trusted publisher for
    `theaileverage/jevscript`, workflow filename `publish.yml`, environment
    `npm`, and permission for `npm publish`. Remove `NPM_BOOTSTRAP_TOKEN` from
@@ -117,5 +129,7 @@ version, treat it as an incident. Read PyPI's version JSON and npm's version
 metadata, compare their wheel SHA-256 and tarball SHA-512 integrity with the
 reviewed bundle, and rerun `publish.yml` with the same tag, staging run ID,
 and digest. The workflow skips already published bytes only after matching
-them. A mismatch requires a new patch version; never rebuild or overwrite an
-existing name/version pair.
+them and checking the expected npm writer. If a different account controls a
+same-byte npm version, stop and resolve ownership before considering release
+complete. A byte mismatch requires a new patch version; never rebuild or
+overwrite an existing name/version pair.

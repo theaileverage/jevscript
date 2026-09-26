@@ -32,6 +32,8 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
       - name: Require a successful staging run of this tag's commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -47,6 +49,8 @@ jobs:
           test "$(jq -r .status <<<"$run")" = completed
           test "$(jq -r .conclusion <<<"$run")" = success
           test "$(jq -r .head_sha <<<"$run")" = "$GITHUB_SHA"
+      - name: Require release tag on merged main
+        run: python3 scripts/check_release_ref.py --commit "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" --ref-type "$GITHUB_REF_TYPE"
       - uses: actions/download-artifact@v4.3.0
         with:
           name: package-bundle
@@ -86,6 +90,7 @@ jobs:
       - name: Bootstrap npm from the exact reviewed bundle
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          NPM_EXPECTED_OWNER: ${{ vars.NPM_EXPECTED_OWNER }}
         run: python3 scripts/publish_npm.py bundle --bootstrap
 
   pypi:
@@ -138,6 +143,7 @@ jobs:
       - name: Publish or verify the exact reviewed npm tarball
         env:
           NPM_BOOTSTRAP: ${{ inputs.npm_bootstrap }}
+          NPM_EXPECTED_OWNER: ${{ vars.NPM_EXPECTED_OWNER }}
         run: |
           if [ "$NPM_BOOTSTRAP" = true ]; then
             python3 scripts/publish_npm.py bundle --require-published

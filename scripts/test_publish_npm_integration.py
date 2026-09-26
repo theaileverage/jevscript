@@ -63,6 +63,10 @@ class PublishIntegrationTests(unittest.TestCase):
             "#!/usr/bin/env python3\n"
             "import base64,hashlib,json,os,pathlib,sys\n"
             "args=sys.argv[1:]\n"
+            "if args[0]=='whoami':\n"
+            " print(os.environ['NPM_FAKE_IDENTITY']);sys.exit(0)\n"
+            "if args[:2]==['owner','ls']:\n"
+            " print(os.environ['NPM_FAKE_OWNER']+' <owner@example.test>');sys.exit(0)\n"
             "path=pathlib.Path(args[1])\n"
             "pathlib.Path(os.environ['NPM_CALLS']).write_text(json.dumps(args))\n"
             "digest=base64.b64encode(hashlib.sha512(path.read_bytes()).digest()).decode()\n"
@@ -70,7 +74,9 @@ class PublishIntegrationTests(unittest.TestCase):
         )
         fake_npm.chmod(0o755)
         self.env = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
-                    "NPM_CALLS": str(self.calls), "NPM_METADATA": str(self.metadata)}
+                    "NPM_CALLS": str(self.calls), "NPM_METADATA": str(self.metadata),
+                    "NPM_FAKE_IDENTITY": "expected-owner", "NPM_FAKE_OWNER": "expected-owner",
+                    "NPM_EXPECTED_OWNER": "expected-owner"}
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), RegistryHandler)
         self.server.metadata = self.metadata
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
@@ -122,6 +128,21 @@ class PublishIntegrationTests(unittest.TestCase):
         result = self.run_publish()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("differs from the verified tarball", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_same_bytes_unrelated_owner_blocks_bootstrap(self) -> None:
+        self.metadata_for(self.tarball.read_bytes())
+        self.env["NPM_FAKE_OWNER"] = "unrelated-owner"
+        result = self.run_publish(bootstrap=True, credential=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("has no write access", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_bootstrap_token_must_belong_to_expected_owner(self) -> None:
+        self.env["NPM_FAKE_IDENTITY"] = "unrelated-owner"
+        result = self.run_publish(bootstrap=True, credential=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not belong to the expected owner", result.stderr)
         self.assertFalse(self.calls.exists())
 
     def test_normal_oidc_path_publishes_missing_version(self) -> None:
