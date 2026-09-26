@@ -46,13 +46,15 @@ needs fleet: tool:
 
 task take_request(req, s) budget calls 6:
   selected_project = ""
-  confirmed_project = false
+  project_authoritative = false
   if req.project != none:
     selected_project = req.project
+    project_authoritative = true
   else:
     related = [c for c in req.thread_contexts if c.relation.kind == "valid"]
     if len(related) == 1:
       selected_project = related[0].project
+      project_authoritative = true
     elif len(related) > 1:
       choices = [c.project for c in related]
       choice = escalation.ask("Which project contains the conversation you are replying to?", choices)
@@ -60,7 +62,7 @@ task take_request(req, s) budget calls 6:
       if len(matched_project) != 1:
         return { id: req.id, route: "ask_thread", reason: "Choose one of the listed projects.", title: head(req.text, 72), text: req.text }
       selected_project = matched_project[0].project
-      confirmed_project = true
+      project_authoritative = true
   assessment = none
   if selected_project == "" and len(s.projects) > 0:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
@@ -81,15 +83,13 @@ task take_request(req, s) budget calls 6:
   if assessment == none:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
   d = routing.route(req, assessment, s.policy)
-  if selected_project != "" and d.route != "ask":
-    d.project = selected_project
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
     clarified = { id: req.id, text: "{req.text}\n\nClarification from the owner: {a.text}" }
     d = routing.route(clarified, intake.assess(clarified, s.projects, s.homes, s.profiles), s.policy)
     if d.route == "ask":
       d.route = "unclear"
-  if confirmed_project:
+  if project_authoritative:
     d.project = selected_project
   if d.hold and d.route == "backlog":
     a = escalation.ask("'{d.title}' could delete data, spend money, publish or change production. Start it?", ["yes", "no"])

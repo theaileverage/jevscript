@@ -288,7 +288,7 @@ class Learning:
             return None
         program = self.host.session.load(path)
         try:
-            episode = self.host.episodes.run(program, "main", {"request": {"text": request["text"], "project": request.get("project")}}, {}, subject=f"playbook:{name}:{request['id']}", output="plan")
+            episode = self.host.episodes.run(program, "main", {"request": {"text": request["text"], "project": request.get("effective_project") or request.get("project")}}, {}, subject=f"playbook:{name}:{request['id']}", output="plan")
         finally:
             program.close()
         plan = episode.result or {}

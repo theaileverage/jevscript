@@ -118,23 +118,25 @@ def test_ambiguous_explicit_relation_asks_for_project(make_host, project, relati
     assert receipt["thread_id"] != roots["proj"]["thread_id"]
 
 
-def test_confirmed_project_survives_taskless_thread_clarification(make_host, project):
+@pytest.mark.parametrize("selection", ["supplied", "unique_relation", "answered_ambiguity"])
+def test_effective_project_survives_taskless_thread_clarification(make_host, project, selection):
     host = make_host(rules=[{"match": {"id": "^work$"}, "answer": {"choice": "status"}}])
     host.registry.add_project("other", str(project), "another scope")
     roots = {}
-    for name in ("proj", "other"):
+    for name in (("proj", "other") if selection == "answered_ambiguity" else ("other",)):
         host.submit("What is in progress?", project=name, channel="general", message_id="shared-status")
         host.tick()
         roots[name] = host.threads.receipt({"source": "cli", "project": name, "channel": "general"}, "shared-status")
         assert roots[name]["task_id"] is None
     host.session.fake.rules.insert(0, {"match": {"id": "^work$"}, "answer": {"choice": "ship"}})
     host.session.fake.rules.insert(0, {"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.95}})
-    host.submit("Update the guide", channel="general", message_id="clarified-followup", reply_to="shared-status", after=["unreleased"])
+    host.submit("Update the guide", project="other" if selection == "supplied" else None, channel="general", message_id="clarified-followup", reply_to="shared-status", after=["unreleased"])
     host.tick()
-    [project_decision] = host.decisions.open()
-    assert set(project_decision["options"]) == {"proj", "other"}
-    host.decisions.answer(project_decision["key"], "other")
-    host.tick()
+    if selection == "answered_ambiguity":
+        [project_decision] = host.decisions.open()
+        assert set(project_decision["options"]) == {"proj", "other"}
+        host.decisions.answer(project_decision["key"], "other")
+        host.tick()
     [detail_decision] = host.decisions.open()
     host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i0"}})
     host.session.fake.rules.insert(0, {"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.15}})
@@ -142,8 +144,33 @@ def test_confirmed_project_survives_taskless_thread_clarification(make_host, pro
     host.tick()
     receipt = host.threads.receipt({"source": "cli", "project": "other", "channel": "general"}, "clarified-followup")
     assert receipt["thread_id"] == roots["other"]["thread_id"]
-    assert receipt["thread_id"] != roots["proj"]["thread_id"]
+    if selection == "answered_ambiguity":
+        assert receipt["thread_id"] != roots["proj"]["thread_id"]
     assert host.backlog.get(receipt["task_id"])["project"] == "other"
+
+
+def test_playbook_cannot_replace_effective_project(make_host, project, monkeypatch):
+    host = make_host(rules=[
+        {"match": {"id": "^routine$"}, "answer": {"noul": 0.9}},
+        {"match": {"id": "^pb$"}, "answer": {"item": "docs"}},
+    ])
+    host.registry.add_project("other", str(project), "another scope")
+    monkeypatch.setattr(host.learning.playbooks, "active", lambda: [{"name": "pb_docs", "category": "docs_change", "trigger": "docs"}])
+    seen = []
+
+    def mismatched_plan(name, request):
+        seen.append((name, request.get("effective_project")))
+        return {"matches": True, "project": "other", "kind": "ship", "effort": "low", "profile": "default"}
+
+    monkeypatch.setattr(host.learning, "run_playbook", mismatched_plan)
+    host.submit("Update the guide", project="proj", channel="general", message_id="playbook-scope", after=["unreleased"])
+    host.tick()
+    host.tick()
+    receipt = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "playbook-scope")
+    assert seen == [("pb_docs", "proj")]
+    assert receipt["thread_id"]
+    assert host.backlog.get(receipt["task_id"])["project"] == "proj"
+    assert all(item["project"] != "other" for item in host.backlog.items())
 
 
 def test_inferred_project_rejects_another_requests_message_id(make_host, project):

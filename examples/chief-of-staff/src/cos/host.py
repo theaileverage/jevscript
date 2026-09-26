@@ -451,7 +451,7 @@ class Host:
         if route == "playbook":
             existing = next((i for i in self.backlog.items() + self.backlog.done_history() if (i.get("request") or {}).get("id") == request_id), None)
             plan = None if existing else self.learning.run_playbook(d["playbook"], request)
-            if existing or (plan and plan.get("matches") and plan.get("project")):
+            if existing or (plan and plan.get("matches") and plan.get("project") and (not request.get("effective_project") or plan["project"] == request["effective_project"])):
                 self.threads.receipt_for({**request, "effective_project": existing["project"] if existing else plan["project"]})
                 item = existing or self.backlog.add(
                     {
