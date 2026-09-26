@@ -99,6 +99,8 @@ class Commands:
         for handled in summary.get("handled", []):
             result = handled.get("result") or {}
             if handled["kind"] == "request" and (only is None or handled["subject"] == only):
+                if result.get("route") == "reassess":
+                    continue
                 if handled.get("paused"):
                     question = (self.decisions.all().get(handled["paused"]) or {}).get("question", "")
                     lines.append(f"I need one answer first: {question} Reply with `cos answer {handled['paused']} <answer>`")

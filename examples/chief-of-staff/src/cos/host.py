@@ -313,8 +313,7 @@ class Host:
                 return self._reject_request(wake, error, episode.recording)
         self.wakes.ack(wake, "persisted" if episode.result is not None else (episode.problem or "no result"))
         self.effects.forget(wake["id"])
-        if follow_up:
-            # The worker moved; its next step may be possible right away.
+        if follow_up or (wake["kind"] == "request" and episode.result and episode.result.get("route") == "reassess"):
             self.wakes.push(wake["kind"], wake["subject"], ["continue after a transition"])
         if wake["kind"] == "request" and episode.result and (episode.result.get("route") in ("backlog", "playbook") or episode.result.get("item")):
             self.wakes.push("dispatch", "backlog", ["new work queued"])
@@ -418,7 +417,6 @@ class Host:
         request = read_json(path, {"id": request_id, "text": d.get("text", "")})
         request.setdefault("message_id", request_id)
         route = d.get("route")
-        outcome: dict[str, Any] = {"route": route}
         previous = self.threads.receipt_for(request)
         if previous and previous.get("status") == "done":
             self._reconcile_thread_task(previous)
@@ -428,6 +426,9 @@ class Host:
         self.threads.receipt_for(request)
         if request["effective_project"] and request["effective_project"] not in {p["name"] for p in self.registry.projects()}:
             raise UnknownProject(f"unknown project `{request['effective_project']}`")
+        if route == "mate" and request["effective_project"] and not self.mates.accepts_project(d["mate"], request["effective_project"]):
+            route = "backlog"
+        outcome: dict[str, Any] = {"route": route}
         if route == "continue":
             thread = self.threads.get(d["thread_id"])
             if thread is None or thread["scope"] != self.threads.scope(request):

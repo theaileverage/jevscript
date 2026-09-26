@@ -242,7 +242,6 @@ def test_unknown_supplied_project_is_settled_before_next_request(make_host):
 
 def test_unknown_playbook_project_reassesses_without_stranding_work(make_host, monkeypatch):
     host = make_host(rules=[
-        {"match": {"id": "^project$"}, "answer": {"choice": "none"}},
         {"match": {"id": "^routine$"}, "answer": {"noul": 0.9}},
         {"match": {"id": "^pb$"}, "answer": {"item": "docs"}},
     ])
@@ -250,11 +249,42 @@ def test_unknown_playbook_project_reassesses_without_stranding_work(make_host, m
     monkeypatch.setattr(host.learning, "run_playbook", lambda name, request: {"matches": True, "project": "porj", "kind": "ship", "effort": "low", "profile": "default"})
     host.submit("Update the guide", channel="general", message_id="bad-plan", after=["unreleased"])
     host.tick()
-    assert not host.backlog.items()
-    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i0"}})
-    host.tick()
     receipt = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "bad-plan")
     assert receipt["task_id"] and host.backlog.get(receipt["task_id"])["project"] == "proj"
+
+
+@pytest.mark.parametrize("plan_project", ["other", "porj"])
+def test_one_shot_say_finishes_playbook_reassessment(make_host, project, monkeypatch, plan_project):
+    host = make_host(rules=[
+        {"match": {"id": "^routine$"}, "answer": {"noul": 0.9}},
+        {"match": {"id": "^pb$"}, "answer": {"item": "docs"}},
+    ])
+    host.registry.add_project("other", str(project), "another scope")
+    monkeypatch.setattr(host.learning.playbooks, "active", lambda: [{"name": "pb_docs", "category": "docs_change", "trigger": "docs"}])
+    monkeypatch.setattr(host.learning, "run_playbook", lambda name, request: {"matches": True, "project": plan_project, "kind": "ship", "effort": "low", "profile": "default"})
+    with Commands(host.home, host_factory=lambda _: host) as cos:
+        reply = cos.say("Update the guide", project="proj", channel="general", message_id="one-shot", after=["unreleased"])
+        assert "Queued 'Update the guide' for proj" in reply.text
+        assert "Could not place" not in reply.text
+        receipt = host.threads.receipt({"source": "cos", "project": "proj", "channel": "general"}, "one-shot")
+        assert receipt["task_id"] and host.backlog.get(receipt["task_id"])["project"] == "proj"
+        assert host.wakes.find("request", receipt["request_id"]) is None
+        cos._host = None
+
+
+def test_mate_without_selected_project_keeps_work_with_parent(make_host, project):
+    host = make_host(rules=[{"match": {"id": "^home$"}, "answer": {"choice": "i1"}}])
+    host.registry.add_mate("docs", "documentation work")
+    host.registry.add_project("other", str(project), "added after the mate")
+    with Commands(host.home, host_factory=lambda _: host) as cos:
+        reply = cos.say("Update the guide", project="other", channel="general", message_id="late-project", after=["unreleased"])
+        assert "Queued 'Update the guide' for other" in reply.text
+        assert "Passed" not in reply.text
+        receipt = host.threads.receipt({"source": "cos", "project": "other", "channel": "general"}, "late-project")
+        assert receipt["thread_id"] and host.backlog.get(receipt["task_id"])["project"] == "other"
+        assert not list((host.home.root / "mates" / "docs" / "state" / "requests").glob("*.json"))
+        assert not read_json(host.home.root / "mates" / "docs" / "data" / "backlog.json", [])
+        cos._host = None
 
 
 def test_inferred_project_rejects_another_requests_message_id(make_host, project):
