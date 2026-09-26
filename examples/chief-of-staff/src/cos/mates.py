@@ -34,7 +34,8 @@ class Mates:
         raise KeyError(f"no second mate `{name}`")
 
     def accepts_project(self, name: str, project: str) -> bool:
-        return any(row["name"] == project for row in read_json(self._home(name).data / "projects.json", []))
+        parent = next((row for row in self.host.registry.projects() if row["name"] == project), None)
+        return parent is not None and parent in read_json(self._home(name).data / "projects.json", [])
 
     def forward(self, name: str, request: dict[str, Any]) -> None:
         child = self._home(name).init()

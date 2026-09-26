@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import subprocess
 
 import pytest
 
@@ -282,6 +283,28 @@ def test_mate_without_selected_project_keeps_work_with_parent(make_host, project
         assert "Passed" not in reply.text
         receipt = host.threads.receipt({"source": "cos", "project": "other", "channel": "general"}, "late-project")
         assert receipt["thread_id"] and host.backlog.get(receipt["task_id"])["project"] == "other"
+        assert not list((host.home.root / "mates" / "docs" / "state" / "requests").glob("*.json"))
+        assert not read_json(host.home.root / "mates" / "docs" / "data" / "backlog.json", [])
+        cos._host = None
+
+
+@pytest.mark.parametrize("change", ["path", "mode"])
+def test_mate_with_stale_project_record_keeps_work_with_parent(make_host, project, change):
+    host = make_host(rules=[{"match": {"id": "^home$"}, "answer": {"choice": "i1"}}])
+    host.registry.add_mate("docs", "documentation work")
+    if change == "path":
+        replacement = project.parent / "replacement"
+        replacement.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main", str(replacement)], check=True)
+        host.registry.add_project("proj", str(replacement), "the test project", yolo=True)
+    else:
+        host.registry.add_project("proj", str(project), "the test project", mode="no-mistakes", yolo=True)
+    with Commands(host.home, host_factory=lambda _: host) as cos:
+        reply = cos.say("Update the guide", project="proj", channel="general", message_id=f"stale-{change}", after=["unreleased"])
+        assert "Queued 'Update the guide' for proj" in reply.text
+        assert "Passed" not in reply.text
+        receipt = host.threads.receipt({"source": "cos", "project": "proj", "channel": "general"}, f"stale-{change}")
+        assert receipt["thread_id"] and host.backlog.get(receipt["task_id"])["project"] == "proj"
         assert not list((host.home.root / "mates" / "docs" / "state" / "requests").glob("*.json"))
         assert not read_json(host.home.root / "mates" / "docs" / "data" / "backlog.json", [])
         cos._host = None
