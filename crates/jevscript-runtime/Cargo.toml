@@ -1,0 +1,31 @@
+[package]
+name = "jevscript-runtime"
+description = "The reference Jevscript runtime: executes IR, records and replays runs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+jevscript-ir.workspace = true
+jevscript-syntax.workspace = true
+reqwest = { workspace = true, features = ["rustls"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tiktoken-rs.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+# Tests build IR by hand and run the compiler's batching pass over it so that
+# `request_group` is what a compiled program would carry (spec section 6.6).
+# The runtime itself never depends on the compiler.
+jevscript-compiler.workspace = true
+serde_json.workspace = true

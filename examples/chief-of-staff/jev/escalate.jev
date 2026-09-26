@@ -1,0 +1,66 @@
+program escalation
+
+# Escalation: how the Chief of Staff talks to the person who owns the work.
+# Escalation policy: talk in outcomes rather than mechanics, never
+# relay a worker's own words verbatim, interrupt only for what needs the
+# person, and let away and quiet modes hold routine news for the digest.
+# A question is a `confirm` pause (`me.ask`): the episode parks durably and
+# the person's answer resumes it, even across a host restart.
+
+needs me: person
+needs writer: llm
+needs fleet: tool:
+  digest(text) -> none
+
+# Internal words a worker or the host might use, and the plain words the
+# person reads instead.
+def plain(text):
+  swaps = [
+    ["needs-decision", "needs a decision"],
+    ["worktree", "isolated copy"],
+    ["teardown", "cleanup"],
+    ["crewmate", "worker"],
+    ["fast-forward", "clean update"],
+    ["status file", "record"],
+    ["brief", "instructions"],
+    ["escalate", "raise"]
+  ]
+  msg = text
+  for pair in swaps:
+    msg = join(split(msg, pair[0]), pair[1])
+  return msg
+
+# Where a message goes, decided in code from its severity and the mode:
+#   info     routine progress, only ever in the digest
+#   outcome  something finished or is ready for review
+#   decision something only the person can decide
+#   urgent   always sent now, whatever the mode
+def channel(severity, mode):
+  if severity == "urgent":
+    return "now"
+  if severity == "info":
+    return "digest"
+  if mode == "away":
+    return "digest"
+  if mode == "quiet" and severity == "outcome":
+    return "digest"
+  return "now"
+
+task tell(message, severity, mode):
+  msg = plain(message)
+  if channel(severity, mode) == "now":
+    me.notify msg
+    return "sent"
+  fleet.digest(msg)
+  return "digest"
+
+# Ask the person and wait for the answer: the run parks at this pause and
+# resumes when `cos answer` arrives. Returns the pause_result.
+task ask(question, options):
+  return me.ask(plain(question), options: options)
+
+# A reply to the person after a command: a short outcome summary written by
+# the `llm` capability from facts the host gathered, kept in plain words.
+task summarize(facts):
+  text = writer.write "In one to three short sentences, tell the owner of this work what happened and what, if anything, they need to do. Talk about outcomes, not mechanics. Use only these facts." using facts
+  return plain(text)

@@ -1,0 +1,146 @@
+program cos
+
+# The thin entry program. The host runs one of these tasks per wake over a
+# snapshot of durable state, persists `result`, then acknowledges the wake:
+#
+#   on_wake   a request, a ready backlog, or one worker that needs attention
+#   learn     find repeated work and draft playbooks, or judge a draft's proof
+#   bearings  the fleet digest
+#   reply     a short outcome summary for a command's reply
+#
+# Every decision lives in the modules; this file wires capabilities into them.
+
+use "./intake.jev" as intake
+use "./routing.jev" as routing
+use "./threads.jev" as threads
+use "./dispatch.jev" as dispatch with crew, writer, fleet
+use "./supervise.jev" as supervise with crew, me, writer, fleet
+use "./escalate.jev" as escalation with me, writer, fleet
+use "./learn.jev" as learn with writer
+use "./bearings.jev" as bearings
+
+in snapshot: record
+out result
+
+needs crew: agent
+needs me: person
+needs writer: llm
+needs fleet: tool:
+  worktree(id, project) -> record
+  ensure_skills(id, worktree, harness, selected, status, uncertain) -> record
+  write_brief(id, text) -> text
+  steer(id, text) -> record
+  ring(id) -> bool
+  digest(text) -> none
+  landable(id) -> record
+  land(id) -> record
+  landed(id) -> record
+  pr_state(id) -> record
+  merge(id) -> record
+  authority(id) -> record
+  authorize(id, answer) -> none
+  cleanup(id) -> record
+  relaunch(id) -> record
+  follow(id, answer, text) -> record
+  track_review(id, handle) -> none
+
+task take_request(req, s) budget calls 6:
+  selected_project = ""
+  project_authoritative = false
+  if req.project != none:
+    selected_project = req.project
+    project_authoritative = true
+  else:
+    related = [c for c in req.thread_contexts if c.relation.kind == "valid"]
+    if len(related) == 1:
+      selected_project = related[0].project
+      project_authoritative = true
+    elif len(related) > 1:
+      choices = [c.project for c in related]
+      choice = escalation.ask("Which project contains the conversation you are replying to?", choices)
+      matched_project = [c for c in related if c.project == choice.answer]
+      if len(matched_project) != 1:
+        return { id: req.id, route: "ask_thread", reason: "Choose one of the listed projects.", title: head(req.text, 72), text: req.text }
+      selected_project = matched_project[0].project
+      project_authoritative = true
+  assessment = none
+  if selected_project == "" and len(s.projects) > 0:
+    assessment = intake.assess(req, s.projects, s.homes, s.profiles)
+    if assessment.project.index != none and assessment.project.confidence >= s.policy.min_route_confidence:
+      selected_project = assessment.project.item.name
+  context = [c for c in req.thread_contexts if c.project == selected_project][0]
+  conversation = threads.route_message({ text: req.text, relation: context.relation, candidates: context.candidates }, s.policy)
+  if conversation.route == "continue" and conversation.task_id != none:
+    return { id: req.id, route: "continue", thread_id: conversation.thread_id, project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
+  if conversation.route == "ask":
+    return { id: req.id, route: "ask_thread", project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
+  if len(s.playbooks) > 0 and not req.skip_playbooks and conversation.route != "continue":
+    m = routing.match_playbook(req, s.playbooks, s.policy)
+    if m.matched:
+      return { id: req.id, route: "playbook", project: selected_project, playbook: m.name, text: req.text, title: head(req.text, 72), hold: false, urgent: false, signals: m, thread_route: conversation.route, thread_id: conversation.thread_id }
+  if len(s.projects) == 0:
+    return { id: req.id, route: "unclear", reason: "No projects are registered yet.", text: req.text, title: head(req.text, 72), hold: false, urgent: false, thread_route: conversation.route, thread_id: conversation.thread_id }
+  if assessment == none:
+    assessment = intake.assess(req, s.projects, s.homes, s.profiles)
+  effective_project = none
+  if project_authoritative:
+    effective_project = selected_project
+  d = routing.route(req, assessment, s.policy, effective_project)
+  if d.route == "ask":
+    a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
+    clarified = { id: req.id, text: "{req.text}\n\nClarification from the owner: {a.text}" }
+    d = routing.route(clarified, intake.assess(clarified, s.projects, s.homes, s.profiles), s.policy, effective_project)
+    if d.route == "ask":
+      d.route = "unclear"
+  if conversation.route == "continue" and d.route == "mate":
+    d.route = "backlog"
+  if d.hold and d.route == "backlog":
+    a = escalation.ask("'{d.title}' could delete data, spend money, publish or change production. Start it?", ["yes", "no"])
+    if a.answer == "yes":
+      d.hold = false
+    else:
+      d.route = "declined"
+  if d.urgent:
+    escalation.tell("Urgent request noted: {d.title}", "urgent", s.policy.mode)
+  if d.project != selected_project:
+    d.thread_route = "new"
+    d.thread_id = none
+  else:
+    d.thread_route = conversation.route
+    d.thread_id = conversation.thread_id
+  return d
+
+task on_wake budget calls 40:
+  s = snapshot
+  kind = s.wake.kind
+  log info "wake started" { kind: kind, subject: s.wake.subject }
+  if kind == "request":
+    result = take_request(s.request, s)
+  elif kind == "dispatch":
+    started = []
+    batch_limit = min([s.policy.capacity, 15])
+    ready_items = routing.ready(s.backlog, s.now, batch_limit)
+    more_ready = len(routing.ready(s.backlog, s.now, batch_limit + 1)) > batch_limit
+    for item in ready_items:
+      project = [p for p in s.projects if p.name == item.project][0]
+      started = started + [dispatch.start(item, project, s.profiles, s.prefs, s.paths[item.id], s.skill_catalog, s.policy)]
+    result = { started: started, more_ready: more_ready }
+  elif kind == "worker":
+    result = supervise.step(s.worker, s.policy)
+  else:
+    result = { ignored: kind }
+  log info "wake completed" { kind: kind, subject: s.wake.subject }
+
+task learn budget calls 24:
+  log info "learning pass started" { phase: snapshot.phase }
+  if snapshot.phase == "prove":
+    result = learn.verdict(snapshot.results, snapshot.policy)
+  else:
+    result = learn.find(snapshot.entries, snapshot.playbooks, snapshot.policy)
+  log info "learning pass completed" { phase: snapshot.phase }
+
+task bearings:
+  result = bearings.digest(snapshot.fleet)
+
+task reply budget calls 2:
+  result = escalation.summarize(snapshot.facts)

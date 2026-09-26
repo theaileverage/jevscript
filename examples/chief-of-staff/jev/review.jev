@@ -1,0 +1,34 @@
+program review
+
+# Lead review: before work lands, a second agent (the lead, for example a
+# Codex session reviewing what a Claude session built) reviews the branch.
+# The reviewer runs through the same agent adapter as any worker, in the
+# worker's isolated copy, read-only by instruction, and reports a verdict on
+# its own status line. Jev reads the verdict; code decides what it means.
+
+needs crew: agent
+needs fleet: tool:
+  write_brief(id, text) -> text
+
+judgment read_review(report):
+  verdict = report pick:
+    approve "approves the change as ready to land"
+    changes "asks for changes before the change can land"
+    other
+
+def instructions(w, paths):
+  return """# Review
+Review the change on branch {w.branch} in {w.worktree} against {w.base} for the task: {w.title}
+
+Read the diff (`git diff {w.base}...{w.branch}`) and run the project's checks. Do not modify, commit, push or delete anything.
+
+When you have a verdict, append exactly one line to {paths.review_status}:
+  done [at=<epoch seconds>]: approved - <one line on why>
+or
+  blocked [at=<epoch seconds>]: changes requested - <the concrete changes>
+"""
+
+task start(w, reviewer, paths) budget calls 1:
+  where = fleet.write_brief("{w.id}-review", instructions(w, paths))
+  h = crew.spawn in { path: w.worktree }, prompt "Read {where} and follow it exactly; it is your whole task.", name "{w.id}-review", harness reviewer.harness, model reviewer.model, effort reviewer.effort, backend reviewer.backend, command reviewer.command, role "reviewer"
+  return h

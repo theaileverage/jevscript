@@ -1,0 +1,46 @@
+program review_loop
+
+needs claude: agent
+needs tree:   tool:
+  tests_pass() -> bool
+  test_summary() -> text
+needs me:     person
+
+machine review(dev) budget calls 30 thresholds min_confidence 0.6, risk_confirm 0.5:
+  goal "Get the agent's change to a passing, reviewable state without doing its work for it."
+
+  observe:
+    summary  focus dev.observe.last_message on "what the agent says it did", max 1500
+    tests    tree.test_summary, max 300
+    status   dev.observe.status
+
+  state working:
+    on finished "the agent reports it is finished and tests pass" -> reviewing when tree.tests_pass
+    on claims_done "the agent reports it is finished but tests do not pass" -> nudging when not tree.tests_pass:
+      dev.send "Tests fail:\n{obs.tests}"
+    on stuck "the agent is looping or unsure how to proceed" -> nudging:
+      dev.send "Stop. In three lines, what is blocking you?"
+    on asks "the agent asks a question only a person can answer" -> waiting_on_me
+
+  state nudging:
+    on resumed "the agent has started working again" -> working
+
+  state waiting_on_me:
+    on answered "a reply has been passed to the agent" -> working:
+      answer = me.ask obs.summary
+      dev.send answer.text
+
+  state reviewing:
+    on approved "the change is ready to open as a pull request" -> approved when tree.tests_pass
+    on rejected "the change needs more work" -> working risky:
+      dev.send "Review found problems. Address them."
+
+  state approved done
+
+task main:
+  dev = claude.spawn prompt "Fix the failing test in src/parser.rs"
+  r = review(dev, max 20)
+  if r.done and r.verified:
+    me.notify "Ready: {r.steps} steps"
+  else:
+    me.notify "Stopped in {r.state} after {r.steps} steps"

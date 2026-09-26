@@ -1,0 +1,36 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+sdk/js/native/
+sdk/js/examples/
+sdk/js/skills/
+sdk/python/src/jevscript/_bin/
+sdk/python/src/jevscript/examples/
+sdk/python/src/jevscript/skills/
+.release-tmp/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+build/
+
+# Recordings and local state
+*.jsonl
+!**/fixtures/**/*.jsonl
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

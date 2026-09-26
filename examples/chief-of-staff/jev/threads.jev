@@ -1,0 +1,19 @@
+program threads
+
+# Section 6.4a: the host supplies only bounded, scoped candidates. Explicit
+# relationships are validated by the host; Jevscript owns their priority and
+# the confidence rule for a semantic continuation.
+def route_message(req, policy):
+  if req.relation.kind == "valid":
+    return { route: "continue", thread_id: req.relation.thread_id, task_id: req.relation.task_id, reason: req.relation.reason }
+  if req.relation.kind == "missing":
+    return { route: "ask", thread_id: none, reason: "The referenced conversation is missing in this scope." }
+  if len(req.candidates) == 0:
+    return { route: "new", thread_id: none, reason: "No earlier conversation in this scope." }
+  candidates = req.candidates
+  matched = candidates pick among "Which earlier conversation does this incoming message continue: {req.text}?":
+    by summary
+    none
+  if matched.index == none or matched.confidence < policy.thread_confidence:
+    return { route: "new", thread_id: none, reason: "No confident related conversation." }
+  return { route: "continue", thread_id: matched.item.id, task_id: matched.item.task_id, reason: "semantic" }

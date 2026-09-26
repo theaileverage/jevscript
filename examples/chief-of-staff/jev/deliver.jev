@@ -1,0 +1,40 @@
+program deliver
+
+# Delivery: merge authority, landing and cleanup, as code. Jev never decides
+# whether something may land. Authority is the project's standing `yolo`
+# posture or the owner's recorded yes; a landing counts only when the fleet
+# tool proves the change is on the main branch (or its pull request merged);
+# cleanup runs only behind that same proof, and the host's cleanup refuses
+# unlanded work a second time on its own.
+
+needs fleet: tool:
+  landable(id) -> record
+  landed(id) -> record
+  pr_state(id) -> record
+  authority(id) -> record
+  cleanup(id) -> record
+
+def authorized(w, auth):
+  return w.yolo or auth.answer == "yes"
+
+def declined(w, auth):
+  return not w.yolo and auth.answer == "no"
+
+def is_local(w):
+  return w.mode == "local-only"
+
+# Ready to land here: a local-only ship whose branch is a clean fast-forward.
+def can_land(w, check):
+  return is_local(w) and w.kind == "ship" and check.ok
+
+# A pull request that is open and green.
+def green(w, pr):
+  return not is_local(w) and w.pr != none and pr.state == "OPEN" and pr.green
+
+# The landed-work guard: clean up only what is proven landed.
+task finish(w):
+  proof = fleet.landed(w.id)
+  if not proof.ok:
+    return { cleaned: false, reason: proof.reason }
+  c = fleet.cleanup(w.id)
+  return { cleaned: c.removed, reason: c.reason }

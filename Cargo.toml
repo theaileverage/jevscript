@@ -1,0 +1,50 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/jevscript-syntax",
+    "crates/jevscript-ir",
+    "crates/jevscript-compiler",
+    "crates/jevscript-runtime",
+    "crates/jevscript-cli",
+    "crates/jevscript-conformance",
+    "crates/jevscript-lsp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "Apache-2.0"
+repository = "https://github.com/theaileverage/jevscript"
+homepage = "https://jevscript.sh"
+publish = false
+
+# Every dependency is pinned exactly. The spec is versioned; so is the build.
+[workspace.dependencies]
+jevscript-syntax = { path = "crates/jevscript-syntax", version = "=0.1.0" }
+jevscript-ir = { path = "crates/jevscript-ir", version = "=0.1.0" }
+jevscript-compiler = { path = "crates/jevscript-compiler", version = "=0.1.0" }
+jevscript-runtime = { path = "crates/jevscript-runtime", version = "=0.1.0" }
+jevscript-lsp = { path = "crates/jevscript-lsp", version = "=0.1.0" }
+
+anyhow = "=1.0.104"
+clap = { version = "=4.6.7", features = ["derive"] }
+hex = "=0.4.3"
+lsp-server = "=0.10.0"
+lsp-types = "=0.97.0"
+reqwest = { version = "=0.13.5", default-features = false, features = ["json"] }
+schemars = "=1.2.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+sha2 = "=0.11.0"
+thiserror = "=2.0.20"
+tiktoken-rs = "=0.12.0"
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "io-std", "io-util"] }
+unicode-width = "=0.2.1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[profile.release]
+strip = true

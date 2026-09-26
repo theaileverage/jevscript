@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jevscript"
+version = "0.1.0"
+description = "Python host SDK for Jevscript: drives the jevscript runtime over JSON-RPC on stdio"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "The AI Leverage" }]
+keywords = ["jevscript", "jev", "agent", "sdk"]
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: MacOS", "Operating System :: POSIX :: Linux", "Operating System :: Microsoft :: Windows"]
+# The SDK speaks JSON-RPC over a pipe. That needs nothing but the standard
+# library, and keeping it that way is deliberate.
+dependencies = []
+
+[project.urls]
+Homepage = "https://jevscript.sh"
+Repository = "https://github.com/theaileverage/jevscript"
+Issues = "https://github.com/theaileverage/jevscript/issues"
+
+[project.scripts]
+jevscript = "jevscript._cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest==9.0.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jevscript"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

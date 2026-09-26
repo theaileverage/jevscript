@@ -1,0 +1,4 @@
+# One workspace for the agent adapters: the shared core and one package per
+# agent CLI. The SDK stays outside it and is linked, as before.
+packages:
+  - '*'

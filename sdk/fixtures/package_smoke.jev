@@ -1,0 +1,4 @@
+program package_smoke
+
+task main:
+  return true

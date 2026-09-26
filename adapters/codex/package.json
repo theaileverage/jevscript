@@ -1,0 +1,38 @@
+{
+  "name": "@jevscript/adapter-codex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jevscript agent adapter for Codex",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "jevscript-adapter-codex": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@jevscript/adapter-core": "workspace:*",
+    "jevscript": "link:../../sdk/js"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1"
+  }
+}

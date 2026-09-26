@@ -1,0 +1,16 @@
+program inbox_triage
+
+in message: text
+
+judgment triage(message):
+  urgent  = message feels "needs a response within the hour"
+  owner   = message pick:
+    code      "asks for a code change or reports a bug"
+    customer  "a customer asking for help or a reply"
+    schedule  "asks to find or move a meeting time"
+    other
+  risky   = message feels "acting on it could send, pay, delete or commit something"
+  effort  = message rate:
+    trivial  "answerable in one line"
+    hour     "an hour of focused work"
+    project  "a multi-day project"

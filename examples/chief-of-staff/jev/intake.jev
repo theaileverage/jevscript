@@ -1,0 +1,38 @@
+program intake
+
+# Intake: what a request from the person who owns the work is. Jev answers
+# every question below in one request: what kind of work it is (ship or
+# scout, a preference to remember, a status question), its urgency, risk,
+# ambiguity and effort, which project it concerns, which home's scope covers
+# it and which dispatch rule fits. It decides nothing: `routing.route` turns
+# these answers into a route in code.
+#
+# A library (spec section 3.9): no `in` or `out`, so another harness can use
+# `assess` with its own lists. The pick-among questions read the request
+# from `text`, which is in the state because every question shares one
+# request (spec section 6.6).
+
+def assess(req, projects, homes, profiles):
+  text = req.text
+  work = text pick:
+    ship "asks for a change to be made to a project: code, configuration, documentation or a release"
+    scout "asks for an investigation, diagnosis, plan, audit or report without changing code"
+    memory "states a standing preference or rule about how future work should be done"
+    status "asks what is happening, what is finished or what needs attention"
+    other
+  urgent = text feels "needs attention within the hour"
+  risky = text feels "carrying it out could delete data, spend money, publish something publicly or change production"
+  ambiguous = text feels "leaves the deliverable unclear enough that two careful people would build different things"
+  effort = text rate:
+    trivial "a one-line or mechanical change a careful person finishes in minutes"
+    routine "a well-understood change with a known procedure"
+    involved "a change across several parts that needs some design"
+    open "an unclear problem that needs investigation or design before anything is built"
+  project = projects pick among "Which of these projects is the request in `text` about?":
+    by description
+    none
+  home = homes pick among "Which of these homes has a scope that covers the request in `text`?":
+    by scope
+  profile = profiles pick among "Which of these worker dispatch rules fits the request in `text` best?":
+    by rule
+  return { work: work, urgent: urgent, risky: risky, ambiguous: ambiguous, effort: effort, project: project, home: home, profile: profile }

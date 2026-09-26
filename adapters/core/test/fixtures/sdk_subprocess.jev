@@ -1,0 +1,10 @@
+program sdk_subprocess
+
+out message
+
+needs dev: agent
+
+task main:
+  worker = dev.spawn prompt "hello"
+  message = worker.observe.last_message
+  worker.stop

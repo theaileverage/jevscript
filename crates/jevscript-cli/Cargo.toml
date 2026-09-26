@@ -1,0 +1,31 @@
+[package]
+name = "jevscript-cli"
+description = "The jevscript command-line tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "jevscript"
+path = "src/main.rs"
+
+[dependencies]
+jevscript-compiler.workspace = true
+jevscript-ir.workspace = true
+jevscript-lsp.workspace = true
+jevscript-runtime.workspace = true
+jevscript-syntax.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+unicode-width.workspace = true

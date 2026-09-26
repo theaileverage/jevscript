@@ -1,0 +1,93 @@
+program dispatch
+
+# Dispatch: turn a ready backlog item into a running worker. The worker's
+# instructions have two parts: a task statement the `llm` capability writes
+# from the request, and the contract code owns (where to work, how to report
+# status, how to take instructions, how to deliver). The contract is never
+# left to a model. Then an isolated copy, and a spawn through whichever agent
+# adapter the host bound, with the rule's harness, model, effort and backend
+# passed through as named arguments (spec section 9.1).
+
+use "./routing.jev" as routing
+use "./skills.jev" as skills
+
+needs crew: agent
+needs writer: llm
+needs fleet: tool:
+  worktree(id, project) -> record
+  ensure_skills(id, worktree, harness, selected, status, uncertain) -> record
+  write_brief(id, text) -> text
+
+def delivery(item, project, wt, paths):
+  if item.kind == "scout":
+    return """Deliverable: a self-contained report at {paths.report}. Do not change project code.
+When the report is written, append: done [at=<epoch>]: report ready"""
+  if project.mode == "local-only":
+    return """Delivery: local-only. Commit your work on branch {wt.branch}. Never push and never open a pull request.
+Keep the branch a clean fast-forward of {wt.base}; rebase if {wt.base} moves.
+When it is committed, append: done [at=<epoch>]: ready in branch {wt.branch}"""
+  if project.mode == "no-mistakes":
+    return """Delivery: validated pull request. Commit on branch {wt.branch}, run the project's validation pipeline, and let it push and open the pull request.
+When checks are green, append: done [at=<epoch>]: PR <full https url> checks green"""
+  return """Delivery: pull request. Commit on branch {wt.branch}, push it, and open a pull request.
+When it is open, append: done [at=<epoch>]: PR <full https url>"""
+
+def instructions(item, statement, project, prefs, wt, paths, choice, ensured, catalog):
+  notes = ""
+  if item.notes != none and item.notes != "":
+    notes = """
+
+## Additional context
+{item.notes}"""
+  conversation = ""
+  if item.thread_id != none:
+    conversation = "\nConversation thread: {item.thread_id}"
+  skill_lines = ["- {skill.id}: {skill.path} (SKILL.md SHA-256 {skill.sha256}; tree SHA-256 {skill.tree_sha256}) — {skill.description}" for skill in ensured.selected]
+  uncertain_lines = ["- {skill.id}: {skill.description}" for skill in catalog if routing.has(choice.uncertain, skill.id)]
+  skill_note = "No approved task Skills matched this task."
+  if len(skill_lines) > 0:
+    skill_note = "Load and use every applicable Skill before work starts:\n{join(skill_lines, "\n")}\nThese copies are host-owned. Do not stage or commit .agents/skills/<id> or .claude/skills/<id>."
+  if choice.status == "uncertain":
+    skill_note = "{skill_note}\n\nSelection is uncertain for these approved Skills:\n{join(uncertain_lines, "\n")}\nAsk the owner to resolve them before work on the affected part of the task."
+  return """# Task
+{statement}
+
+Original request: {item.text}
+Project: {project.name} ({wt.path})
+Shape: {item.kind}. Effort: {item.effort}.{conversation}{notes}
+
+## Standing preferences
+{prefs}
+
+## Task Skills
+{skill_note}
+
+# Rules
+1. Work only inside {wt.path}; modify nothing outside it.
+2. Report status by appending one line to {paths.status}:
+   <state> [at=<epoch seconds>]: <one short line>
+   States: working, needs-decision, blocked, paused, done, failed. Report phase changes only.
+3. Instructions may arrive in {paths.inbox}. Read each NNN.msg in order, act on it, then acknowledge it by moving it into {paths.inbox}/handled/.
+4. If a decision belongs to the person who owns the work, append needs-decision with the options and stop.
+5. Never tear down, force-push or discard work.
+
+# Definition of done
+{delivery(item, project, wt, paths)}
+"""
+
+task start(item, project, profiles, prefs, paths, catalog, policy) budget calls 8:
+  p = routing.profile_named(profiles, item.profile)
+  effort = item.effort
+  if p.effort != none and p.effort != "":
+    effort = p.effort
+  statement = writer.write "Restate this request as a short, concrete task statement for a coding agent. Keep every requirement; add none." using item.text
+  choice = skills.select(statement, item.text, item.notes, catalog, policy.skill_fit, policy.skill_uncertain)
+  wt = fleet.worktree(item.id, project.name)
+  ensured = fleet.ensure_skills(item.id, wt.path, p.harness, choice.ids, choice.status, choice.uncertain)
+  if ensured.blocked != none:
+    return { id: item.id, blocked: ensured.blocked }
+  choice.status = ensured.selection_status
+  choice.uncertain = ensured.uncertain
+  where = fleet.write_brief(item.id, instructions(item, statement, project, prefs, wt, paths, choice, ensured, catalog))
+  dev = crew.spawn in wt, prompt "Read {where} and follow it exactly; it is your whole task.", name item.id, harness p.harness, model p.model, effort effort, backend p.backend, command p.command
+  return { id: item.id, blocked: none, handle: dev, worktree: wt.path, branch: wt.branch, base: wt.base, brief: where, harness: p.harness, model: p.model, effort: effort, profile: p.name, backend: p.backend, skills: ensured.selected, skill_selection: choice.status, skill_receipt: ensured.key }

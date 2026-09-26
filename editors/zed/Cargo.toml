@@ -1,0 +1,18 @@
+[package]
+name = "jevscript-zed"
+description = "The Zed extension that starts `jevscript lsp`"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# Built by Zed for wasm32-wasip2, on its own: not a member of the repository's
+# workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+zed_extension_api = "=0.7.0"

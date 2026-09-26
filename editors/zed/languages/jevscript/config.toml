@@ -1,0 +1,6 @@
+name = "Jevscript"
+grammar = "python"
+path_suffixes = ["jev"]
+line_comments = ["# "]
+tab_size = 2
+hard_tabs = false

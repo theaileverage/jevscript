@@ -1,0 +1,33 @@
+{
+  "name": "jevscript",
+  "version": "0.1.0",
+  "homepage": "https://jevscript.sh",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/theaileverage/jevscript.git", "directory": "sdk/js" },
+  "bugs": { "url": "https://github.com/theaileverage/jevscript/issues" },
+  "keywords": ["jevscript", "jev", "agent", "sdk"],
+  "description": "JavaScript host SDK for Jevscript: drives the jevscript runtime over JSON-RPC on stdio",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "jevscript": "./bin/jevscript.mjs" },
+  "files": ["dist", "bin", "native", "examples", "skills", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "prepack": "node bin/verify-package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1"
+  }
+}

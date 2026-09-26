@@ -1,0 +1,131 @@
+{
+  "name": "jevscript",
+  "displayName": "Jevscript",
+  "description": "Language support for Jevscript (.jev): diagnostics, highlighting, hover, navigation and completion from the jevscript language server",
+  "version": "0.1.0",
+  "publisher": "jevscript",
+  "license": "Apache-2.0",
+  "homepage": "https://jevscript.sh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theaileverage/jevscript",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/theaileverage/jevscript/issues"
+  },
+  "private": true,
+  "engines": {
+    "vscode": "^1.91.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "jevscript",
+    "jev",
+    "language server",
+    "lsp"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:jevscript"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "jevscript",
+        "aliases": [
+          "Jevscript",
+          "jevscript"
+        ],
+        "extensions": [
+          ".jev"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "Jevscript",
+      "properties": {
+        "jevscript.server.path": {
+          "type": "string",
+          "default": "jevscript",
+          "markdownDescription": "The `jevscript` binary the extension runs as `jevscript lsp`. A bare name is looked up on `PATH`."
+        },
+        "jevscript.modulePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Module search roots for `use` paths that are not relative, tried before `JEVSCRIPT_PATH` (spec section 3.9). Relative entries resolve against the first workspace folder."
+        },
+        "jevscript.errorReference": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where diagnostics link for each error code (`<url>#<code>`). Empty uses the published `docs/error-reference.md`."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "jevscript.restartServer",
+        "title": "Restart Language Server",
+        "category": "Jevscript"
+      }
+    ],
+    "semanticTokenModifiers": [
+      {
+        "id": "unitKind",
+        "description": "A unit keyword: judgment, task, def or machine (spec section 3)"
+      },
+      {
+        "id": "judgmentVerb",
+        "description": "A judgment verb: feels, pick, rate, among or each (spec section 6)"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "jevscript",
+        "scopes": {
+          "keyword.unitKind": [
+            "storage.type.jevscript"
+          ],
+          "keyword.judgmentVerb": [
+            "keyword.operator.word.jevscript"
+          ],
+          "interface": [
+            "entity.name.type.interface.jevscript"
+          ],
+          "enumMember": [
+            "variable.other.enummember.jevscript"
+          ],
+          "event": [
+            "entity.name.tag.jevscript"
+          ]
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "pnpm run build && vsce package --no-dependencies --skip-license --out dist/jevscript.vsix",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/vscode": "1.91.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1",
+    "vscode-jsonrpc": "9.0.3"
+  }
+}

@@ -1,0 +1,110 @@
+program routing
+
+# Routing: where a request goes and what may start. Learned playbooks are
+# tried first (one pick-among request); otherwise the intake answers are
+# turned into a route by code: a standing preference, a status question, a
+# second mate whose scope covers it, a clarifying question, or the backlog
+# with the dispatch rule (harness, model, effort, backend) the matrix picked.
+# Readiness is plain code over the backlog: dependencies, holds, time gates.
+
+def has(xs, x):
+  return len([y for y in xs if y == x]) > 0
+
+# Which registered playbook, if any, this request is an instance of.
+def match_playbook(req, playbooks, policy):
+  text = req.text
+  routine = text feels "describes a routine, repeatable procedure rather than novel work"
+  pb = playbooks pick among "Which of these routine procedures is the request in `text` an instance of?":
+    by trigger
+    none
+  if pb.index == none:
+    return { matched: false, name: none, confidence: pb.confidence, routine: routine }
+  matched = pb.confidence >= policy.playbook_confidence and routine >= policy.playbook_routine
+  return { matched: matched, name: pb.item.name, confidence: pb.confidence, routine: routine }
+
+# Map effort levels to worker effort names (low for mechanical
+# work, xhigh for open investigation).
+def effort_name(level):
+  if level == 0:
+    return "low"
+  if level == 1:
+    return "medium"
+  if level == 2:
+    return "high"
+  return "xhigh"
+
+def route(req, a, policy, effective_project):
+  destination = "backlog"
+  reason = ""
+  if a.work is memory:
+    destination = "memory"
+  elif a.work is status:
+    destination = "status"
+  elif a.work is other or a.work.confidence < policy.min_kind_confidence:
+    destination = "ask"
+    reason = "It is not clear whether this asks for a change, an investigation or something else."
+  elif a.home.item.name != "main" and a.home.confidence >= policy.min_route_confidence:
+    destination = "mate"
+  elif effective_project == none and (a.project.index == none or a.project.confidence < policy.min_route_confidence):
+    destination = "ask"
+    reason = "It is not clear which project this is about."
+  elif a.ambiguous > policy.max_ambiguity:
+    destination = "ask"
+    reason = "The deliverable is open; one answer now avoids building the wrong thing."
+  project = none
+  if a.project.index != none:
+    project = a.project.item.name
+  if effective_project != none:
+    project = effective_project
+  return {
+    id: req.id,
+    route: destination,
+    reason: reason,
+    title: head(req.text, 72),
+    text: req.text,
+    kind: a.work.label,
+    project: project,
+    mate: a.home.item.name,
+    effort: effort_name(a.effort.level),
+    profile: a.profile.item.name,
+    urgent: a.urgent > policy.urgent,
+    hold: a.risky > policy.risk_hold,
+    playbook: none,
+    signals: {
+      kind_confidence: a.work.confidence,
+      route_confidence: a.project.confidence,
+      urgent: a.urgent,
+      risky: a.risky,
+      ambiguous: a.ambiguous
+    }
+  }
+
+# Queued items whose dependencies are done and whose holds have cleared, in
+# backlog order, at most `capacity` of them. A hold without `until` waits for
+# the person; one with `until` is a time gate (`now` is epoch seconds).
+def ready(items, now, capacity):
+  done = [i.id for i in items if i.status == "done"]
+  picked = []
+  for it in items:
+    if len(picked) >= capacity:
+      break
+    if it.status != "queued":
+      continue
+    if it.hold != none:
+      if it.hold.until == none:
+        continue
+      if it.hold.until > now:
+        continue
+    missing = [d for d in it.deps if not has(done, d)]
+    if len(missing) == 0:
+      picked = picked + [it]
+  return picked
+
+# The dispatch rule intake picked, else the first. A rule names a harness,
+# model, effort and backend that `spawn` passes through to the agent adapter
+# the host bound; whether that harness exists is the adapter's business.
+def profile_named(profiles, name):
+  found = [p for p in profiles if p.name == name]
+  if len(found) > 0:
+    return found[0]
+  return profiles[0]

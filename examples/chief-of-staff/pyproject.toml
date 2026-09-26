@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chief-of-staff"
+version = "0.1.0"
+description = "A Chief of Staff written in Jevscript with a thin Python host"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+# The host needs only the Jevscript SDK; everything else is the standard
+# library. Pinned exactly, like every dependency in this repository.
+dependencies = ["jevscript==0.1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest==9.0.2"]
+
+[project.scripts]
+cos = "cos.cli:main"
+
+[tool.uv.sources]
+jevscript = { path = "../../sdk/python", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cos"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"jev" = "cos/jev"
+"agent-session" = "cos/agent-session"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "../../sdk/python/src"]
+markers = ["live: touches a real terminal backend or agent CLI on this machine"]

@@ -1,0 +1,37 @@
+{
+  "name": "@jevscript/adapter-core",
+  "version": "0.1.0",
+  "homepage": "https://jevscript.sh",
+  "private": true,
+  "description": "The shared core of the Jevscript `agent` adapters: the verb contract, harness catalog, terminal backends, discovery and the JSONL subprocess protocol",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "jevscript-agent": "./dist/bin.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "smoke": "JEVSCRIPT_LIVE_SMOKE=1 vitest run --config vitest.smoke.config.ts"
+  },
+  "dependencies": {
+    "jevscript": "link:../../sdk/js"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1"
+  }
+}

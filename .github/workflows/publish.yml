@@ -1,0 +1,101 @@
+# Registry publication of the exact bytes a passing staging run built and tested.
+# Dispatch it on the release tag with that run's ID and the reviewed SHA-256 of
+# its SHA256SUMS. Nothing is rebuilt here. npm and PyPI trust this workflow file
+# and its protected environments through OIDC; no registry token is stored.
+name: publish package release
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: ID of a successful "stage package release" run on this tag
+        required: true
+      sums_sha256:
+        description: Reviewed SHA-256 of that run's SHA256SUMS
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Require a successful staging run of this tag's commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.staging_run_id }}
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          test "$GITHUB_REF_NAME" = "v$version"
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
+          test "$(jq -r .path <<<"$run")" = .github/workflows/release.yml
+          test "$(jq -r .repository.full_name <<<"$run")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .status <<<"$run")" = completed
+          test "$(jq -r .conclusion <<<"$run")" = success
+          test "$(jq -r .head_sha <<<"$run")" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: package-bundle
+          path: bundle
+          run-id: ${{ inputs.staging_run_id }}
+          github-token: ${{ github.token }}
+      - name: Match reviewed digests, versions, source commit and CLI bytes
+        env:
+          SUMS_SHA256: ${{ inputs.sums_sha256 }}
+        run: python3 scripts/verify_release_bundle.py bundle --commit "$GITHUB_SHA" --sums-sha256 "$SUMS_SHA256"
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: verified-bundle
+          path: bundle/
+
+  pypi:
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/jevscript/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: verified-bundle
+          path: bundle
+      - name: Compare existing PyPI wheels with verified bytes
+        run: python3 scripts/check_pypi_wheels.py bundle
+      - uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          packages-dir: bundle/wheelhouse/
+          # A rerun after npm failed must not stop on wheels PyPI already holds.
+          skip-existing: true
+      - name: Require exact verified wheels on PyPI
+        run: python3 scripts/check_pypi_wheels.py bundle --require-all
+
+  npm:
+    needs: pypi
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/jevscript
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: verified-bundle
+          path: bundle
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Trusted publishing needs npm 11.5.1 or later
+        run: npm install -g npm@11.19.0
+      - run: npm publish bundle/jevscript-*.tgz --access public
