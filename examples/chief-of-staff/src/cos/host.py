@@ -189,7 +189,7 @@ class Host:
             for project in sorted(project_names):
                 scoped = {**request, "project": project or None, "effective_project": project or None}
                 contexts.append({"project": project, "relation": self.threads.relation(scoped), "candidates": self.threads.candidates(scoped)})
-            return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "project": request.get("project"), "skip_playbooks": bool(request.get("skip_playbooks")), "thread_contexts": contexts}, **lists}
+            return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "project": request.get("effective_project") or request.get("project"), "skip_playbooks": bool(request.get("skip_playbooks")), "thread_contexts": contexts}, **lists}
         if kind == "dispatch":
             items = self.backlog.snapshot()
             paths = {i["id"]: self.paths(i["id"]) for i in items}
@@ -495,7 +495,7 @@ class Host:
 
             self.decisions.notify(headline(self))
         elif route == "mate":
-            self.mates.forward(d["mate"], request)
+            self.mates.forward(d["mate"], {**request, "project": request.get("effective_project") or request.get("project")})
             outcome["mate"] = d["mate"]
         elif route == "declined":
             self.decisions.notify(f"Dropped '{d.get('title')}' as you asked.")

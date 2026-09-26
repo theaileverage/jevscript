@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from cos.commands import Commands
-from cos.state.home import write_json
+from cos.state.home import read_json, write_json
 
 
 def routed(host, message_id: str):
@@ -149,7 +149,59 @@ def test_effective_project_survives_taskless_thread_clarification(make_host, pro
     assert host.backlog.get(receipt["task_id"])["project"] == "other"
 
 
-def test_playbook_cannot_replace_effective_project(make_host, project, monkeypatch):
+@pytest.mark.parametrize("selection", ["supplied", "unique_relation", "answered_ambiguity"])
+def test_settled_project_does_not_need_intake_project_confidence(make_host, project, selection):
+    host = make_host(rules=[{"match": {"id": "^work$"}, "answer": {"choice": "status"}}])
+    host.registry.add_project("other", str(project), "another scope")
+    roots = {}
+    for name in (("proj", "other") if selection == "answered_ambiguity" else (("other",) if selection == "unique_relation" else ())):
+        host.submit("What is in progress?", project=name, channel="general", message_id="low-confidence-parent")
+        host.tick()
+        roots[name] = host.threads.receipt({"source": "cli", "project": name, "channel": "general"}, "low-confidence-parent")
+    host.session.fake.rules.insert(0, {"match": {"id": "^work$"}, "answer": {"choice": "ship"}})
+    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "none"}})
+    host.submit("Update the guide", project="other" if selection == "supplied" else None, channel="general", message_id="low-confidence-reply", reply_to="low-confidence-parent" if roots else None, after=["unreleased"])
+    host.tick()
+    if selection == "answered_ambiguity":
+        [decision] = host.decisions.open()
+        assert set(decision["options"]) == {"proj", "other"}
+        host.decisions.answer(decision["key"], "other")
+        host.tick()
+    assert not host.decisions.open()
+    receipt = host.threads.receipt({"source": "cli", "project": "other", "channel": "general"}, "low-confidence-reply")
+    assert receipt["status"] == "done" and receipt["thread_id"]
+    if roots:
+        assert receipt["thread_id"] == roots["other"]["thread_id"]
+    assert host.backlog.get(receipt["task_id"])["project"] == "other"
+
+
+def test_old_thread_reply_stays_with_parent_when_intake_selects_mate(make_host):
+    host = make_host(rules=[{"match": {"id": "^work$"}, "answer": {"choice": "status"}}])
+    host.submit("What is in progress?", project="proj", channel="general", message_id="parent-status")
+    host.tick()
+    parent = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "parent-status")
+    host.registry.add_mate("docs", "documentation work")
+    host.session.fake.rules.insert(0, {"match": {"id": "^work$"}, "answer": {"choice": "ship"}})
+    host.session.fake.rules.insert(0, {"match": {"id": "^home$"}, "answer": {"choice": "i1"}})
+    host.submit("Update the guide", channel="general", message_id="parent-followup", reply_to="parent-status", after=["unreleased"])
+    host.tick()
+    receipt = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "parent-followup")
+    assert receipt["thread_id"] == parent["thread_id"]
+    assert host.backlog.get(receipt["task_id"])["project"] == "proj"
+    assert not list((host.home.root / "mates" / "docs" / "state" / "requests").glob("*.json"))
+
+
+def test_new_request_carries_selected_project_to_mate(make_host):
+    host = make_host(rules=[{"match": {"id": "^home$"}, "answer": {"choice": "i1"}}])
+    host.registry.add_mate("docs", "documentation work")
+    host.submit("Update the guide", project="proj", channel="general", message_id="mate-project", after=["unreleased"])
+    host.tick()
+    child_items = read_json(host.home.root / "mates" / "docs" / "data" / "backlog.json", [])
+    assert child_items and child_items[0]["project"] == "proj"
+
+
+@pytest.mark.parametrize("selection", ["supplied", "inferred"])
+def test_playbook_cannot_replace_effective_project(make_host, project, monkeypatch, selection):
     host = make_host(rules=[
         {"match": {"id": "^routine$"}, "answer": {"noul": 0.9}},
         {"match": {"id": "^pb$"}, "answer": {"item": "docs"}},
@@ -163,8 +215,9 @@ def test_playbook_cannot_replace_effective_project(make_host, project, monkeypat
         return {"matches": True, "project": "other", "kind": "ship", "effort": "low", "profile": "default"}
 
     monkeypatch.setattr(host.learning, "run_playbook", mismatched_plan)
-    host.submit("Update the guide", project="proj", channel="general", message_id="playbook-scope", after=["unreleased"])
+    host.submit("Update the guide", project="proj" if selection == "supplied" else None, channel="general", message_id="playbook-scope", after=["unreleased"])
     host.tick()
+    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i1"}})
     host.tick()
     receipt = host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "playbook-scope")
     assert seen == [("pb_docs", "proj")]

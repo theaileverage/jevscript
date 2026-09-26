@@ -82,15 +82,18 @@ task take_request(req, s) budget calls 6:
     return { id: req.id, route: "unclear", reason: "No projects are registered yet.", text: req.text, title: head(req.text, 72), hold: false, urgent: false, thread_route: conversation.route, thread_id: conversation.thread_id }
   if assessment == none:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
-  d = routing.route(req, assessment, s.policy)
+  effective_project = none
+  if project_authoritative:
+    effective_project = selected_project
+  d = routing.route(req, assessment, s.policy, effective_project)
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
     clarified = { id: req.id, text: "{req.text}\n\nClarification from the owner: {a.text}" }
-    d = routing.route(clarified, intake.assess(clarified, s.projects, s.homes, s.profiles), s.policy)
+    d = routing.route(clarified, intake.assess(clarified, s.projects, s.homes, s.profiles), s.policy, effective_project)
     if d.route == "ask":
       d.route = "unclear"
-  if project_authoritative:
-    d.project = selected_project
+  if conversation.route == "continue" and d.route == "mate":
+    d.route = "backlog"
   if d.hold and d.route == "backlog":
     a = escalation.ask("'{d.title}' could delete data, spend money, publish or change production. Start it?", ["yes", "no"])
     if a.answer == "yes":

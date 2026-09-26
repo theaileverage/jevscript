@@ -201,7 +201,7 @@ in policy: record
 out answer
 
 task main:
-  answer = routing.route(req, intake.assess(req, projects, homes, profiles), policy)
+  answer = routing.route(req, intake.assess(req, projects, homes, profiles), policy, none)
 """,
     )
     policy = {"min_kind_confidence": 0.35, "min_route_confidence": 0.45, "max_ambiguity": 0.8, "urgent": 0.8, "risk_hold": 0.7}
