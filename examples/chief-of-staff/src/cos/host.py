@@ -184,7 +184,12 @@ class Host:
                 return None
             lists = self.fleet_lists()
             lists["profiles"] = [{"name": p["name"], "rule": p["rule"]} for p in lists["profiles"]]
-            return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "skip_playbooks": bool(request.get("skip_playbooks")), "relation": self.threads.relation(request), "candidates": self.threads.candidates(request)}, **lists}
+            project_names = {p["name"] for p in lists["projects"]} | {"", request.get("project") or ""}
+            contexts = []
+            for project in sorted(project_names):
+                scoped = {**request, "project": project or None, "effective_project": project or None}
+                contexts.append({"project": project, "relation": self.threads.relation(scoped), "candidates": self.threads.candidates(scoped)})
+            return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "project": request.get("project"), "skip_playbooks": bool(request.get("skip_playbooks")), "thread_contexts": contexts}, **lists}
         if kind == "dispatch":
             items = self.backlog.snapshot()
             paths = {i["id"]: self.paths(i["id"]) for i in items}

@@ -44,21 +44,34 @@ needs fleet: tool:
   follow(id, answer, text) -> record
   track_review(id, handle) -> none
 
-# One request: playbooks first, then the full assessment and a route. An
-# unclear request or a risky one asks the owner before anything is queued.
 task take_request(req, s) budget calls 6:
-  conversation = threads.route_message(req, s.policy)
+  selected_project = ""
+  if req.project != none:
+    selected_project = req.project
+  else:
+    related = [c for c in req.thread_contexts if c.relation.kind == "valid"]
+    if len(related) == 1:
+      selected_project = related[0].project
+  assessment = none
+  if selected_project == "" and len(s.projects) > 0:
+    assessment = intake.assess(req, s.projects, s.homes, s.profiles)
+    if assessment.project.index != none and assessment.project.confidence >= s.policy.min_route_confidence:
+      selected_project = assessment.project.item.name
+  context = [c for c in req.thread_contexts if c.project == selected_project][0]
+  conversation = threads.route_message({ text: req.text, relation: context.relation, candidates: context.candidates }, s.policy)
   if conversation.route == "continue" and conversation.task_id != none:
-    return { id: req.id, route: "continue", thread_id: conversation.thread_id, reason: conversation.reason, title: head(req.text, 72), text: req.text }
+    return { id: req.id, route: "continue", thread_id: conversation.thread_id, project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
   if conversation.route == "ask":
-    return { id: req.id, route: "ask_thread", reason: conversation.reason, title: head(req.text, 72), text: req.text }
+    return { id: req.id, route: "ask_thread", project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
   if len(s.playbooks) > 0 and not req.skip_playbooks:
     m = routing.match_playbook(req, s.playbooks, s.policy)
     if m.matched:
-      return { id: req.id, route: "playbook", playbook: m.name, text: req.text, title: head(req.text, 72), hold: false, urgent: false, signals: m, thread_route: conversation.route, thread_id: conversation.thread_id }
+      return { id: req.id, route: "playbook", project: selected_project, playbook: m.name, text: req.text, title: head(req.text, 72), hold: false, urgent: false, signals: m, thread_route: conversation.route, thread_id: conversation.thread_id }
   if len(s.projects) == 0:
     return { id: req.id, route: "unclear", reason: "No projects are registered yet.", text: req.text, title: head(req.text, 72), hold: false, urgent: false, thread_route: conversation.route, thread_id: conversation.thread_id }
-  d = routing.route(req, intake.assess(req, s.projects, s.homes, s.profiles), s.policy)
+  if assessment == none:
+    assessment = intake.assess(req, s.projects, s.homes, s.profiles)
+  d = routing.route(req, assessment, s.policy)
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
     clarified = { id: req.id, text: "{req.text}\n\nClarification from the owner: {a.text}" }
@@ -73,6 +86,8 @@ task take_request(req, s) budget calls 6:
       d.route = "declined"
   if d.urgent:
     escalation.tell("Urgent request noted: {d.title}", "urgent", s.policy.mode)
+  if selected_project != "":
+    d.project = selected_project
   d.thread_route = conversation.route
   d.thread_id = conversation.thread_id
   return d

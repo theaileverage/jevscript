@@ -56,6 +56,25 @@ def test_inferred_project_receipt_supports_explicit_project_reply(make_host):
     assert second["thread_id"] == first["thread_id"]
 
 
+def test_inferred_project_routes_no_project_followups(make_host, project):
+    host = make_host(rules=[{"match": {"id": "^matched$"}, "answer": {"choice": "i0"}}])
+    host.registry.add_project("other", str(project), "another scope")
+    host.submit("Improve the search guide", channel="general", message_id="start", after=["unreleased"])
+    first = routed(host, "start")
+    host.submit("Update a separate guide", project="other", channel="general", message_id="other-start", after=["unreleased"])
+    host.tick()
+    other = host.threads.receipt({"source": "cli", "project": "other", "channel": "general"}, "other-start")
+    host.submit("Also fix the examples", channel="general", message_id="reply", reply_to="start")
+    explicit = routed(host, "reply")
+    assert explicit["route"] == "continue"
+    assert explicit["thread_id"] == first["thread_id"]
+    host.submit("The search guide still needs work", channel="general", message_id="semantic")
+    semantic = routed(host, "semantic")
+    assert semantic["route"] == "continue"
+    assert semantic["thread_id"] == first["thread_id"]
+    assert semantic["thread_id"] != other["thread_id"]
+
+
 def test_missing_parent_native_thread_and_scope_separation(make_host):
     host = make_host()
     host.submit("Start conversation", project="proj", channel="general", message_id="native-1", native_thread="native-1", after=["unreleased"])
