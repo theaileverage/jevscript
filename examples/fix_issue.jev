@@ -1,0 +1,18 @@
+program fix_issue
+
+use "./lib/agent_loop.jev" as harness with claude, tree, me
+
+in  issue: { title, body, branch }
+out pr_url
+
+needs claude: agent
+needs tree:   tool
+needs me:     person
+
+task main budget calls 40, minutes 30:
+  tree.create issue.branch
+  dev = claude.spawn in tree, prompt issue.body
+  passed = harness.watch(dev, issue.title)
+  dev.stop
+  if passed:
+    pr_url = tree.open_pr

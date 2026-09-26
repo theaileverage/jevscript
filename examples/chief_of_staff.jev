@@ -1,0 +1,45 @@
+program chief_of_staff
+
+in  events: list
+out dispatched
+
+needs claude: agent
+needs writer: llm
+needs me:     person
+needs mux:    tool
+
+task main budget calls 60, minutes 20 thresholds risk_confirm 0.2, min_confidence 0.6:
+  dispatched = []
+  for ev in events:
+    e = shape:
+      subject  ev.subject, max 100
+      body     ev.body, max 1500
+      source   ev.source
+
+    urgent = e.body feels "needs a response within the hour"
+    owner  = e.body pick:
+      code      "asks for a code change or reports a bug"
+      customer  "a customer asking for help or a reply"
+      schedule  "asks to find or move a meeting time"
+      other
+    risky  = e.body feels "acting on it could send, pay, delete or commit something"
+    log info "routed {e.subject}" { owner: owner.label, confidence: owner.confidence, urgent }
+
+    gate risk risky, confidence owner.confidence:
+      proceed ->
+        if owner is code:
+          pane = mux.pane "cos-{hash(e.subject)}"
+          claude.spawn in pane, prompt e.body
+          dispatched = dispatched + [{ subject: e.subject, to: "claude" }]
+        elif owner is customer:
+          draft = writer.write "Draft a reply. Commit to nothing. No signature." using e.body
+          me.notify "Draft for {e.subject}:\n{draft}"
+        elif owner is schedule:
+          mux.enqueue "calendar", e
+        else:
+          me.notify "Unrouted: {e.subject}"
+      confirm  -> me.ask "This looks risky: {e.subject}. Handle it yourself?"
+      escalate -> me.notify "Unsure who owns: {e.subject}"
+
+    if urgent > 0.8:
+      me.notify "Urgent: {e.subject}"

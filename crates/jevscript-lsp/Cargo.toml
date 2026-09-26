@@ -1,0 +1,21 @@
+[package]
+name = "jevscript-lsp"
+description = "The Jevscript language server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+jevscript-compiler.workspace = true
+jevscript-syntax.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,14 @@
+program agent_smoke
+
+in  job: { prompt }
+out status
+out tail
+
+needs dev: agent
+
+task main budget calls 10, minutes 5:
+  a = dev.spawn prompt job.prompt
+  seen = a.wait idle, minutes 1
+  status = seen.status
+  tail = seen.tail
+  a.stop

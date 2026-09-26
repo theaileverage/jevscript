@@ -1,0 +1,18 @@
+id = "jevscript"
+name = "Jevscript"
+version = "0.1.0"
+schema_version = 1
+authors = ["Jevscript contributors"]
+description = "Jevscript (.jev) support from the jevscript language server"
+repository = "https://github.com/theaileverage/jevscript"
+
+[language_servers.jevscript]
+name = "jevscript"
+languages = ["Jevscript"]
+
+# A stand-in until Jevscript has a tree-sitter grammar of its own: Python's
+# indentation blocks and `#` comments are close enough for Zed's structural
+# features. Highlighting comes from the language server's semantic tokens.
+[grammars.python]
+repository = "https://github.com/tree-sitter/tree-sitter-python"
+rev = "293fdc02038ee2bf0e2e206711b69c90ac0d413f" # v0.25.0

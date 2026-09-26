@@ -1,0 +1,10 @@
+# esbuild's install script checks its platform binary. vsce-sign's fetches a
+# signing tool that local packaging does not use.
+allowBuilds:
+  esbuild: true
+  '@vscode/vsce-sign': false
+# The same decision for pnpm 10, which CI runs.
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - '@vscode/vsce-sign'

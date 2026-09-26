@@ -1,0 +1,26 @@
+[
+  {
+    "id": "apple_notes",
+    "text": "Can you save this recipe as a new note in my 'Recipes' folder in Notes.app so it syncs to my phone? Just write it up in whatever editor pops up.",
+    "gold": "apple-notes",
+    "case": "obvious match"
+  },
+  {
+    "id": "powerpoint_authoring",
+    "text": "Can you put together a pitch deck skeleton (cover, situation overview, comps, precedent transactions, DCF, LBO) as a .pptx, using our firm-template.pptx for branding and footnoting each valuation number back to the cell it came from in the model?",
+    "gold": "pptx-author",
+    "case": "ambiguous lookalike: authoring versus editing"
+  },
+  {
+    "id": "mastodon_no_exact_skill",
+    "text": "Post this announcement to my Mastodon account.",
+    "gold": null,
+    "case": "no exact skill"
+  },
+  {
+    "id": "prose_only",
+    "text": "Explain what a monad is in plain English, with one small example.",
+    "gold": null,
+    "case": "prose-only; no skill"
+  }
+]

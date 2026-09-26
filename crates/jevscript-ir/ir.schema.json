@@ -1,0 +1,2446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ir",
+  "description": "One compiled program (spec section 11.1).",
+  "type": "object",
+  "properties": {
+    "defs": {
+      "description": "Pure helpers (spec section 8).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Def"
+      }
+    },
+    "file": {
+      "description": "The source file, if the program was compiled from a path.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "inputs": {
+      "description": "`in` declarations (spec section 3.2).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Input"
+      }
+    },
+    "ir_version": {
+      "description": "The IR version this document is written in. Always [`crate::IR_VERSION`].",
+      "type": "string"
+    },
+    "judgments": {
+      "description": "Named judgments (spec section 6.7).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Judgment"
+      }
+    },
+    "machines": {
+      "description": "Machines (spec section 7.8).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Machine"
+      }
+    },
+    "modules": {
+      "description": "Every module linked into this document, root first (spec section 3.9).\nThe host sees one flat program; this is how it can still tell where a\nunit came from.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Module"
+      }
+    },
+    "needs": {
+      "description": "`needs` declarations (spec section 3.4). After linking these are the\nroot program's: a library's `needs` are satisfied by its importer, so\nthey never reach the host.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Need"
+      }
+    },
+    "outputs": {
+      "description": "`out` declarations (spec section 3.3).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Output"
+      }
+    },
+    "program": {
+      "description": "`program <name>`.",
+      "type": "string"
+    },
+    "span": {
+      "description": "The whole program.",
+      "$ref": "#/$defs/Span"
+    },
+    "tasks": {
+      "description": "Tasks (spec section 7).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Task"
+      }
+    }
+  },
+  "required": [
+    "ir_version",
+    "program",
+    "inputs",
+    "outputs",
+    "needs",
+    "judgments",
+    "tasks",
+    "defs",
+    "span"
+  ],
+  "$defs": {
+    "Arg": {
+      "description": "One argument of a call.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The argument's name, for named arguments.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "description": "Its value.",
+          "$ref": "#/$defs/Expr"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "BinaryOp": {
+      "description": "Binary operators, in the precedence order of spec section 5.1.",
+      "type": "string",
+      "enum": [
+        "or",
+        "and",
+        "eq",
+        "not_eq",
+        "lt",
+        "lt_eq",
+        "gt",
+        "gt_eq",
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "rem"
+      ]
+    },
+    "Branch": {
+      "description": "One `if` or `elif` arm.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "The body.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stmt"
+          }
+        },
+        "span": {
+          "description": "The arm.",
+          "$ref": "#/$defs/Span"
+        },
+        "test": {
+          "description": "The condition.",
+          "$ref": "#/$defs/Expr"
+        }
+      },
+      "required": [
+        "test",
+        "body",
+        "span"
+      ]
+    },
+    "Budget": {
+      "description": "The budgets a task declared. A key that is absent is unlimited, except\n`calls`, which the compiler fills with its default of 50 (spec section 7.1).",
+      "type": "object",
+      "properties": {
+        "calls": {
+          "description": "Model requests: Jev requests plus `llm` generations.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "minutes": {
+          "description": "Wall-clock minutes since the task started, excluding time spent paused.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "steps": {
+          "description": "Iterations of the outermost loop in the task.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "usd": {
+          "description": "Estimated spend from recorded usage and the runtime's price table.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "CallForm": {
+      "description": "Which syntax a call was written in. The two are equivalent (spec 5.2).",
+      "oneOf": [
+        {
+          "description": "`tree.create issue.branch`.",
+          "type": "string",
+          "const": "command"
+        },
+        {
+          "description": "`tree.create(issue.branch)`.",
+          "type": "string",
+          "const": "function"
+        }
+      ]
+    },
+    "CapabilityKind": {
+      "description": "Capability kinds (spec section 9).",
+      "oneOf": [
+        {
+          "description": "Something that runs a task in the world over time and can be observed.",
+          "type": "string",
+          "const": "agent"
+        },
+        {
+          "description": "A human in the loop.",
+          "type": "string",
+          "const": "person"
+        },
+        {
+          "description": "A text generation model.",
+          "type": "string",
+          "const": "llm"
+        },
+        {
+          "description": "Anything else; verbs are open and unchecked.",
+          "type": "string",
+          "const": "tool"
+        }
+      ]
+    },
+    "Def": {
+      "description": "A pure helper (spec section 8).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "Its body.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stmt"
+          }
+        },
+        "name": {
+          "description": "The def's name, qualified with its module alias after linking. The\nprelude's defs are the implicit module `std`, and are in scope both\nunqualified and as `std.stuck` (spec section 3.9).",
+          "type": "string"
+        },
+        "params": {
+          "description": "Its parameters, with optional defaults.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DefParam"
+          }
+        },
+        "span": {
+          "description": "The whole unit.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "params",
+        "body",
+        "span"
+      ]
+    },
+    "DefParam": {
+      "description": "One parameter of a def.",
+      "type": "object",
+      "properties": {
+        "default": {
+          "description": "Its default, if one was written.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "The parameter's name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Detail": {
+      "description": "A detail block refining a question. The keys map directly onto Jev's\ninstruction object (spec section 6.8).",
+      "type": "object",
+      "properties": {
+        "compare": {
+          "description": "Other state paths to read alongside the subject.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "focus": {
+          "description": "What to look at within the subject.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "no": {
+          "description": "Short concrete examples of the negative side of a `feels`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "description": "A supporting fact the question needs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sample": {
+          "description": "`sample true`: draw the label or level from Jev's distribution instead\nof taking the argmax (spec section 6.11). `feels` is never sampled, and\nsampling changes only which label or level is reported.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "yes": {
+          "description": "Short concrete examples of the positive side of a `feels`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Expr": {
+      "description": "An expression.",
+      "oneOf": [
+        {
+          "description": "A number.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "number"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "value": {
+              "description": "Its value.",
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "node",
+            "value",
+            "span"
+          ]
+        },
+        {
+          "description": "A text literal with its interpolations lowered to expressions.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "text"
+            },
+            "parts": {
+              "description": "The parts, in order.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TextPart"
+              }
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "parts",
+            "span"
+          ]
+        },
+        {
+          "description": "`true` or `false`.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "bool"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "value": {
+              "description": "Its value.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "node",
+            "value",
+            "span"
+          ]
+        },
+        {
+          "description": "`none`.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "none"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "span"
+          ]
+        },
+        {
+          "description": "A variable, input, parameter or capability name.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "The name.",
+              "type": "string"
+            },
+            "node": {
+              "type": "string",
+              "const": "name"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "name",
+            "span"
+          ]
+        },
+        {
+          "description": "A list.",
+          "type": "object",
+          "properties": {
+            "items": {
+              "description": "The items.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Expr"
+              }
+            },
+            "node": {
+              "type": "string",
+              "const": "list"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "items",
+            "span"
+          ]
+        },
+        {
+          "description": "A record.",
+          "type": "object",
+          "properties": {
+            "fields": {
+              "description": "The fields.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RecordField"
+              }
+            },
+            "node": {
+              "type": "string",
+              "const": "record"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "fields",
+            "span"
+          ]
+        },
+        {
+          "description": "`x.field`.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "The field name.",
+              "type": "string"
+            },
+            "node": {
+              "type": "string",
+              "const": "field"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "target": {
+              "description": "What is accessed.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "node",
+            "target",
+            "name",
+            "span"
+          ]
+        },
+        {
+          "description": "`x[i]`.",
+          "type": "object",
+          "properties": {
+            "index": {
+              "description": "The index.",
+              "$ref": "#/$defs/Expr"
+            },
+            "node": {
+              "type": "string",
+              "const": "index"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "target": {
+              "description": "What is indexed.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "node",
+            "target",
+            "index",
+            "span"
+          ]
+        },
+        {
+          "description": "A call. A trailing identifier on a capability or handle is a\nzero-argument call (spec section 5.2).",
+          "type": "object",
+          "properties": {
+            "args": {
+              "description": "Its arguments.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Arg"
+              }
+            },
+            "callee": {
+              "description": "What is called.",
+              "$ref": "#/$defs/Expr"
+            },
+            "form": {
+              "description": "Which form it was written in.",
+              "$ref": "#/$defs/CallForm"
+            },
+            "node": {
+              "type": "string",
+              "const": "call"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "callee",
+            "args",
+            "form",
+            "span"
+          ]
+        },
+        {
+          "description": "`not x` or `-x`.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "unary"
+            },
+            "op": {
+              "description": "Which operator.",
+              "$ref": "#/$defs/UnaryOp"
+            },
+            "operand": {
+              "description": "Its operand.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "op",
+            "operand",
+            "span"
+          ]
+        },
+        {
+          "description": "A binary operation.",
+          "type": "object",
+          "properties": {
+            "left": {
+              "description": "Left operand.",
+              "$ref": "#/$defs/Expr"
+            },
+            "node": {
+              "type": "string",
+              "const": "binary"
+            },
+            "op": {
+              "description": "Which operator.",
+              "$ref": "#/$defs/BinaryOp"
+            },
+            "right": {
+              "description": "Right operand.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "op",
+            "left",
+            "right",
+            "span"
+          ]
+        },
+        {
+          "description": "`c is <label>` (spec section 4.3).",
+          "type": "object",
+          "properties": {
+            "label": {
+              "description": "The label, written without quotes.",
+              "type": "string"
+            },
+            "node": {
+              "type": "string",
+              "const": "is"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "target": {
+              "description": "What is compared.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "node",
+            "target",
+            "label",
+            "span"
+          ]
+        },
+        {
+          "description": "A list comprehension (spec section 8.2).",
+          "type": "object",
+          "properties": {
+            "expr": {
+              "description": "What each item becomes.",
+              "$ref": "#/$defs/Expr"
+            },
+            "iterable": {
+              "description": "What is iterated.",
+              "$ref": "#/$defs/Expr"
+            },
+            "names": {
+              "description": "The loop variables.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "node": {
+              "type": "string",
+              "const": "comprehension"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "test": {
+              "description": "The filter, if written.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "node",
+            "expr",
+            "names",
+            "iterable",
+            "span"
+          ]
+        },
+        {
+          "description": "`focus <text> on \"<purpose>\", max <tokens>` (spec section 7.3).",
+          "type": "object",
+          "properties": {
+            "max": {
+              "description": "The token cap.",
+              "type": "number",
+              "format": "double"
+            },
+            "node": {
+              "type": "string",
+              "const": "focus"
+            },
+            "on": {
+              "description": "What it is being reduced for.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "text": {
+              "description": "The text to reduce.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "node",
+            "text",
+            "on",
+            "max",
+            "span"
+          ]
+        },
+        {
+          "description": "`trail <n>` (spec section 7.5).",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "How many step records.",
+              "type": "number",
+              "format": "double"
+            },
+            "node": {
+              "type": "string",
+              "const": "trail"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            }
+          },
+          "required": [
+            "node",
+            "count",
+            "span"
+          ]
+        },
+        {
+          "description": "A judgment expression.",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "const": "judge"
+            }
+          },
+          "$ref": "#/$defs/Judge",
+          "required": [
+            "node"
+          ]
+        },
+        {
+          "description": "`log <level> <expr> [ { fields } ]` (spec section 5.8). Records a `log`\nevent with the value's text form as its message and the evaluated\nfields, then evaluates to the value. It never reaches Jev, never counts\nagainst a budget and never changes control flow.",
+          "type": "object",
+          "properties": {
+            "fields": {
+              "description": "The structured fields, in written order.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RecordField"
+              }
+            },
+            "level": {
+              "description": "The level.",
+              "$ref": "#/$defs/LogLevel"
+            },
+            "node": {
+              "type": "string",
+              "const": "log"
+            },
+            "span": {
+              "description": "Where it was written.",
+              "$ref": "#/$defs/Span"
+            },
+            "value": {
+              "description": "The logged value.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "node",
+            "level",
+            "value",
+            "span"
+          ]
+        }
+      ]
+    },
+    "FieldShape": {
+      "description": "One field of a record shape.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The field's name.",
+          "type": "string"
+        },
+        "shape": {
+          "description": "Its shape, if one was declared.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shape"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "GateArm": {
+      "description": "One arm of a gate.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "What it runs.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stmt"
+          }
+        },
+        "span": {
+          "description": "The arm.",
+          "$ref": "#/$defs/Span"
+        },
+        "verdict": {
+          "description": "Which verdict this arm handles.",
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "verdict",
+        "body",
+        "span"
+      ]
+    },
+    "Input": {
+      "description": "`in <name>: <shape>`.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The input's name.",
+          "type": "string"
+        },
+        "shape": {
+          "description": "Its declared shape.",
+          "$ref": "#/$defs/Shape"
+        },
+        "span": {
+          "description": "Where it was declared.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "shape",
+        "span"
+      ]
+    },
+    "Judge": {
+      "description": "A judgment expression: one question to Jev (spec section 6).",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "The detail block, if one was written.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Detail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "each": {
+          "description": "`each` asks the question once per element of a list, in one request.",
+          "type": "boolean"
+        },
+        "request_group": {
+          "description": "Which request this question is batched into (spec section 6.6).\nQuestions in one request share one state and never see each other's\nanswers.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        },
+        "subject": {
+          "description": "What is judged.",
+          "$ref": "#/$defs/Subject"
+        },
+        "verb": {
+          "description": "Which question is asked.",
+          "$ref": "#/$defs/JudgeVerb"
+        }
+      },
+      "required": [
+        "each",
+        "subject",
+        "verb",
+        "request_group",
+        "span"
+      ]
+    },
+    "JudgeVerb": {
+      "description": "Which question is asked.",
+      "oneOf": [
+        {
+          "description": "A yes/no question, answered with a probability. Maps to a Jev Noul.",
+          "type": "object",
+          "properties": {
+            "condition": {
+              "description": "The condition.",
+              "$ref": "#/$defs/Expr"
+            },
+            "verb": {
+              "type": "string",
+              "const": "feels"
+            }
+          },
+          "required": [
+            "verb",
+            "condition"
+          ]
+        },
+        {
+          "description": "A choice among labelled descriptions. Maps to a Jev Choice.",
+          "type": "object",
+          "properties": {
+            "labels": {
+              "description": "The labels.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PickLabel"
+              }
+            },
+            "verb": {
+              "type": "string",
+              "const": "pick"
+            }
+          },
+          "required": [
+            "verb",
+            "labels"
+          ]
+        },
+        {
+          "description": "A place on a spectrum of situations. Maps to a Jev Score.",
+          "type": "object",
+          "properties": {
+            "levels": {
+              "description": "The levels, low to high.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RateLevel"
+              }
+            },
+            "verb": {
+              "type": "string",
+              "const": "rate"
+            }
+          },
+          "required": [
+            "verb",
+            "levels"
+          ]
+        },
+        {
+          "description": "A choice among the elements of a runtime list (spec section 6.4a).\n\nThe options are built at run time, so the shape hash covers the question\nand the `by` field but not the items: the host contract stays stable\nacross inputs. `label` is `\"i<index>\"` or `\"none\"`.",
+          "type": "object",
+          "properties": {
+            "allow_none": {
+              "description": "Whether choosing nothing is allowed.",
+              "type": "boolean"
+            },
+            "by": {
+              "description": "Which field of each item is the description Jev sees.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "question": {
+              "description": "What Jev is choosing for.",
+              "$ref": "#/$defs/Expr"
+            },
+            "verb": {
+              "type": "string",
+              "const": "pick_among"
+            }
+          },
+          "required": [
+            "verb",
+            "question",
+            "allow_none"
+          ]
+        }
+      ]
+    },
+    "Judgment": {
+      "description": "A named judgment. One `judgment` is exactly one Jev request (spec 6.7).",
+      "type": "object",
+      "properties": {
+        "logs": {
+          "description": "Its `log` lines (spec section 5.8), run in order after the answers\narrive. They never reach Jev and are not part of the shape hash.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgmentLog"
+          }
+        },
+        "name": {
+          "description": "The judgment's name, qualified with its module alias after linking:\n`harness.read_agent` (spec section 3.9).",
+          "type": "string"
+        },
+        "params": {
+          "description": "Its parameters, which are the state fields Jev sees.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "results": {
+          "description": "Its results, in order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgmentResult"
+          }
+        },
+        "shape_hash": {
+          "description": "A stable hash over the answer space: result names, verbs, labels and\nlevel names. Hosts pin it and refuse a program whose answers moved\n(spec section 11.4). It uses the unit's own name rather than its module\nalias, so moving a judgment between files keeps its hash (section 3.9).",
+          "type": "string"
+        },
+        "span": {
+          "description": "The whole unit.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "params",
+        "results",
+        "shape_hash",
+        "span"
+      ]
+    },
+    "JudgmentLog": {
+      "description": "A `log` line inside a judgment block (spec section 5.8).",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "How many results precede it: it runs once those are bound, and may\nread them, the parameters and the inputs.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "log": {
+          "description": "The log, always an [`Expr::Log`].",
+          "$ref": "#/$defs/Expr"
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "after",
+        "log",
+        "span"
+      ]
+    },
+    "JudgmentResult": {
+      "description": "One `<result> = <judgment expression>` inside a judgment block.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The field the answer lands in.",
+          "type": "string"
+        },
+        "question": {
+          "description": "The question.",
+          "$ref": "#/$defs/Judge"
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "question",
+        "span"
+      ]
+    },
+    "LogLevel": {
+      "description": "The four `log` levels, lowest first (spec section 5.8).",
+      "type": "string",
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "Machine": {
+      "description": "A machine: the fourth unit (spec section 7.8).\n\nStates and the events enabled in each. At every step Jev is asked one Choice\nover exactly the enabled events plus `stay`; guards, actions and the\ntransition itself are code.",
+      "type": "object",
+      "properties": {
+        "budget": {
+          "description": "Its budgets, with defaults applied.",
+          "$ref": "#/$defs/Budget"
+        },
+        "goal": {
+          "description": "`goal`, sent to Jev on every step.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "initial": {
+          "description": "The state the machine starts in. The compiler fills this with the first\ndeclared state when `initial` was not written.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The machine's name, qualified with its module alias after linking. A\npause raised inside it carries `task: \"machine:<qualified name>\"`.",
+          "type": "string"
+        },
+        "observe": {
+          "description": "`observe:`, evaluated before every step and bound to `obs`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ShapeField"
+          }
+        },
+        "params": {
+          "description": "Its parameters, readable in guards, actions and `observe`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DefParam"
+          }
+        },
+        "shape_hash": {
+          "description": "A stable hash over state names, event names and their targets.\nDescriptions are excluded, so rewording is not a breaking change\n(spec section 7.8).",
+          "type": "string"
+        },
+        "span": {
+          "description": "The whole unit.",
+          "$ref": "#/$defs/Span"
+        },
+        "states": {
+          "description": "The states, in source order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MachineState"
+          }
+        },
+        "thresholds": {
+          "description": "Its thresholds, applied as a gate on every step.",
+          "$ref": "#/$defs/Thresholds"
+        }
+      },
+      "required": [
+        "name",
+        "budget",
+        "thresholds",
+        "initial",
+        "states",
+        "shape_hash",
+        "span"
+      ]
+    },
+    "MachineState": {
+      "description": "One state of a machine.",
+      "type": "object",
+      "properties": {
+        "done": {
+          "description": "Whether it is terminal. A machine needs at least one.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "The state's name.",
+          "type": "string"
+        },
+        "span": {
+          "description": "The whole state.",
+          "$ref": "#/$defs/Span"
+        },
+        "transitions": {
+          "description": "The events it enables. A terminal state has none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Transition"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "done",
+        "span"
+      ]
+    },
+    "Module": {
+      "description": "One module linked into an IR document (spec section 3.9).\n\nThe compiler inlines every transitively used module and qualifies every unit\nname, so `loop.read_agent` is a judgment of the linked program rather than a\nreference into another document.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias its units are qualified with, such as `loop`. Empty for the\nroot program, whose units keep their bare names.",
+          "type": "string"
+        },
+        "mapping": {
+          "description": "How the importer's capabilities satisfied this module's `needs`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NeedMapping"
+          }
+        },
+        "path": {
+          "description": "The path it was imported from, as written.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "program": {
+          "description": "The `program` name the module declared.",
+          "type": "string"
+        },
+        "span": {
+          "description": "Where the `use` was written, or the whole file for the root.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "alias",
+        "program",
+        "span"
+      ]
+    },
+    "NamedNumber": {
+      "description": "A name and a number, for thresholds the verdict does not read.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name as written.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Its value.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "Need": {
+      "description": "`needs <name>: <kind>`.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Which verbs the compiler accepted on it.",
+          "$ref": "#/$defs/CapabilityKind"
+        },
+        "name": {
+          "description": "The capability's program-scoped name.",
+          "type": "string"
+        },
+        "signatures": {
+          "description": "The verbs a `tool` declared (spec section 9.4). Empty means the tool is\nopen and nothing is checked before run time. The runtime also compares\nthese against the adapter's bind-time manifest, when it passed one.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolSignature"
+          }
+        },
+        "span": {
+          "description": "Where it was declared.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "span"
+      ]
+    },
+    "NeedMapping": {
+      "description": "One entry of a `use ... with ...` clause (spec section 3.9).\n\nThe mapping is static, so the compiler checks verbs against kinds across the\nmodule boundary exactly as it does within a file.",
+      "type": "object",
+      "properties": {
+        "inner": {
+          "description": "The capability's name inside the library.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The kind both sides agreed on.",
+          "$ref": "#/$defs/CapabilityKind"
+        },
+        "outer": {
+          "description": "The importer's capability it was bound to.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "inner",
+        "outer",
+        "kind"
+      ]
+    },
+    "Output": {
+      "description": "`out <name>`.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The output's name.",
+          "type": "string"
+        },
+        "span": {
+          "description": "Where it was declared.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "span"
+      ]
+    },
+    "PickLabel": {
+      "description": "One label of a `pick` (spec section 6.3).",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Its one-line description.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "escape": {
+          "description": "Whether it is the bare `other` / `none` escape option.",
+          "type": "boolean"
+        },
+        "examples": {
+          "description": "Short concrete instances of the label.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "The label. It is an API; renaming it is a breaking change.",
+          "type": "string"
+        },
+        "not_for": {
+          "description": "What the label does not cover.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        },
+        "what": {
+          "description": "What the label covers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "escape",
+        "span"
+      ]
+    },
+    "Pos": {
+      "description": "A position in a source file. Lines are 1-based, columns 0-based, both in\ncharacters rather than bytes so that diagnostics line up with what an editor\nshows.",
+      "type": "object",
+      "properties": {
+        "column": {
+          "description": "0-based column, in characters.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "description": "1-based line number.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "offset": {
+          "description": "0-based byte offset into the source.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ]
+    },
+    "RateLevel": {
+      "description": "One level of a `rate` (spec section 6.4).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The level's name, if it was named. Named levels allow `l is unchanged`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "situation": {
+          "description": "The situation it describes.",
+          "$ref": "#/$defs/Expr"
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "situation",
+        "span"
+      ]
+    },
+    "RecordField": {
+      "description": "One field of a record literal.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The field's name.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Its value. `{ title }` is lowered to `{ title: title }`.",
+          "$ref": "#/$defs/Expr"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "ReturnType": {
+      "description": "What a declared `tool` verb returns (spec section 9.4).",
+      "type": "string",
+      "enum": [
+        "text",
+        "number",
+        "bool",
+        "list",
+        "record",
+        "handle",
+        "none"
+      ]
+    },
+    "Shape": {
+      "description": "A declared input shape.",
+      "oneOf": [
+        {
+          "description": "A bare type.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "Which type.",
+              "$ref": "#/$defs/TypeName"
+            },
+            "shape": {
+              "type": "string",
+              "const": "type"
+            }
+          },
+          "required": [
+            "shape",
+            "name"
+          ]
+        },
+        {
+          "description": "A record shape listing field names, optionally typed.",
+          "type": "object",
+          "properties": {
+            "fields": {
+              "description": "The declared fields.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FieldShape"
+              }
+            },
+            "shape": {
+              "type": "string",
+              "const": "record"
+            }
+          },
+          "required": [
+            "shape",
+            "fields"
+          ]
+        }
+      ]
+    },
+    "ShapeField": {
+      "description": "One field of a `shape` block.",
+      "type": "object",
+      "properties": {
+        "max": {
+          "description": "Its hard cap in tokens, if one was written.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "name": {
+          "description": "The field's name.",
+          "type": "string"
+        },
+        "policy": {
+          "description": "What happens on overflow.",
+          "$ref": "#/$defs/ShapePolicy"
+        },
+        "span": {
+          "description": "The field.",
+          "$ref": "#/$defs/Span"
+        },
+        "value": {
+          "description": "What fills it.",
+          "$ref": "#/$defs/Expr"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "policy",
+        "span"
+      ]
+    },
+    "ShapePolicy": {
+      "description": "What happens to a `shape` field whose value exceeds its cap (spec 7.2).",
+      "oneOf": [
+        {
+          "description": "Keep the first tokens and record a `truncated` warning. The default.",
+          "type": "object",
+          "properties": {
+            "policy": {
+              "type": "string",
+              "const": "head"
+            }
+          },
+          "required": [
+            "policy"
+          ]
+        },
+        {
+          "description": "Keep the last tokens.",
+          "type": "object",
+          "properties": {
+            "policy": {
+              "type": "string",
+              "const": "tail"
+            }
+          },
+          "required": [
+            "policy"
+          ]
+        },
+        {
+          "description": "Reduce the value to what serves a purpose, using Jev (spec section 7.3).",
+          "type": "object",
+          "properties": {
+            "on": {
+              "description": "What the text is being reduced for.",
+              "$ref": "#/$defs/Expr"
+            },
+            "policy": {
+              "type": "string",
+              "const": "focus"
+            }
+          },
+          "required": [
+            "policy",
+            "on"
+          ]
+        }
+      ]
+    },
+    "Span": {
+      "description": "A half-open source range, `start..end`.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "description": "One past the last position covered by the span.",
+          "$ref": "#/$defs/Pos"
+        },
+        "start": {
+          "description": "First position covered by the span.",
+          "$ref": "#/$defs/Pos"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "Stmt": {
+      "description": "A statement.",
+      "oneOf": [
+        {
+          "description": "`x = expr` or `x.field = expr`.",
+          "type": "object",
+          "properties": {
+            "path": {
+              "description": "Field names that follow it.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "root": {
+              "description": "The root variable.",
+              "type": "string"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "assign"
+            },
+            "value": {
+              "description": "What is assigned.",
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "stmt",
+            "root",
+            "path",
+            "value",
+            "span"
+          ]
+        },
+        {
+          "description": "A call in statement position.",
+          "type": "object",
+          "properties": {
+            "expr": {
+              "description": "The call.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "expr"
+            }
+          },
+          "required": [
+            "stmt",
+            "expr",
+            "span"
+          ]
+        },
+        {
+          "description": "`if` / `elif` / `else`.",
+          "type": "object",
+          "properties": {
+            "branches": {
+              "description": "The `if` and each `elif`, in order.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Branch"
+              }
+            },
+            "otherwise": {
+              "description": "The `else` body, if written.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "$ref": "#/$defs/Stmt"
+              }
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "if"
+            }
+          },
+          "required": [
+            "stmt",
+            "branches",
+            "span"
+          ]
+        },
+        {
+          "description": "`for x in xs:`, bounded by its list.",
+          "type": "object",
+          "properties": {
+            "body": {
+              "description": "The body.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Stmt"
+              }
+            },
+            "iterable": {
+              "description": "What is iterated.",
+              "$ref": "#/$defs/Expr"
+            },
+            "names": {
+              "description": "The loop variables.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "for"
+            }
+          },
+          "required": [
+            "stmt",
+            "names",
+            "iterable",
+            "body",
+            "span"
+          ]
+        },
+        {
+          "description": "`loop max N:`.",
+          "type": "object",
+          "properties": {
+            "body": {
+              "description": "The body.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Stmt"
+              }
+            },
+            "max": {
+              "description": "The compile-time upper bound. Every loop has one (spec section 5.5).",
+              "type": "number",
+              "format": "double"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "loop"
+            }
+          },
+          "required": [
+            "stmt",
+            "max",
+            "body",
+            "span"
+          ]
+        },
+        {
+          "description": "`until cond, max N:` or `until verify(cond), max N:`.",
+          "type": "object",
+          "properties": {
+            "body": {
+              "description": "The body.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Stmt"
+              }
+            },
+            "max": {
+              "description": "The compile-time upper bound.",
+              "type": "number",
+              "format": "double"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "until"
+            },
+            "test": {
+              "description": "The condition.",
+              "$ref": "#/$defs/Expr"
+            },
+            "verify": {
+              "description": "Whether the condition is the task's proof of done (spec section 7.4).",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "stmt",
+            "test",
+            "verify",
+            "max",
+            "body",
+            "span"
+          ]
+        },
+        {
+          "description": "A gate (spec section 7.6).",
+          "type": "object",
+          "properties": {
+            "arms": {
+              "description": "The arms that were written. Unwritten arms take the spec defaults.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GateArm"
+              }
+            },
+            "confidence": {
+              "description": "`confidence <expr>`, if written.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "done": {
+              "description": "`done <expr>`, if written.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "risk": {
+              "description": "`risk <expr>`, if written.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "gate"
+            }
+          },
+          "required": [
+            "stmt",
+            "arms",
+            "span"
+          ]
+        },
+        {
+          "description": "`name = shape [strict]:` (spec section 7.2).",
+          "type": "object",
+          "properties": {
+            "fields": {
+              "description": "The fields.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ShapeField"
+              }
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "shape"
+            },
+            "strict": {
+              "description": "Whether an overflow is an `error` pause instead of a truncation.",
+              "type": "boolean"
+            },
+            "target": {
+              "description": "The record the fields land in.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stmt",
+            "target",
+            "strict",
+            "fields",
+            "span"
+          ]
+        },
+        {
+          "description": "`return [expr]`.",
+          "type": "object",
+          "properties": {
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "return"
+            },
+            "value": {
+              "description": "The returned value, if any.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "stmt",
+            "span"
+          ]
+        },
+        {
+          "description": "`continue`.",
+          "type": "object",
+          "properties": {
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "continue"
+            }
+          },
+          "required": [
+            "stmt",
+            "span"
+          ]
+        },
+        {
+          "description": "`break`.",
+          "type": "object",
+          "properties": {
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "break"
+            }
+          },
+          "required": [
+            "stmt",
+            "span"
+          ]
+        },
+        {
+          "description": "`stop \"reason\"`.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "description": "Why.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "required": [
+            "stmt",
+            "reason",
+            "span"
+          ]
+        },
+        {
+          "description": "`escalate \"reason\"`.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "description": "Why.",
+              "$ref": "#/$defs/Expr"
+            },
+            "span": {
+              "description": "The statement.",
+              "$ref": "#/$defs/Span"
+            },
+            "stmt": {
+              "type": "string",
+              "const": "escalate"
+            }
+          },
+          "required": [
+            "stmt",
+            "reason",
+            "span"
+          ]
+        }
+      ]
+    },
+    "Subject": {
+      "description": "A judgment subject: always a path, so that it can become a state path Jev is\ntold to inspect by name (spec section 6.1).",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "What follows it.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectStep"
+          }
+        },
+        "root": {
+          "description": "The root variable, input or parameter.",
+          "type": "string"
+        },
+        "span": {
+          "description": "Where it was written.",
+          "$ref": "#/$defs/Span"
+        },
+        "state_path": {
+          "description": "The path as Jev sees it, such as `obs.summary` or `files[3]`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "path",
+        "state_path",
+        "span"
+      ]
+    },
+    "SubjectStep": {
+      "description": "One step of a subject path.",
+      "oneOf": [
+        {
+          "description": "`.name`.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "The field name.",
+              "type": "string"
+            },
+            "step": {
+              "type": "string",
+              "const": "field"
+            }
+          },
+          "required": [
+            "step",
+            "name"
+          ]
+        },
+        {
+          "description": "`[expr]`.",
+          "type": "object",
+          "properties": {
+            "index": {
+              "description": "The index.",
+              "$ref": "#/$defs/Expr"
+            },
+            "step": {
+              "type": "string",
+              "const": "index"
+            }
+          },
+          "required": [
+            "step",
+            "index"
+          ]
+        }
+      ]
+    },
+    "Task": {
+      "description": "A task: the unit a host runs (spec section 7).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "Its body.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stmt"
+          }
+        },
+        "budget": {
+          "description": "Its budgets, with defaults applied.",
+          "$ref": "#/$defs/Budget"
+        },
+        "name": {
+          "description": "The task's name, qualified with its module alias after linking:\n`loop.watch`. A pause carries this as its `task`, so a host can tell\nwhich module it came from (spec section 3.9).",
+          "type": "string"
+        },
+        "params": {
+          "description": "Its parameters. `main` has none: it reads the program's `in`\ndeclarations (spec section 7).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DefParam"
+          }
+        },
+        "span": {
+          "description": "The whole unit.",
+          "$ref": "#/$defs/Span"
+        },
+        "thresholds": {
+          "description": "Its thresholds.",
+          "$ref": "#/$defs/Thresholds"
+        }
+      },
+      "required": [
+        "name",
+        "budget",
+        "thresholds",
+        "body",
+        "span"
+      ]
+    },
+    "TextPart": {
+      "description": "One piece of a text literal (spec section 2.7).",
+      "oneOf": [
+        {
+          "description": "Literal characters, with escapes resolved.",
+          "type": "object",
+          "properties": {
+            "part": {
+              "type": "string",
+              "const": "literal"
+            },
+            "value": {
+              "description": "The characters.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "part",
+            "value"
+          ]
+        },
+        {
+          "description": "A `{expr}` hole, evaluated before the text reaches anything.",
+          "type": "object",
+          "properties": {
+            "expr": {
+              "description": "The expression.",
+              "$ref": "#/$defs/Expr"
+            },
+            "part": {
+              "type": "string",
+              "const": "interpolation"
+            }
+          },
+          "required": [
+            "part",
+            "expr"
+          ]
+        }
+      ]
+    },
+    "Thresholds": {
+      "description": "The thresholds a gate reads (spec section 7.6). Names are open; these four\nare the ones the verdict is computed from.",
+      "type": "object",
+      "properties": {
+        "done": {
+          "description": "Treat the goal as met at or above this `done` probability.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "min_confidence": {
+          "description": "`escalate` below this confidence.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "other": {
+          "description": "Any other threshold the task declared.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedNumber"
+          }
+        },
+        "risk_confirm": {
+          "description": "`confirm` at or above this risk.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "stop_confidence": {
+          "description": "`stop` below this confidence.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "ToolSignature": {
+      "description": "One declared `tool` verb (spec section 9.4).\n\nWith a signature block the compiler rejects an unlisted verb\n(`verb_unknown`) and a call with the wrong number of positional arguments\n(`verb_arity`), and the runtime checks the adapter's actual return against\n`returns` (`type_error`).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The verb's name.",
+          "type": "string"
+        },
+        "params": {
+          "description": "Its positional parameter names.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "returns": {
+          "description": "What it returns.",
+          "$ref": "#/$defs/ReturnType"
+        },
+        "span": {
+          "description": "Where it was declared.",
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "name",
+        "returns",
+        "span"
+      ]
+    },
+    "Transition": {
+      "description": "One event of a state.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "The action block, run when the event fires.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stmt"
+          }
+        },
+        "description": {
+          "description": "What the event means, which is the label's description.",
+          "$ref": "#/$defs/Expr"
+        },
+        "event": {
+          "description": "The event's name, which is the Choice label Jev sees.",
+          "type": "string"
+        },
+        "risky": {
+          "description": "Whether the step's gate sees `risk` 1 for this event instead of 0.",
+          "type": "boolean"
+        },
+        "span": {
+          "description": "The whole transition.",
+          "$ref": "#/$defs/Span"
+        },
+        "target": {
+          "description": "The state this moves to.",
+          "type": "string"
+        },
+        "when": {
+          "description": "A code guard. A false guard removes the event from what Jev sees, and a\nguarded entry into a terminal state is what makes the result `verified`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "event",
+        "description",
+        "target",
+        "risky",
+        "span"
+      ]
+    },
+    "TypeName": {
+      "description": "The five declarable types (spec section 3.2).",
+      "type": "string",
+      "enum": [
+        "text",
+        "number",
+        "bool",
+        "list",
+        "record"
+      ]
+    },
+    "UnaryOp": {
+      "description": "Unary operators.",
+      "type": "string",
+      "enum": [
+        "not",
+        "neg"
+      ]
+    },
+    "Verdict": {
+      "description": "The four gate verdicts, in the order section 7.6 computes them.",
+      "type": "string",
+      "enum": [
+        "proceed",
+        "confirm",
+        "escalate",
+        "stop"
+      ]
+    }
+  }
+}

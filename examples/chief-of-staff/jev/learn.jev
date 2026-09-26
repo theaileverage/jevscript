@@ -1,0 +1,130 @@
+program learn
+
+# Learning: record -> classify -> encode -> prove -> go live.
+#
+# The host keeps the record (ledger and recordings). `find` classifies: Jev
+# sorts each past request into a kind of work and judges each repeated kind
+# (were the same steps repeated? is it automatable, does it need judgment, or
+# was it a one-off? how efficiently did it go?); code counts, thresholds and
+# picks the route the evidence agrees on. For kinds worth encoding it drafts
+# a playbook with `llm.write`. The host compiles each draft and replays the
+# past runs it claims; `verdict` then decides in code whether it goes live.
+
+needs writer: llm
+
+def has(xs, x):
+  return len([y for y in xs if y == x]) > 0
+
+# The most common value in a list, first seen wins a tie.
+def mode(values):
+  best = none
+  best_n = 0
+  for v in values:
+    n = len([x for x in values if x == v])
+    if n > best_n:
+      best = v
+      best_n = n
+  return best
+
+judgment assess_pattern(summary):
+  repeated = summary feels "the same steps were repeated from one request to the next"
+  nature = summary pick:
+    automatable "one fixed procedure that code could follow without judgment about novel content"
+    needs_judgment "a recurring kind of work whose steps depend on judgment about each case"
+    one_off "unrelated requests that only look alike"
+    other
+  efficiency = summary rate:
+    smooth "the work went through without nudges, relaunches or questions"
+    bumpy "the work needed an occasional nudge or question"
+    wasteful "the work repeatedly lost time to the same avoidable obstacle"
+
+def categorize(entries):
+  texts = [e.request for e in entries]
+  kinds = each texts pick:
+    dependency_update "asks to update, bump or pin a dependency, toolchain or tool version"
+    ci_repair "asks to fix a failing build, test run, lint check or CI job"
+    docs_change "asks to write or correct documentation, comments or a README"
+    release_task "asks to cut, tag or prepare a release or a changelog"
+    cleanup "asks to remove dead code, warnings or formatting problems"
+    investigation "asks to investigate, reproduce or explain something without changing code"
+    feature "asks to build new behavior"
+    other
+  return kinds
+
+def cluster_summary(category, members):
+  lines = ["- {m.request} (took {m.minutes_words}; {m.nudges_words}; outcome {m.outcome})" for m in members]
+  obstacles = [m.obstacle for m in members if m.obstacle != none and m.obstacle != ""]
+  return """Category: {category}
+Past requests:
+{join(lines)}
+Obstacles seen:
+{join(obstacles)}"""
+
+task find(entries, playbooks, policy) budget calls 20:
+  kinds = categorize(entries)
+  categories = ["dependency_update", "ci_repair", "docs_change", "release_task", "cleanup", "investigation", "feature"]
+  covered = [p.category for p in playbooks]
+  patterns = []
+  drafts = []
+  for c in categories:
+    members = [e for e, k in zip(entries, kinds) if k.label == c and k.confidence >= policy.min_category_confidence]
+    wins = [m for m in members if m.outcome == "landed"]
+    if len(members) < policy.min_repeats:
+      continue
+    if has(covered, c):
+      patterns = patterns + [{ category: c, count: len(members), decision: "covered" }]
+      continue
+    success = len(wins) / len(members)
+    a = assess_pattern(cluster_summary(c, members))
+    worth = a.nature is automatable and a.repeated >= policy.automatable and (a.efficiency.level >= 1 or a.repeated >= policy.repeated_strong)
+    promote = success >= policy.min_success and worth
+    decision = "watch"
+    if promote:
+      decision = "draft"
+    patterns = patterns + [{ category: c, count: len(members), success: success, repeated: a.repeated, nature: a.nature.label, efficiency: a.efficiency.level, decision: decision }]
+    if promote:
+      spec = {
+        name: "pb_{c}",
+        category: c,
+        trigger: members[0].trigger,
+        project: mode([m.project for m in wins]),
+        projects: [m.project for m in wins],
+        kind: mode([m.kind for m in wins]),
+        effort: mode([m.effort for m in wins]),
+        profile: mode([m.profile for m in wins]),
+        obstacles: [m.obstacle for m in members if m.obstacle != none and m.obstacle != ""],
+        examples: [m.request for m in members],
+        evidence: [m.id for m in wins]
+      }
+      source = writer.write "Write a Jevscript playbook program for this routine category. Follow the playbook contract exactly: program pb_<category>; in request: {{ text, project }}; out plan; one task main with at most one feels judgment deciding whether the request is an instance; plan is {{ matches: false }} unless it is, else a record with matches, playbook, project, kind, effort, profile and notes. Put the obstacles into notes as instructions that prevent them. Output only the program source." using spec
+      drafts = drafts + [{ name: spec.name, category: c, spec: spec, source: source }]
+  return { patterns: patterns, drafts: drafts }
+
+# Prove, decided by code: a draft goes live only if the past runs it claims
+# replayed cleanly, it reproduces their recorded routes, and it claims none of
+# the unrelated requests it was tried on. No model is asked.
+def verdict(results, policy):
+  positives = [r for r in results if r.expected_match]
+  negatives = [r for r in results if not r.expected_match]
+  replayed = [r for r in positives if r.replay_ok]
+  hits = [r for r in replayed if r.matched and r.plan_project == r.expected_project and r.plan_kind == r.expected_kind]
+  false_hits = [r for r in negatives if r.matched]
+  recall = 0
+  if len(positives) > 0:
+    recall = len(hits) / len(positives)
+  reasons = []
+  if len(replayed) < policy.min_evidence:
+    reasons = reasons + ["only {len(replayed)} past tasks replayed cleanly; {policy.min_evidence} are needed"]
+  if recall < policy.min_recall:
+    reasons = reasons + ["it reproduced {len(hits)} of {len(positives)} past routes"]
+  if len(false_hits) > 0:
+    reasons = reasons + ["it also claimed {len(false_hits)} unrelated requests"]
+  return {
+    ok: len(reasons) == 0,
+    recall: recall,
+    positives: len(positives),
+    negatives: len(negatives),
+    replayed: len(replayed),
+    false_hits: len(false_hits),
+    reasons: reasons
+  }

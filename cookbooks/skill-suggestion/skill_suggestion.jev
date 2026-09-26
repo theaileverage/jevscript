@@ -1,0 +1,39 @@
+program skill_suggestion
+
+in request: text
+in roster: list
+
+out suggestion
+out gate_score
+out shortlist
+out fits
+
+task main budget calls 2:
+  wide_roster = [{ name: skill.name, description: skill.description, label: skill.label } for skill in roster]
+  wide = wide_roster pick among "Which skill, if any, is the right one to load for the user's latest request?":
+    by description
+  acts_on_user_system = request feels "the assistant is being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise"
+  would_follow_documented_procedure = request feels "a careful expert answering this would consult a specific documented procedure or set of commands, rather than answer from general understanding"
+  prose_suffices = request feels "a knowledgeable generalist could fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts"
+
+  gate_score = (acts_on_user_system + would_follow_documented_procedure + (1 - prose_suffices)) / 3
+  suggestion = none
+  shortlist = []
+  fits = []
+
+  if gate_score < 0.30:
+    return
+
+  wide_probabilities = [wide.probabilities[skill.label] for skill in wide_roster]
+  ranked = top(roster, by wide_probabilities, n 3)
+  shortlist = [skill.name for skill in ranked]
+  detailed = [{ name: skill.name, detail: skill.description_full + " — " + head(skill.body, 700) } for skill in ranked]
+
+  reranked = detailed pick among "Exactly one of these skills is the right one to load for the user's latest request. Which one? Read what each actually does, not just its name.":
+    by detail
+  fits = each detailed feels "does the specific thing the user's request asks for":
+    compare ["request"]
+
+  if max(fits) < 0.30:
+    return
+  suggestion = reranked.item.name

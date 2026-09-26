@@ -1,0 +1,19 @@
+program skills
+
+# A separate, bounded judgment over the host's approved catalog. Each skill
+# is judged independently, so a task can need none, one, or several. The
+# trusted host closes dependencies and verifies the files before dispatch.
+
+def select(statement, request, notes, catalog, threshold, uncertain_floor):
+  if len(catalog) == 0:
+    return { ids: [], uncertain: [], status: "none" }
+  fits = each catalog feels "the documented skill is needed to complete a part of `statement`, considering `request` and `notes`; its procedure applies to the actual work":
+    compare ["statement", "request", "notes"]
+  ids = [skill.id for skill, fit in zip(catalog, fits) if fit >= threshold]
+  uncertain = [skill.id for skill, fit in zip(catalog, fits) if fit >= uncertain_floor and fit < threshold]
+  status = "selected"
+  if len(uncertain) > 0:
+    status = "uncertain"
+  elif len(ids) == 0:
+    status = "none"
+  return { ids: ids, uncertain: uncertain, status: status }

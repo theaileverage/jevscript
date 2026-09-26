@@ -1,0 +1,34 @@
+program agent_loop
+
+needs claude: agent
+needs tree:   tool
+needs me:     person
+
+judgment read_agent(summary, files, tests, recent, title):
+  claims_done = summary feels "states the work is complete"
+  off_scope   = each files feels "is unrelated to the issue: {title}"
+  next        = summary pick:
+    keep_working  "making progress and needs nothing"
+    stuck         "looping or unsure how to proceed"
+    needs_me      "asks a question only a person can answer"
+    other
+
+task watch(dev, title) budget calls 30 thresholds risk_confirm 0.2, min_confidence 0.5:
+  until verify(tree.tests_pass), max 6:
+    dev.wait idle, minutes 5
+    obs = shape:
+      summary  focus dev.observe.last_message on "what the agent says it did", max 2k
+      files    tree.diff.files, max 500
+      tests    tree.test_summary, max 300
+      recent   trail 6
+    j = read_agent(summary: obs.summary, files: obs.files, tests: obs.tests, recent: obs.recent, title: title)
+    if stuck(obs.recent) or j.next is stuck:
+      dev.send "Stop. In three lines, what is blocking you?"
+      continue
+    gate risk max(j.off_scope), confidence j.next.confidence:
+      confirm  -> me.ask "Agent touched {count(j.off_scope, above 0.6)} unrelated files. Continue?"
+      escalate -> me.take_over
+      proceed  ->
+        if j.claims_done > 0.8 and not tree.tests_pass:
+          dev.send "Tests fail:\n{obs.tests}"
+  return tree.tests_pass

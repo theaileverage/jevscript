@@ -1,0 +1,29 @@
+program std
+
+def focus_impl(text, purpose, limit):
+  if tokens(text) <= limit:
+    return text
+  chunks = chunk(text, tokens 1500)
+  keep   = each chunks feels "contains information relevant to: {purpose}"
+  kept   = [c for c, p in zip(chunks, keep) if p > 0.6]
+  if len(kept) == 0:
+    kept = top(chunks, by keep, n 3)
+  return focus_impl(join(kept), purpose, limit)
+
+def stuck(steps):
+  if repeats(steps) >= 2:
+    return true
+  same = steps feels "the recent attempts use the same approach with only cosmetic differences"
+  progress = steps rate:
+    unchanged "each step leaves the state unchanged"
+    drifting  "the state changes but not toward the goal"
+    advancing "the state is moving toward the goal"
+  return same > 0.7 or (progress is unchanged and progress.confidence > 0.6)
+
+def repeats(steps):
+  keys = [hash([s.action, s.target, s.args]) for s in steps]
+  most = 0
+  for k in keys:
+    n = len([x for x in keys if x == k])
+    most = max([most, n])
+  return most

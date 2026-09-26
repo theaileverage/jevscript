@@ -1,0 +1,170 @@
+program supervise
+
+# Supervision: one wake of one worker's lifecycle.
+#
+#   working -> ready -> review -> approved -> landing -> done
+#      |  ^                |          |
+#      v  |                v          v
+#   stuck / needs_decision  fixes   shelved (the owner declined)
+#
+# Jev picks the next transition, but only among those whose `when` guard is
+# true, so a model can never skip review or land unverified work: sign-off,
+# green checks, merge authority and a proven landing are all code guards, and
+# `done` is entered only through the guarded `landed` event, which makes the
+# machine's result `verified` (spec section 7.8).
+#
+# A worker's lifecycle spans many wakes and Jevscript 0.1 has no way to start
+# a machine in a state chosen at run time (`initial` is static). So every
+# episode enters at `resume`, whose events are guarded by the persisted phase
+# (exactly one is enabled), takes one lifecycle step, and the host persists
+# the state it reached as the next episode's phase.
+
+use "./escalate.jev" as escalation with me, writer, fleet
+use "./deliver.jev" as deliver with fleet
+use "./review.jev" as review with crew, fleet
+
+needs crew: agent
+needs me: person
+needs writer: llm
+needs fleet: tool:
+  steer(id, text) -> record
+  ring(id) -> bool
+  digest(text) -> none
+  landable(id) -> record
+  land(id) -> record
+  landed(id) -> record
+  pr_state(id) -> record
+  merge(id) -> record
+  authority(id) -> record
+  authorize(id, answer) -> none
+  cleanup(id) -> record
+  relaunch(id) -> record
+  follow(id, answer, text) -> record
+  write_brief(id, text) -> text
+  track_review(id, handle) -> none
+
+judgment read_worker(title, screen, status):
+  looping = screen feels "shows the agent repeating the same failed step or cycling without making progress"
+  prompt = screen feels "shows a question, permission prompt or dialog waiting for someone to answer it"
+  needs_owner = status feels "asks for a product decision, a credential, an approval or an authority that only the person who owns the work can give"
+
+machine lifecycle(w, j, rv, looping, policy) budget calls 4 thresholds min_confidence 0.2, stop_confidence 0.02, risk_confirm 1.1:
+  goal "Keep this worker moving toward a reviewed change that is proven landed, without doing its work for it and without deciding anything that belongs to the person who owns the work."
+  initial resume
+
+  observe:
+    phase    w.phase, max 10
+    status   w.status_kind, max 10
+    said     w.last_status, max 200
+    quiet    w.idle_words, max 20
+    review   w.review_text, max 200
+
+  state resume:
+    on at_working "the record says the worker is working; continue from there" -> working when w.phase == "working"
+    on at_stuck "the record says the worker is stuck; continue from there" -> stuck when w.phase == "stuck"
+    on at_needs_decision "the record says the worker needs a decision; continue from there" -> needs_decision when w.phase == "needs_decision"
+    on at_ready "the record says the work is ready; continue from there" -> ready when w.phase == "ready"
+    on at_review "the record says the work is in review; continue from there" -> review when w.phase == "review"
+    on at_fixes "the record says the worker is fixing review findings; continue from there" -> fixes when w.phase == "fixes"
+    on at_approved "the record says the work is approved; continue from there" -> approved when w.phase == "approved"
+    on at_landing "the record says the work is landing; continue from there" -> landing when w.phase == "landing"
+
+  state working:
+    on reported_ready "the worker reports that its work is ready" -> ready when w.status_kind == "done" and w.status_new
+    on asks "the worker asks for a decision, reports a blocker or reports a failure" -> needs_decision when w.status_new and (w.status_kind == "needs-decision" or w.status_kind == "blocked" or w.status_kind == "failed")
+    on stalled "the worker stopped making progress or is looping" -> stuck when w.alive and w.active and (w.stale or looping or j.looping >= policy.looping)
+    on died "the worker's session ended before it delivered" -> stuck when not w.alive
+    on prompt_blocked "a question or permission prompt on the worker's screen is waiting for an answer" -> needs_decision when w.alive and not w.busy and j.prompt >= policy.prompt
+    on rering "the worker has not acknowledged an instruction for too long" -> working when w.alive and w.unacked > 0 and w.unacked_minutes >= policy.rering_minutes:
+      fleet.ring(w.id)
+    on carry_on "nothing needs doing: the worker is busy, or waiting on something outside" -> working when true
+
+  state stuck:
+    on nudge "nudge the stalled worker to name its blocker and continue" -> working when w.alive and w.nudges < policy.max_nudges:
+      fleet.steer(w.id, "You seem stalled. In three lines: what is blocking you, and what will you try next? Then continue.")
+    on relaunch "relaunch the worker in its existing isolated copy" -> working when not w.alive and w.relaunches < policy.max_relaunches:
+      fleet.relaunch(w.id)
+    on hand_over "ask the owner what to do with a worker that keeps stalling or dying" -> working when (w.alive and w.nudges >= policy.max_nudges) or (not w.alive and w.relaunches >= policy.max_relaunches):
+      a = escalation.ask("The worker on '{w.title}' keeps stalling or exiting ({w.nudges} nudges, {w.relaunches} relaunches). Its work is kept. Relaunch it, stop it, or reply with direction for it?", ["relaunch", "stop", "direction in text"])
+      fleet.follow(w.id, a.answer, a.text)
+
+  state needs_decision:
+    on owner_decides "only the owner can settle this; ask them and pass the answer on" -> working when j.needs_owner >= policy.needs_owner or j.prompt >= policy.prompt or w.status_kind == "failed":
+      a = escalation.ask("The worker on '{w.title}' needs you: {w.last_status}", ["answer in text"])
+      fleet.follow(w.id, "answer", a.text)
+    on in_scope "the instructions already settle this; tell the worker to take the conservative option" -> working when j.needs_owner < policy.needs_owner and j.prompt < policy.prompt and w.status_kind != "failed":
+      fleet.steer(w.id, "Your instructions already settle this. Take the most conservative option that stays inside the task's scope, note the choice in your final report, and continue.")
+
+  state ready:
+    on request_review "ask the lead reviewer to review the change" -> review when w.reviewer != none and w.kind == "ship":
+      h = review.start(w, w.reviewer, w.paths)
+      fleet.track_review(w.id, h)
+    on skip_review "no lead review is required for this work" -> approved when w.reviewer == none or w.kind == "scout"
+
+  state review:
+    on signed_off "the reviewer approved the change" -> approved when rv.approved
+    on changes_requested "the reviewer asked for changes" -> fixes when rv.changes:
+      fleet.steer(w.id, "The review asked for changes: {w.review_text}. Address them, commit, and report done again.")
+    on awaiting_review "the review is not finished yet" -> review when not rv.approved and not rv.changes
+
+  state fixes:
+    on back_to_work "the worker has the review findings; supervise it as working again" -> working when true
+
+  state approved:
+    on deliver_report "the investigation report is written" -> landing when w.kind == "scout" and w.report_exists
+    on land "the branch is a clean fast-forward and landing is authorized" -> landing when deliver.can_land(w, fleet.landable(w.id)) and deliver.authorized(w, fleet.authority(w.id)):
+      fleet.land(w.id)
+    on merge "the pull request is green and merging is authorized" -> landing when deliver.green(w, fleet.pr_state(w.id)) and deliver.authorized(w, fleet.authority(w.id)):
+      fleet.merge(w.id)
+    on merged "the pull request has already merged" -> landing when w.pr != none and fleet.pr_state(w.id).state == "MERGED"
+    on ask_authority "the work is ready and landing it needs the owner's approval" -> approved when not w.yolo and fleet.authority(w.id).answer == none and (deliver.can_land(w, fleet.landable(w.id)) or deliver.green(w, fleet.pr_state(w.id))):
+      a = escalation.ask("'{w.title}' in {w.project} is ready and reviewed. Land it? {w.pr}", ["yes", "no"])
+      fleet.authorize(w.id, a.answer)
+    on declined "the owner declined to land this work" -> shelved when deliver.declined(w, fleet.authority(w.id)):
+      escalation.tell("Holding '{w.title}' unlanded, as you asked. Its isolated copy is kept.", "info", policy.mode)
+    on rebase "the branch is not a clean fast-forward of the main branch" -> working when w.kind == "ship" and deliver.is_local(w) and not fleet.landable(w.id).ok:
+      fleet.steer(w.id, "Your branch cannot land as a clean fast-forward: {fleet.landable(w.id).reason}. Fix that, commit, and report done again.")
+    on skill_correction "host-owned Skill files are in the pull request; ask the worker to remove them" -> working when w.pr != none and fleet.pr_state(w.id).state == "OPEN" and not fleet.pr_state(w.id).skills_ok:
+      fleet.steer(w.id, "Host-owned Skill files are in your branch: {fleet.pr_state(w.id).reason}. Remove them from your commits while keeping your local copies, update the pull request, and report done again.")
+    on checks_pending "the pull request's checks are still running or failing" -> approved when w.pr != none and fleet.pr_state(w.id).state == "OPEN" and fleet.pr_state(w.id).skills_ok and not fleet.pr_state(w.id).green
+    on no_pr "the worker said it is done but named no pull request" -> working when w.kind == "ship" and not deliver.is_local(w) and w.pr == none:
+      fleet.steer(w.id, "Report the full https URL of your pull request in a done line.")
+    on hold "nothing can move yet: wait for the worker, the checks or the owner" -> approved when true
+
+  state landing:
+    on landed "the change is proven on the main branch" -> done when fleet.landed(w.id).ok:
+      deliver.finish(w)
+      escalation.tell("Landed '{w.title}' in {w.project}.", "outcome", policy.mode)
+    on land_failed "the landing did not take" -> approved when not fleet.landed(w.id).ok
+
+  state done done
+  state shelved done
+
+# The prelude's stuck check reads step-like records of what the Chief of
+# Staff already tried with this worker.
+task step(w, policy) budget calls 10:
+  view = shape:
+    title   w.title, max 60
+    screen  w.screen, max 1500, tail
+    status  w.last_status, max 200
+  j = read_worker(title: view.title, screen: view.screen, status: view.status)
+  looping = false
+  if w.stale:
+    looping = stuck(w.recent)
+  rv = { approved: false, changes: false, verdict: none }
+  if w.review_new:
+    r = review.read_review(report: w.review_text)
+    rv = { approved: r.verdict is approve and r.verdict.confidence >= policy.review_confidence, changes: r.verdict is changes, verdict: r.verdict.label }
+  m = lifecycle(w, j, rv, looping, policy, max 2)
+  return {
+    id: w.id,
+    phase: m.state,
+    done: m.done,
+    verified: m.verified,
+    steps: m.steps,
+    events: [e.event for e in m.events],
+    looping: j.looping,
+    prompt: j.prompt,
+    needs_owner: j.needs_owner,
+    review: rv.verdict
+  }

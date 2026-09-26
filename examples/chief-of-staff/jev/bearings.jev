@@ -1,0 +1,29 @@
+program bearings
+
+# Bearings: the fleet digest, decided in code. What needs the owner comes
+# first, then what is under way, what is queued or held, what finished, and
+# the second mates and learned playbooks. No model is asked; the host only
+# renders the sections this returns.
+
+def digest(fleet):
+  asks = ["{d.question} (answer with: cos answer {d.key} ...)" for d in fleet.decisions]
+  under_way = ["{w.title} [{w.id}] in {w.project}: {w.phase}" for w in fleet.workers]
+  sep = ", "
+  queued = [i for i in fleet.backlog if i.status == "queued"]
+  held = ["{i.title} [{i.id}]: held, {i.hold.reason}" for i in queued if i.hold != none]
+  waiting = ["{i.title} [{i.id}]: after {join(i.deps, sep)}" for i in queued if i.hold == none and len(i.deps) > 0]
+  next_up = ["{i.title} [{i.id}]" for i in queued if i.hold == none and len(i.deps) == 0]
+  finished = ["{i.title} [{i.id}]: {i.outcome}" for i in fleet.finished]
+  headline = "{len(fleet.workers)} under way, {len(queued)} queued, {len(fleet.decisions)} waiting on you."
+  if len(fleet.decisions) == 0 and len(fleet.workers) == 0 and len(queued) == 0:
+    headline = "All quiet: nothing under way and nothing waiting on you."
+  return {
+    headline: headline,
+    mode: fleet.mode,
+    needs_you: asks,
+    under_way: under_way,
+    queued: next_up + waiting + held,
+    finished: finished,
+    mates: ["{m.name} ({m.scope}): {m.in_flight} under way, {m.open_decisions} waiting" for m in fleet.mates],
+    playbooks: ["{p.name} v{p.version}: {p.state}" for p in fleet.playbooks]
+  }

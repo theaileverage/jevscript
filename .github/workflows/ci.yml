@@ -1,0 +1,128 @@
+# Every check in AGENTS.md, on every push and pull request. The toolchain comes
+# from rust-toolchain.toml and every other version is pinned in the repo, so a
+# green run here means the same thing as a green run locally.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: rust (fmt, clippy, test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Cache cargo
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build
+      - name: Zed extension (built as Zed builds it)
+        run: |
+          rustup target add wasm32-wasip2
+          cargo build --release --target wasm32-wasip2 --locked --manifest-path editors/zed/Cargo.toml
+      - name: Keep the binary for the SDK tests
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: jevscript
+          path: target/debug/jevscript
+          retention-days: 1
+
+  sdks:
+    name: sdks, adapters and editors
+    runs-on: ubuntu-24.04
+    needs: rust
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: jevscript
+          path: target/debug
+      - run: chmod +x target/debug/jevscript
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install tmux for the adapter's integration test
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: JavaScript SDK
+        working-directory: sdk/js
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm run typecheck
+          pnpm run build
+      - name: Python SDK
+        run: python3 -m pip install pytest && python3 -m pytest sdk/python
+      - name: Agent adapter suite
+        working-directory: adapters
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm run typecheck
+          pnpm run build
+      - name: VS Code extension
+        working-directory: editors/vscode
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm run typecheck
+          pnpm run package
+
+  package-smoke:
+    name: offline npm and PyPI artifact smoke (Linux x64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10
+      - run: python3 scripts/build_release_cli.py --target linux-x64-gnu
+      - run: python3 scripts/stage_release.py npm --binary-root .release-tmp/binaries --targets linux-x64-gnu
+      - run: python3 scripts/stage_release.py wheel --binary-root .release-tmp/binaries --targets linux-x64-gnu
+      - run: python3 -m pip install build==1.3.0 hatchling==1.28.0
+      - name: Build Linux wheel
+        working-directory: sdk/python
+        env:
+          JEVSCRIPT_TARGET: linux-x64-gnu
+          JEVSCRIPT_PLATFORM_TAG: manylinux_2_39_x86_64
+          JEVSCRIPT_WHEEL_TAG: py3-none-manylinux_2_39_x86_64
+        run: python3 -m build --wheel --no-isolation --outdir ../../.release-tmp/wheelhouse
+      - name: Build npm tarball
+        working-directory: sdk/js
+        env:
+          JEVSCRIPT_PACK_TARGETS: linux-x64-gnu
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run build
+          npm pack --pack-destination ../../.release-tmp
+      - run: python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.0.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.0-py3-none-manylinux_2_39_x86_64.whl
