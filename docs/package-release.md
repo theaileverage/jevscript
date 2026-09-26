@@ -90,8 +90,11 @@ Before a release:
    environments with required reviewers. No registry token is stored.
 4. Run `publish.yml` on the same tag with the staging run ID and the recorded
    digest. It requires that run to be a successful `release.yml` run of the
-   tag's commit, rechecks every digest, then publishes the wheels to PyPI and
-   the tarball to npm with provenance.
+   tag's commit and rechecks every bundle digest. Before uploading, it compares
+   any wheels already on PyPI with the verified bytes. After the upload, it
+   requires every verified wheel on PyPI to have the same SHA-256 digest, then
+   publishes the tarball to npm with provenance. A rerun skips wheels already
+   present only when their bytes match the verified bundle.
 
 Registry names were unclaimed by public lookup on 2026-09-26, but that does
 not reserve them. npm/PyPI versions and the packaged CLI version must match

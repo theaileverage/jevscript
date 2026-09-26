@@ -192,7 +192,7 @@ class Commands:
         rows = self.decisions.drain_digest()
         if not rows:
             return Reply("Welcome back. Nothing happened that needed you.", [])
-        return Reply(f"Welcome back. While you were away: " + "; ".join(r["message"] for r in rows[-8:]), rows)
+        return Reply("Welcome back. While you were away: " + "; ".join(r["message"] for r in rows[-8:]), rows)
 
     # -- running it --------------------------------------------------------------------
 

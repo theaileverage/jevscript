@@ -65,15 +65,24 @@ uses the corresponding `--message-id`, `--reply-to`, `--native-thread`,
 Omitting `message_id` gives a locally generated ID. Retrying a supplied ID
 returns its recorded thread and task without creating another request.
 
-[`threads.jev`](jev/threads.jev) first honors a valid native thread or reply
-relation. A missing explicit relation is returned as unresolved. Otherwise it
+The host matches native-thread and reply relations within registered projects.
+An explicit project fixes the scope; a relation found in one project selects
+that project, and matches in several projects prompt the owner to choose one.
+An unknown supplied project is rejected. Once selected, the project remains
+fixed through intake clarification and playbook reassessment. A playbook that
+selects an unknown or different project is reassessed through normal intake.
+
+[`threads.jev`](jev/threads.jev) continues a valid relation in the selected
+project. A missing explicit relation is returned as unresolved. Otherwise it
 uses a bounded same-scope candidate list and `pick among` with `none`; code
-requires the configured `policy.thread_confidence` (default `0.65`) before
-continuing. The host validates the scope, stores message-to-thread receipts
-and updates the selected task or active worker inbox. A thread with no task
-keeps its identity while the incoming message goes through normal intake. The
-caller sees the thread ID and any task ID in the `say` result. This is local
-message correlation; there is no provider connector or Discord API in this example.
+requires `policy.thread_confidence` (default `0.65`) before continuing. The
+host stores message-to-thread receipts and updates the selected task or active
+worker inbox. A thread with no task keeps its identity while the incoming
+message goes through normal intake. A follow-up stays with the parent when a
+second mate cannot route the selected project with the same repository path
+and delivery mode. The caller sees the thread ID and any task ID in the `say`
+result. This is local message correlation; there is no provider connector or
+Discord API in this example.
 
 ## Task Skills at dispatch
 

@@ -91,7 +91,7 @@ task main budget calls 2:
 
 def compile_check(path: Path) -> tuple[bool, str]:
     result = subprocess.run([find_jevscript(), "check", str(path)], capture_output=True, text=True, check=False, timeout=60)
-    errors = [l for l in result.stderr.splitlines() if ": warning:" not in l and l.strip()]
+    errors = [line for line in result.stderr.splitlines() if ": warning:" not in line and line.strip()]
     return result.returncode == 0, "\n".join(errors)
 
 
@@ -102,7 +102,7 @@ def replay(recording: str) -> dict[str, Any] | None:
     result = subprocess.run([find_jevscript(), "replay", recording], capture_output=True, text=True, check=False, timeout=120)
     if result.returncode != 0:
         return None
-    lines = [l for l in result.stdout.splitlines() if l.strip().startswith("{")]
+    lines = [line for line in result.stdout.splitlines() if line.strip().startswith("{")]
     return json.loads(lines[-1]) if lines else None
 
 
