@@ -41,7 +41,7 @@ class Threads:
     def scope(self, request: dict[str, Any]) -> dict[str, str]:
         return {
             "source": _id(request.get("source"), "source") or "cos",
-            "project": _id(request.get("project"), "project") or "",
+            "project": _id(request.get("effective_project") or request.get("project"), "project") or "",
             "channel": _id(request.get("channel"), "channel") or "",
         }
 
@@ -125,9 +125,12 @@ class Threads:
 
     def apply(self, request: dict[str, Any], decision: dict[str, Any], task_id: str | None = None) -> dict[str, Any]:
         scope = self.scope(request)
+        original_scope = self.scope({**request, "effective_project": None})
         message_id = request["message_id"]
-        receipt = self.receipt(scope, message_id)
+        receipt = self.receipt(scope, message_id) or self.receipt(original_scope, message_id)
         if receipt and receipt.get("status") == "done":
+            if original_scope != scope:
+                write_json(self.receipt_path(original_scope, message_id), receipt)
             return receipt
         route = decision["route"]
         thread = self.get(decision.get("thread_id")) if route == "continue" else None
@@ -145,6 +148,8 @@ class Threads:
             if task_id:
                 thread["task_id"] = task_id
             write_json(self.root / f"{thread['id']}.json", thread)
-        result = {**(receipt or {}), "status": "done", "route": route, "reason": decision.get("reason", ""), "thread_id": thread["id"] if thread else None, "task_id": thread.get("task_id") if thread else None}
+        result = {**(receipt or {}), "scope": scope, "status": "done", "route": route, "reason": decision.get("reason", ""), "thread_id": thread["id"] if thread else None, "task_id": thread.get("task_id") if thread else None}
         write_json(self.receipt_path(scope, message_id), result)
+        if original_scope != scope:
+            write_json(self.receipt_path(original_scope, message_id), result)
         return result

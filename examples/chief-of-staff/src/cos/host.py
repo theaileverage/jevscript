@@ -391,6 +391,7 @@ class Host:
             self._reconcile_thread_task(previous)
             path.unlink(missing_ok=True)
             return {"thread_id": previous.get("thread_id"), "task_id": previous.get("task_id")}
+        request["effective_project"] = request.get("project") or d.get("project")
         if route == "continue":
             thread = self.threads.get(d["thread_id"])
             if thread is None or thread["scope"] != self.threads.scope(request):
@@ -474,6 +475,8 @@ class Host:
         else:
             self.decisions.notify(f"Could not place '{d.get('title')}': {d.get('reason') or 'it stayed unclear'}. Say it again with more detail.")
         if d.get("thread_route") in ("new", "continue") and route not in ("unclear", "declined"):
+            if outcome.get("item"):
+                request["effective_project"] = self.backlog.get(outcome["item"])["project"]
             thread_route = d["thread_route"]
             receipt = self.threads.apply(request, {"route": thread_route, "thread_id": d.get("thread_id"), "reason": d.get("reason") or thread_route}, outcome.get("item"))
             outcome.update(thread_route=thread_route, thread_id=receipt["thread_id"], task_id=receipt["task_id"])

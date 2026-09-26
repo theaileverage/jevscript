@@ -61,17 +61,23 @@ jobs:
       name: pypi
       url: https://pypi.org/project/jevscript/
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4.2.2
       - uses: actions/download-artifact@v4.3.0
         with:
           name: verified-bundle
           path: bundle
+      - name: Compare existing PyPI wheels with verified bytes
+        run: python3 scripts/check_pypi_wheels.py bundle
       - uses: pypa/gh-action-pypi-publish@v1.14.2
         with:
           packages-dir: bundle/wheelhouse/
           # A rerun after npm failed must not stop on wheels PyPI already holds.
           skip-existing: true
+      - name: Require exact verified wheels on PyPI
+        run: python3 scripts/check_pypi_wheels.py bundle --require-all
 
   npm:
     needs: pypi

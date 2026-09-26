@@ -15,8 +15,6 @@ import tempfile
 import venv
 import zipfile
 
-from stage_release import version
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FORBIDDEN = (b"/Users/", b"/home/runner/", b"C:\\Users\\", b"docs/handoffs/", b"TYPESAFE_API_KEY=", b"-----BEGIN PRIVATE KEY-----")
 EXTERNAL_NAME = bytes.fromhex("46697273746d617465").lower()
@@ -71,21 +69,23 @@ def inspect_tarball(path: pathlib.Path) -> tuple[dict, bytes]:
                 archive.extractfile("package/skills/jevscript/SKILL.md").read())  # type: ignore[union-attr]
 
 
-def inspect_wheel(path: pathlib.Path) -> tuple[dict, bytes]:
+def inspect_wheel(path: pathlib.Path, version: str) -> tuple[dict, bytes]:
     """Audit exact wheel members, including generated metadata."""
+    if not path.name.startswith(f"jevscript-{version}-"):
+        raise AssertionError("wheel filename differs from npm package version")
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
         for name in names:
             if EXTERNAL_NAME in name.lower().encode() or "/.env" in name or name.endswith((".env", ".replay.jsonl")):
                 raise AssertionError(f"environment file in wheel: {name}")
-            if not (name.startswith("jevscript/") or name.startswith(f"jevscript-{version()}.dist-info/")):
+            if not (name.startswith("jevscript/") or name.startswith(f"jevscript-{version}.dist-info/")):
                 raise AssertionError(f"unexpected wheel member: {name}")
             if any(pattern in archive.read(name) for pattern in FORBIDDEN) or EXTERNAL_NAME in archive.read(name).lower():
                 raise AssertionError(f"sensitive wheel member: {name}")
         for suffix in ("entry_points.txt", "RECORD", "WHEEL"):
             if not any(name.endswith(suffix) for name in names):
                 raise AssertionError(f"missing wheel {suffix}")
-        if f"jevscript-{version()}.dist-info/licenses/LICENSE" not in names:
+        if f"jevscript-{version}.dist-info/licenses/LICENSE" not in names:
             raise AssertionError("wheel lacks Apache-2.0 license text")
         if not {"jevscript/examples/inbox_triage.jev", "jevscript/examples/package_smoke.jev", "jevscript/_bin/manifest.json", "jevscript/_bin/THIRD_PARTY_NOTICES.txt", "jevscript/skills/jevscript/SKILL.md"}.issubset(names):
             raise AssertionError("wheel lacks the packaged example, Skill, CLI manifest or third-party notices")
@@ -111,7 +111,7 @@ def main() -> None:
     wheel = args.wheel.resolve()
     check_source_name()
     npm_manifest, npm_skill = inspect_tarball(npm)
-    wheel_manifest, wheel_skill = inspect_wheel(wheel)
+    wheel_manifest, wheel_skill = inspect_wheel(wheel, npm_manifest["version"])
     source_skill = (ROOT / "skills/jevscript/SKILL.md").read_bytes()
     if npm_skill != wheel_skill or npm_skill != source_skill:
         raise AssertionError("npm, wheel and source Skills differ")
@@ -136,8 +136,8 @@ def main() -> None:
         env = os.environ.copy()
         env.pop("JEVSCRIPT_BIN", None)
         env["npm_config_cache"] = str(base / "npm-cache")
-        run("npm", "install", "--offline", "--ignore-scripts", "--no-audit", str(npm), cwd=js, env=env)
-        command = js / "node_modules" / ".bin" / "jevscript"
+        run("npm.cmd" if os.name == "nt" else "npm", "install", "--offline", "--ignore-scripts", "--no-audit", str(npm), cwd=js, env=env)
+        command = js / "node_modules" / ".bin" / ("jevscript.cmd" if os.name == "nt" else "jevscript")
         example = js / "node_modules" / "jevscript" / "examples" / "inbox_triage.jev"
         run(str(command), "--version", cwd=js, env=env)
         project = base / "project"

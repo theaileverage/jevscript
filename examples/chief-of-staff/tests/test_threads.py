@@ -41,6 +41,21 @@ def test_new_semantic_continue_none_and_explicit_reply_priority(make_host):
     assert sum("matched" in req.get("questions", {}) for req in host.session.fake.requests) == matches, "explicit relation needs no semantic model call"
 
 
+def test_inferred_project_receipt_supports_explicit_project_reply(make_host):
+    host = make_host()
+    host.submit("Update the project guide", channel="general", message_id="inferred", after=["unreleased"])
+    first = routed(host, "inferred")
+    scope = {"source": "cli", "project": "proj", "channel": "general"}
+    receipt = host.threads.receipt(scope, "inferred")
+    assert receipt["thread_id"] == first["thread_id"]
+    assert host.threads.get(first["thread_id"])["scope"] == scope
+    assert host.threads.candidates({"source": "cli", "project": "proj", "channel": "general"})[0]["id"] == first["thread_id"]
+    host.submit("Also update its examples", project="proj", channel="general", message_id="explicit", reply_to="inferred")
+    second = routed(host, "explicit")
+    assert second["route"] == "continue"
+    assert second["thread_id"] == first["thread_id"]
+
+
 def test_missing_parent_native_thread_and_scope_separation(make_host):
     host = make_host()
     host.submit("Start conversation", project="proj", channel="general", message_id="native-1", native_thread="native-1", after=["unreleased"])
