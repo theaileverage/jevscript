@@ -9,8 +9,6 @@ import platform
 import shutil
 import subprocess
 
-from stage_release import version
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
@@ -33,6 +31,8 @@ def host_target() -> str:
 
 def main() -> None:
     """Reject stale/wrong-architecture binaries and personal build paths."""
+    from stage_release import version
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True)
     args = parser.parse_args()

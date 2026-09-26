@@ -72,6 +72,8 @@ task take_request(req, s) budget calls 6:
   if assessment == none:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
   d = routing.route(req, assessment, s.policy)
+  if d.route != "ask" and selected_project != "":
+    d.project = selected_project
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
     clarified = { id: req.id, text: "{req.text}\n\nClarification from the owner: {a.text}" }
@@ -86,10 +88,12 @@ task take_request(req, s) budget calls 6:
       d.route = "declined"
   if d.urgent:
     escalation.tell("Urgent request noted: {d.title}", "urgent", s.policy.mode)
-  if selected_project != "":
-    d.project = selected_project
-  d.thread_route = conversation.route
-  d.thread_id = conversation.thread_id
+  if d.project != selected_project:
+    d.thread_route = "new"
+    d.thread_id = none
+  else:
+    d.thread_route = conversation.route
+    d.thread_id = conversation.thread_id
   return d
 
 task on_wake budget calls 40:

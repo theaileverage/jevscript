@@ -396,7 +396,7 @@ class Host:
             self._reconcile_thread_task(previous)
             path.unlink(missing_ok=True)
             return {"thread_id": previous.get("thread_id"), "task_id": previous.get("task_id")}
-        request["effective_project"] = request.get("project") or d.get("project")
+        request["effective_project"] = d.get("project") or request.get("project")
         if route == "continue":
             thread = self.threads.get(d["thread_id"])
             if thread is None or thread["scope"] != self.threads.scope(request):
@@ -455,7 +455,7 @@ class Host:
                 {
                     "text": request["text"],
                     "title": d.get("title"),
-                    "project": request.get("project") or d.get("project"),
+                    "project": d.get("project") or request.get("project"),
                     "kind": d.get("kind", "ship"),
                     "effort": d.get("effort", "medium"),
                     "profile": d.get("profile", "default"),

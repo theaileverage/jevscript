@@ -75,6 +75,24 @@ def test_inferred_project_routes_no_project_followups(make_host, project):
     assert semantic["thread_id"] != other["thread_id"]
 
 
+def test_clarified_project_controls_backlog_and_thread_scope(make_host, project):
+    host = make_host(rules=[{"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.95}}])
+    host.registry.add_project("other", str(project), "the clarified project")
+    host.submit("Update the guide", channel="general", message_id="clarified", after=["unreleased"])
+    host.tick()
+    [decision] = host.decisions.open()
+    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i1"}})
+    host.session.fake.rules.insert(0, {"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.15}})
+    host.decisions.answer(decision["key"], "Use the other project")
+    host.tick()
+    scope = {"source": "cli", "project": "other", "channel": "general"}
+    receipt = host.threads.receipt(scope, "clarified")
+    assert receipt["thread_id"]
+    assert host.threads.get(receipt["thread_id"])["scope"] == scope
+    assert host.backlog.get(receipt["task_id"])["project"] == "other"
+
+
+
 def test_missing_parent_native_thread_and_scope_separation(make_host):
     host = make_host()
     host.submit("Start conversation", project="proj", channel="general", message_id="native-1", native_thread="native-1", after=["unreleased"])
