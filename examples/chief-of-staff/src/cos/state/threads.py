@@ -20,6 +20,10 @@ CANDIDATE_LIMIT = 8
 RECENT_LIMIT = 8
 
 
+class ReceiptCollision(ValueError):
+    """Section 6.4a rejects a message ID already owned in its selected scope."""
+
+
 def _id(value: str | None, name: str) -> str | None:
     if value is None:
         return None
@@ -58,8 +62,16 @@ class Threads:
         original = self.receipt(original_scope, request["message_id"])
         selected = self.receipt(scope, request["message_id"])
         if any(row and row.get("request_id") != request["id"] for row in (original, selected)):
-            raise ValueError("message_id belongs to another request in the selected project")
+            raise ReceiptCollision("message_id belongs to another request in the selected project")
+        if any(t.get("scope") in (original_scope, scope) and any(m["id"] == request["message_id"] and m.get("request_id") != request["id"] for m in t.get("messages", [])) for t in self.all()):
+            raise ReceiptCollision("message_id belongs to another request in the selected project")
         return selected or original
+
+    def reject(self, request: dict[str, Any], reason: str) -> None:
+        scope = self.scope({**request, "effective_project": None})
+        receipt = self.receipt(scope, request["message_id"])
+        if receipt and receipt.get("request_id") == request["id"]:
+            write_json(self.receipt_path(scope, request["message_id"]), {**receipt, "status": "done", "route": "rejected", "reason": reason, "thread_id": None, "task_id": None})
 
     def enqueue(self, request: dict[str, Any]) -> dict[str, Any]:
         """Reserve a scoped provider ID before writing a request file.
@@ -150,8 +162,6 @@ class Threads:
             if thread is None:
                 thread = {"id": f"th-{secrets.token_hex(10)}", "scope": scope, "native_thread": request.get("native_thread"), "messages": [], "summary": "", "task_id": None}
         if thread:
-            if any(m["id"] == message_id and m["request_id"] != request["id"] for m in thread["messages"]):
-                raise ValueError("message_id belongs to another request in the selected project")
             if not any(m["id"] == message_id for m in thread["messages"]):
                 thread["messages"].append({"id": message_id, "request_id": request["id"], "text": request["text"], "at": request["at"]})
             thread["summary"] = "\n".join(m["text"] for m in thread["messages"][-RECENT_LIMIT:])[:600]

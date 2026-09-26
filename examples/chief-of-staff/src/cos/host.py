@@ -35,7 +35,7 @@ from .state.decisions import Decisions, desktop_notifier
 from .state.home import Home, iso, now, read_json, write_json, request_id
 from .state.ledger import Ledger, words_minutes
 from .state.memory import Memory
-from .state.threads import Threads
+from .state.threads import ReceiptCollision, Threads
 from .skills import SkillError, Skills
 from .state.inbox import Inbox
 from .state.registry import Registry
@@ -280,6 +280,10 @@ class Host:
             self.decisions.record(key, f"Skill catalog blocks dispatch: {error}", ["retry", "dismiss"], {"wake": wake["id"]})
             self.wakes.pause(wake, key)
             return Episode("on_wake", wake["subject"], wake["id"], None, "", paused=key)
+        except ReceiptCollision as error:
+            if wake["kind"] != "request":
+                raise
+            return self._reject_request(wake, error)
         if snapshot is None:
             self.wakes.ack(wake, "nothing to do")
             return None
@@ -293,7 +297,12 @@ class Host:
             return episode
         follow_up = False
         if episode.result is not None:
-            follow_up = bool(self.persist(wake, episode))
+            try:
+                follow_up = bool(self.persist(wake, episode))
+            except ReceiptCollision as error:
+                if wake["kind"] != "request":
+                    raise
+                return self._reject_request(wake, error, episode.recording)
         self.wakes.ack(wake, "persisted" if episode.result is not None else (episode.problem or "no result"))
         self.effects.forget(wake["id"])
         if follow_up:
@@ -302,6 +311,17 @@ class Host:
         if wake["kind"] == "request" and episode.result and (episode.result.get("route") in ("backlog", "playbook") or episode.result.get("item")):
             self.wakes.push("dispatch", "backlog", ["new work queued"])
         return episode
+
+    def _reject_request(self, wake: dict[str, Any], error: ReceiptCollision, recording: str = "") -> Episode:
+        path = self.home.state / "requests" / f"{wake['subject']}.json"
+        request = read_json(path, {"id": wake["subject"], "message_id": wake["subject"]})
+        self.threads.reject(request, str(error))
+        path.unlink(missing_ok=True)
+        self.ledger.record("route", request=wake["subject"], route="rejected", reason=str(error))
+        self.wakes.ack(wake, "rejected")
+        self.effects.forget(wake["id"])
+        self.decisions.notify(f"Rejected message {request['message_id']}: {error}")
+        return Episode("on_wake", wake["subject"], wake["id"], {"id": wake["subject"], "route": "rejected", "reason": str(error)}, recording)
 
     def resume_answered(self) -> list[Episode]:
         """Resume every parked episode whose question has been answered."""
@@ -432,6 +452,7 @@ class Host:
             existing = next((i for i in self.backlog.items() + self.backlog.done_history() if (i.get("request") or {}).get("id") == request_id), None)
             plan = None if existing else self.learning.run_playbook(d["playbook"], request)
             if existing or (plan and plan.get("matches") and plan.get("project")):
+                self.threads.receipt_for({**request, "effective_project": existing["project"] if existing else plan["project"]})
                 item = existing or self.backlog.add(
                     {
                         "text": request["text"],

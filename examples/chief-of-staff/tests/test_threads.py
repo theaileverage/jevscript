@@ -118,6 +118,34 @@ def test_ambiguous_explicit_relation_asks_for_project(make_host, project, relati
     assert receipt["thread_id"] != roots["proj"]["thread_id"]
 
 
+def test_confirmed_project_survives_taskless_thread_clarification(make_host, project):
+    host = make_host(rules=[{"match": {"id": "^work$"}, "answer": {"choice": "status"}}])
+    host.registry.add_project("other", str(project), "another scope")
+    roots = {}
+    for name in ("proj", "other"):
+        host.submit("What is in progress?", project=name, channel="general", message_id="shared-status")
+        host.tick()
+        roots[name] = host.threads.receipt({"source": "cli", "project": name, "channel": "general"}, "shared-status")
+        assert roots[name]["task_id"] is None
+    host.session.fake.rules.insert(0, {"match": {"id": "^work$"}, "answer": {"choice": "ship"}})
+    host.session.fake.rules.insert(0, {"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.95}})
+    host.submit("Update the guide", channel="general", message_id="clarified-followup", reply_to="shared-status", after=["unreleased"])
+    host.tick()
+    [project_decision] = host.decisions.open()
+    assert set(project_decision["options"]) == {"proj", "other"}
+    host.decisions.answer(project_decision["key"], "other")
+    host.tick()
+    [detail_decision] = host.decisions.open()
+    host.session.fake.rules.insert(0, {"match": {"id": "^project$"}, "answer": {"choice": "i0"}})
+    host.session.fake.rules.insert(0, {"match": {"id": "^ambiguous$"}, "answer": {"noul": 0.15}})
+    host.decisions.answer(detail_decision["key"], "Update the other project's guide")
+    host.tick()
+    receipt = host.threads.receipt({"source": "cli", "project": "other", "channel": "general"}, "clarified-followup")
+    assert receipt["thread_id"] == roots["other"]["thread_id"]
+    assert receipt["thread_id"] != roots["proj"]["thread_id"]
+    assert host.backlog.get(receipt["task_id"])["project"] == "other"
+
+
 def test_inferred_project_rejects_another_requests_message_id(make_host, project):
     host = make_host(rules=[{"match": {"id": "^project$"}, "answer": {"choice": "i1"}}])
     host.registry.add_project("other", str(project), "another scope")
@@ -126,12 +154,18 @@ def test_inferred_project_rejects_another_requests_message_id(make_host, project
     scope = {"source": "cli", "project": "other", "channel": "general"}
     original = host.threads.receipt(scope, "collision")
     second = host.submit("Different request", channel="general", message_id="collision", after=["unreleased"])
-    with pytest.raises(ValueError, match="another request"):
-        host.tick()
+    host.watcher.scan()
+    good = host.submit("Valid request", project="proj", channel="general", message_id="good", after=["unreleased"])
+    host.tick()
     assert host.threads.receipt(scope, "collision")["request_id"] == first["id"]
-    assert host.threads.receipt({"source": "cli", "project": "", "channel": "general"}, "collision")["request_id"] == second["id"]
+    rejected = host.threads.receipt({"source": "cli", "project": "", "channel": "general"}, "collision")
+    assert rejected["request_id"] == second["id"]
+    assert rejected["status"] == "done" and rejected["route"] == "rejected"
     assert host.threads.get(original["thread_id"])["messages"][0]["request_id"] == first["id"]
-    assert len(host.backlog.items()) == 1
+    assert host.threads.receipt({"source": "cli", "project": "proj", "channel": "general"}, "good")["request_id"] == good["id"]
+    assert len(host.backlog.items()) == 2
+    assert host.wakes.find("request", second["id"]) is None
+    assert host.submit("Different request", channel="general", message_id="collision")["receipt"]["route"] == "rejected"
 
 
 def test_missing_parent_native_thread_and_scope_separation(make_host):

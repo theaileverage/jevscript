@@ -84,6 +84,8 @@ class Commands:
         request = self.host.submit(text, after=after, project=project, source="cos", channel=channel, message_id=message_id, reply_to=reply_to, native_thread=native_thread)
         if request.get("duplicate") and request["receipt"]["status"] == "done":
             receipt = request["receipt"]
+            if receipt.get("route") == "rejected":
+                return Reply(f"Rejected message {request['message_id']}: {receipt['reason']}", receipt)
             return Reply(f"Already received message {request['message_id']} in thread {receipt.get('thread_id') or 'unresolved'} (task {receipt.get('task_id') or 'none'}).", receipt)
         try:
             with self.home.lock():

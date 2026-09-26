@@ -159,14 +159,14 @@ class Episodes:
         meta = {"task": task, "subject": subject, "wake_id": wake_id, "recording": str(path), "inputs": inputs, "output": output, "started": now()}
         return self._drive(program, run, meta, bind, skip=0, answer=None)
 
-    def _drive(self, program: Any, run: Any, meta: dict[str, Any], bind: dict[str, Any], *, skip: int, answer: dict[str, Any] | None) -> Episode:
+    def _drive(self, program: Any, run: Any, meta: dict[str, Any], bind: dict[str, Any], *, skip: int, answer: dict[str, Any] | None, seen: int = 0) -> Episode:
         """Iterate a run to its end or to a question nobody has answered."""
         result: Any = None
         usage: dict[str, Any] = {}
         verified = False
         problem: str | None = None
         retries = 0
-        confirms = 0
+        confirms = seen
         subject = meta["subject"] or meta["task"]
         for pause in run:
             kind = pause.get("kind")
@@ -238,7 +238,7 @@ class Episodes:
         if live is not None:
             _, run, confirms = live
             run.resume(payload)
-            return self._drive(program, run, record, bind, skip=confirms, answer=None)
+            return self._drive(program, run, record, bind, skip=0, answer=None, seen=confirms)
         run = program.task(record["task"]).start(
             inputs=record["inputs"],
             bind=bind,

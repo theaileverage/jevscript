@@ -72,7 +72,7 @@ task take_request(req, s) budget calls 6:
     return { id: req.id, route: "continue", thread_id: conversation.thread_id, project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
   if conversation.route == "ask":
     return { id: req.id, route: "ask_thread", project: selected_project, reason: conversation.reason, title: head(req.text, 72), text: req.text }
-  if len(s.playbooks) > 0 and not req.skip_playbooks:
+  if len(s.playbooks) > 0 and not req.skip_playbooks and conversation.route != "continue":
     m = routing.match_playbook(req, s.playbooks, s.policy)
     if m.matched:
       return { id: req.id, route: "playbook", project: selected_project, playbook: m.name, text: req.text, title: head(req.text, 72), hold: false, urgent: false, signals: m, thread_route: conversation.route, thread_id: conversation.thread_id }
@@ -81,7 +81,7 @@ task take_request(req, s) budget calls 6:
   if assessment == none:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
   d = routing.route(req, assessment, s.policy)
-  if selected_project != "" and (d.route != "ask" or confirmed_project):
+  if selected_project != "" and d.route != "ask":
     d.project = selected_project
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
@@ -89,6 +89,8 @@ task take_request(req, s) budget calls 6:
     d = routing.route(clarified, intake.assess(clarified, s.projects, s.homes, s.profiles), s.policy)
     if d.route == "ask":
       d.route = "unclear"
+  if confirmed_project:
+    d.project = selected_project
   if d.hold and d.route == "backlog":
     a = escalation.ask("'{d.title}' could delete data, spend money, publish or change production. Start it?", ["yes", "no"])
     if a.answer == "yes":
