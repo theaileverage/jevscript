@@ -52,6 +52,15 @@ class Threads:
     def receipt(self, scope: dict[str, str], message_id: str | None) -> dict[str, Any] | None:
         return read_json(self.receipt_path(scope, message_id), None) if message_id else None
 
+    def receipt_for(self, request: dict[str, Any]) -> dict[str, Any] | None:
+        scope = self.scope(request)
+        original_scope = self.scope({**request, "effective_project": None})
+        original = self.receipt(original_scope, request["message_id"])
+        selected = self.receipt(scope, request["message_id"])
+        if any(row and row.get("request_id") != request["id"] for row in (original, selected)):
+            raise ValueError("message_id belongs to another request in the selected project")
+        return selected or original
+
     def enqueue(self, request: dict[str, Any]) -> dict[str, Any]:
         """Reserve a scoped provider ID before writing a request file.
 
@@ -127,7 +136,7 @@ class Threads:
         scope = self.scope(request)
         original_scope = self.scope({**request, "effective_project": None})
         message_id = request["message_id"]
-        receipt = self.receipt(scope, message_id) or self.receipt(original_scope, message_id)
+        receipt = self.receipt_for(request)
         if receipt and receipt.get("status") == "done":
             if original_scope != scope:
                 write_json(self.receipt_path(original_scope, message_id), receipt)
@@ -141,6 +150,8 @@ class Threads:
             if thread is None:
                 thread = {"id": f"th-{secrets.token_hex(10)}", "scope": scope, "native_thread": request.get("native_thread"), "messages": [], "summary": "", "task_id": None}
         if thread:
+            if any(m["id"] == message_id and m["request_id"] != request["id"] for m in thread["messages"]):
+                raise ValueError("message_id belongs to another request in the selected project")
             if not any(m["id"] == message_id for m in thread["messages"]):
                 thread["messages"].append({"id": message_id, "request_id": request["id"], "text": request["text"], "at": request["at"]})
             thread["summary"] = "\n".join(m["text"] for m in thread["messages"][-RECENT_LIMIT:])[:600]

@@ -177,7 +177,7 @@ class Host:
             if request is None:
                 return None
             request.setdefault("message_id", request["id"])
-            receipt = self.threads.receipt(self.threads.scope(request), request["message_id"])
+            receipt = self.threads.receipt_for(request)
             if receipt and receipt.get("status") == "done":
                 self._reconcile_thread_task(receipt)
                 (self.home.state / "requests" / f"{wake['subject']}.json").unlink(missing_ok=True)
@@ -391,12 +391,13 @@ class Host:
         request.setdefault("message_id", request_id)
         route = d.get("route")
         outcome: dict[str, Any] = {"route": route}
-        previous = self.threads.receipt(self.threads.scope(request), request["message_id"])
+        previous = self.threads.receipt_for(request)
         if previous and previous.get("status") == "done":
             self._reconcile_thread_task(previous)
             path.unlink(missing_ok=True)
             return {"thread_id": previous.get("thread_id"), "task_id": previous.get("task_id")}
         request["effective_project"] = d.get("project") or request.get("project")
+        self.threads.receipt_for(request)
         if route == "continue":
             thread = self.threads.get(d["thread_id"])
             if thread is None or thread["scope"] != self.threads.scope(request):

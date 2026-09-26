@@ -93,6 +93,47 @@ def test_clarified_project_controls_backlog_and_thread_scope(make_host, project)
 
 
 
+@pytest.mark.parametrize("relation_field", ["reply_to", "native_thread"])
+def test_ambiguous_explicit_relation_asks_for_project(make_host, project, relation_field):
+    host = make_host()
+    host.registry.add_project("other", str(project), "another scope")
+    roots = {}
+    for name in ("proj", "other"):
+        message_id = "shared" if relation_field == "reply_to" else "shared-native"
+        native_thread = "shared-native" if relation_field == "native_thread" else None
+        host.submit("Update the guide", project=name, channel="general", message_id=message_id, native_thread=native_thread, after=["unreleased"])
+        host.tick()
+        roots[name] = host.threads.receipt({"source": "cli", "project": name, "channel": "general"}, message_id)
+    target = "shared" if relation_field == "reply_to" else "shared-native"
+    host.submit("Also update the examples", channel="general", message_id="followup", **{relation_field: target})
+    host.tick()
+    [decision] = host.decisions.open()
+    assert set(decision["options"]) == {"proj", "other"}
+    assert len(host.backlog.items()) == 2
+    host.decisions.answer(decision["key"], "other")
+    host.tick()
+    receipt = host.threads.receipt({"source": "cli", "project": "other", "channel": "general"}, "followup")
+    assert receipt["route"] == "continue"
+    assert receipt["thread_id"] == roots["other"]["thread_id"]
+    assert receipt["thread_id"] != roots["proj"]["thread_id"]
+
+
+def test_inferred_project_rejects_another_requests_message_id(make_host, project):
+    host = make_host(rules=[{"match": {"id": "^project$"}, "answer": {"choice": "i1"}}])
+    host.registry.add_project("other", str(project), "another scope")
+    first = host.submit("Original request", project="other", channel="general", message_id="collision", after=["unreleased"])
+    host.tick()
+    scope = {"source": "cli", "project": "other", "channel": "general"}
+    original = host.threads.receipt(scope, "collision")
+    second = host.submit("Different request", channel="general", message_id="collision", after=["unreleased"])
+    with pytest.raises(ValueError, match="another request"):
+        host.tick()
+    assert host.threads.receipt(scope, "collision")["request_id"] == first["id"]
+    assert host.threads.receipt({"source": "cli", "project": "", "channel": "general"}, "collision")["request_id"] == second["id"]
+    assert host.threads.get(original["thread_id"])["messages"][0]["request_id"] == first["id"]
+    assert len(host.backlog.items()) == 1
+
+
 def test_missing_parent_native_thread_and_scope_separation(make_host):
     host = make_host()
     host.submit("Start conversation", project="proj", channel="general", message_id="native-1", native_thread="native-1", after=["unreleased"])

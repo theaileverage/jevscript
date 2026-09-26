@@ -46,12 +46,21 @@ needs fleet: tool:
 
 task take_request(req, s) budget calls 6:
   selected_project = ""
+  confirmed_project = false
   if req.project != none:
     selected_project = req.project
   else:
     related = [c for c in req.thread_contexts if c.relation.kind == "valid"]
     if len(related) == 1:
       selected_project = related[0].project
+    elif len(related) > 1:
+      choices = [c.project for c in related]
+      choice = escalation.ask("Which project contains the conversation you are replying to?", choices)
+      matched_project = [c for c in related if c.project == choice.answer]
+      if len(matched_project) != 1:
+        return { id: req.id, route: "ask_thread", reason: "Choose one of the listed projects.", title: head(req.text, 72), text: req.text }
+      selected_project = matched_project[0].project
+      confirmed_project = true
   assessment = none
   if selected_project == "" and len(s.projects) > 0:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
@@ -72,7 +81,7 @@ task take_request(req, s) budget calls 6:
   if assessment == none:
     assessment = intake.assess(req, s.projects, s.homes, s.profiles)
   d = routing.route(req, assessment, s.policy)
-  if d.route != "ask" and selected_project != "":
+  if selected_project != "" and (d.route != "ask" or confirmed_project):
     d.project = selected_project
   if d.route == "ask":
     a = escalation.ask("About '{d.title}': {d.reason} What should I know?", ["answer in text"])
