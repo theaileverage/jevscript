@@ -699,7 +699,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jevscript-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-compiler"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jevscript-ir",
  "jevscript-syntax",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-conformance"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jevscript-compiler",
  "jevscript-ir",
@@ -736,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-ir"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "jevscript-syntax",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-lsp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jevscript-compiler",
  "jevscript-syntax",
@@ -760,7 +760,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jevscript-compiler",
  "jevscript-ir",
@@ -776,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "jevscript-syntax"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "schemars",
  "serde",

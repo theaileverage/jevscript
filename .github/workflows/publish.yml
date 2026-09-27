@@ -42,7 +42,7 @@ jobs:
         run: |
           version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
           test "$GITHUB_REF_NAME" = "v$version"
-          if [ "$NPM_BOOTSTRAP" = true ]; then test "$version" = 0.1.0; fi
+          if [ "$NPM_BOOTSTRAP" = true ]; then test "$version" = 0.1.1; fi
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
           test "$(jq -r .path <<<"$run")" = .github/workflows/release.yml
           test "$(jq -r .repository.full_name <<<"$run")" = "$GITHUB_REPOSITORY"

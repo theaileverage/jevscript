@@ -10,7 +10,7 @@ For a user-level command, use `npm install -g jevscript` and ensure npm's global
 bin directory is on PATH. macOS arm64/x64, glibc Linux arm64/x64, and Windows
 x64 are release targets; each must pass its own package smoke before publishing.
 An unsupported platform reports a clear error. Offline installation works from
-the complete saved `.tgz` with `npm install --offline ./jevscript-0.1.0.tgz`.
+the complete saved `.tgz` with `npm install --offline ./jevscript-0.1.1.tgz`.
 `load({ bin })` and `JEVSCRIPT_BIN` are explicit host overrides; the usual SDK
 path uses the binary in this package after checking its digest.
 
