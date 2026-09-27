@@ -36,18 +36,17 @@ supported macOS floor is also 15. Linux wheels currently target
 advertise older glibc compatibility. The release build sets
 `MACOSX_DEPLOYMENT_TARGET=15.0` and checks that the final binary's Mach-O
 minimum OS equals the wheel floor before staging. Node >=22 and Python >=3.10
-are required. The only locally tested release artifact so far is **macOS
-arm64**, as recorded below; the other targets require passing the staged
-workflow on their own runners. The Mach-O check reads the main executable
-header. Before upload, inspect `otool -L` and `otool -l` on both final macOS
-binaries for linked-library requirements. Require the installed npm and wheel
+are required. The Mach-O check reads the main executable header. Before upload,
+inspect `otool -L` and `otool -l` on both final macOS binaries for linked-library
+requirements. Require the installed npm and wheel
 smokes to pass on macOS 15 arm64 and macOS 15 x86_64 runners; the smoke rejects
 a Mac runner whose actual major OS version is not 15.
 
 ## Local artifact proof
 
-Use the pinned Rust toolchain and release version. The following commands
-write generated artifacts only under ignored package staging paths:
+On macOS 15 arm64, use the pinned Rust toolchain and release version. The
+following commands write generated artifacts only under ignored package
+staging paths:
 
 ```sh
 python3 scripts/build_release_cli.py --target darwin-arm64

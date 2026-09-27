@@ -13,8 +13,9 @@ Activate a virtual environment before expecting its `jevscript` command on
 PATH. Offline installation works from the matching wheel with
 `python -m pip install --no-index ./jevscript-0.1.2-*.whl`. Unsupported
 platforms have no wheel and installation fails rather than installing an SDK
-without a command. Explicit `bin=` and `JEVSCRIPT_BIN` override the packaged
-binary; the default is verified before use.
+without a command. See the [package release guide](../../docs/package-release.md)
+for supported platforms and OS floors. Explicit `bin=` and `JEVSCRIPT_BIN`
+override the packaged binary; the default is verified before use.
 
 Run `jevscript setup --agent codex` or `--agent claude-code` from a project
 to install the bundled coding-agent Skill offline. Repeat `--agent` for both,
