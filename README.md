@@ -112,8 +112,12 @@ npm and PyPI are where the packages are published. Each release also has an
 immutable Git tag, such as `v0.1.3`. The release workflow builds and checks
 the packages and uploads them as a GitHub Actions artifact. The publish
 workflow sends that artifact to the registries. Neither workflow creates a
-GitHub Release, so a release appears on the repository's **Releases** page
-only when a maintainer creates one by hand. The
+GitHub Release. A maintainer creates one from the verified artifact.
+
+The [v0.1.3 GitHub Release](https://github.com/theaileverage/jevscript/releases/tag/v0.1.3)
+attaches the npm tarball, the five platform wheels, and `SHA256SUMS`. PyPI
+serves `jevscript` 0.1.2, so download the 0.1.3 wheels from that release
+page, not from PyPI. The
 [package release guide](docs/package-release.md#where-a-release-appears)
 describes both workflows.
 

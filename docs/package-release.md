@@ -15,10 +15,14 @@ The workflows leave three kinds of record:
 - The published packages on npm and PyPI, uploaded by `publish.yml` from that
   bundle.
 
-Neither workflow creates a GitHub Release or uploads release assets. A tag
-appears on the repository's **Releases** page only after a maintainer creates
-a GitHub Release for it by hand. A registry is the record of what is
-published, and each registry can hold a different latest version:
+Neither workflow creates a GitHub Release or uploads release assets. A
+maintainer creates the GitHub Release by hand and attaches the files from the
+reviewed `package-bundle`. The
+[v0.1.3 GitHub Release](https://github.com/theaileverage/jevscript/releases/tag/v0.1.3)
+holds the npm tarball, the five wheels, and `SHA256SUMS` from staging run
+[36332522495](https://github.com/theaileverage/jevscript/actions/runs/36332522495).
+A registry is the record of what is published there, and each registry can
+hold a different latest version:
 
 ```sh
 npm view @theaileverage/jevscript version
