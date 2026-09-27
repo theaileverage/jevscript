@@ -9,8 +9,8 @@ You need one of these:
 - Node 22 or later, for the npm package.
 - Python 3.10 or later, for the PyPI package.
 
-The packages run on macOS 15 (arm64 and x86_64), glibc Linux (arm64 and x86_64),
-and Windows (x86_64).
+The packages run on macOS 15 or later (arm64 and x86_64), Linux with glibc 2.39
+or later (arm64 and x86_64), and Windows (x86_64).
 
 ## Install the CLI
 
@@ -36,7 +36,9 @@ jevscript --version
 
 On Windows, activate the environment with `.venv\Scripts\activate`.
 
-The last command prints the installed version, for example `jevscript 0.1.3`.
+The last command prints the installed version. Today the npm package prints
+`jevscript 0.1.3` and the PyPI package prints `jevscript 0.1.2`. Everything on
+this page works with both.
 The rest of this page writes `jevscript`. If you installed with npm, write
 `npx jevscript` instead.
 
@@ -109,6 +111,7 @@ log info main 14:3: greeted {"answer":"yes"}
 {"kind":"done", ..., "outputs":{"greeting":"Hello, Ada"}, "verified":false, ...}
 ```
 
+`verified` is `false` because the task declares no `verify` condition.
 `hello.jsonl` now holds the whole run: the linked program, your answer, and
 the log line.
 

@@ -42,8 +42,8 @@ binary. Installation needs no Rust toolchain, install script, or download.
 | npm [`@theaileverage/jevscript`](https://www.npmjs.com/package/@theaileverage/jevscript) | `npm install @theaileverage/jevscript` | 0.1.3 | Node 22+ |
 | PyPI [`jevscript`](https://pypi.org/project/jevscript/) | `python -m pip install jevscript` | 0.1.2 | Python 3.10+ |
 
-Both packages run on macOS 15 (arm64 and x86_64), glibc Linux (arm64 and
-x86_64), and Windows (x86_64). To check the install, run
+Both packages run on macOS 15 or later (arm64 and x86_64), Linux with glibc
+2.39 or later (arm64 and x86_64), and Windows (x86_64). To check the install, run
 `npx jevscript --version` in an npm project or `jevscript --version` in the
 Python environment.
 

@@ -24,9 +24,13 @@ the authority for everything on this page.
 4. **Decide.** Every branch, threshold, weight, and count is Jevscript code. A
    `gate` turns judgments into one of four verdicts, using thresholds that a
    task declares once.
-5. **Act, and prove it.** An agent's claim that it finished and Jev's estimate
-   that the goal is met are both signals, not proof. Only `verify` over
-   observed state proves the goal.
+5. **Act, and check it.** An agent's claim that it finished and Jev's
+   estimate that the goal is met are both signals. `verify` declares the
+   condition the task reports. The `done` pause carries `verified: true` only
+   when that condition is true at the end. The flag is only as strong as its
+   evidence. `verify(tree.tests_pass)` reads a test result, and
+   `verify(j.claims_done > 0.9)` reads a model estimate. The host decides
+   whether to accept the result.
 
 ## Four units make up a program
 
@@ -41,7 +45,9 @@ Use a `task` when the loop is short and the branches depend on content. Use a
 `machine` when the run has distinct phases, when the legal next moves depend
 on the phase, or when a host wants to draw and pin the control flow. A
 machine's terminal state counts as `verified` only when the transition into it
-had a `when` guard. Code proves the goal, not Jev.
+had a `when` guard that passed. The flag reports that a code guard passed, not
+that the goal is objectively met, because a guard can read model or adapter
+values.
 
 ## A run is a series of pauses
 
