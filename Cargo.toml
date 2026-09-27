@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 rust-version = "1.90"
 license = "Apache-2.0"
@@ -21,11 +21,11 @@ publish = false
 
 # Every dependency is pinned exactly. The spec is versioned; so is the build.
 [workspace.dependencies]
-jevscript-syntax = { path = "crates/jevscript-syntax", version = "=0.1.2" }
-jevscript-ir = { path = "crates/jevscript-ir", version = "=0.1.2" }
-jevscript-compiler = { path = "crates/jevscript-compiler", version = "=0.1.2" }
-jevscript-runtime = { path = "crates/jevscript-runtime", version = "=0.1.2" }
-jevscript-lsp = { path = "crates/jevscript-lsp", version = "=0.1.2" }
+jevscript-syntax = { path = "crates/jevscript-syntax", version = "=0.1.3" }
+jevscript-ir = { path = "crates/jevscript-ir", version = "=0.1.3" }
+jevscript-compiler = { path = "crates/jevscript-compiler", version = "=0.1.3" }
+jevscript-runtime = { path = "crates/jevscript-runtime", version = "=0.1.3" }
+jevscript-lsp = { path = "crates/jevscript-lsp", version = "=0.1.3" }
 
 anyhow = "=1.0.104"
 clap = { version = "=4.6.7", features = ["derive"] }

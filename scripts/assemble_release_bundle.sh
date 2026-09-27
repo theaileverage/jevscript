@@ -14,13 +14,13 @@ from stage_release import PLATFORMS, version
 
 current = version()
 targets = sys.argv[1].split(",") if sys.argv[1] else PLATFORMS
-shutil.copy2(f"jevscript-{current}.tgz", "package-bundle")
+shutil.copy2(f"theaileverage-jevscript-{current}.tgz", "package-bundle")
 for target in targets:
     tag = PLATFORMS[target]
     shutil.copy2(Path("wheelhouse") / f"jevscript-{current}-py3-none-{tag}.whl", "package-bundle/wheelhouse")
 PY
 cd package-bundle
-shasum -a 256 jevscript-*.tgz wheelhouse/*.whl > SHA256SUMS
+shasum -a 256 theaileverage-jevscript-*.tgz wheelhouse/*.whl > SHA256SUMS
 python3 ../../scripts/verify_release_bundle.py . --commit "$GITHUB_SHA" ${TARGETS:+--targets "$TARGETS"}
 echo "sums-sha256=$(shasum -a 256 SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 echo "SHA256SUMS digest: $(shasum -a 256 SHA256SUMS | cut -d' ' -f1)"

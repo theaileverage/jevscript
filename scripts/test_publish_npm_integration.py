@@ -25,7 +25,7 @@ class RegistryHandler(BaseHTTPRequestHandler):
     """Serve npm's version metadata from a file the fake npm process updates."""
 
     def do_GET(self) -> None:
-        if self.path != "/jevscript/0.1.0" or not self.server.metadata.is_file():
+        if self.path != "/@theaileverage%2Fjevscript/0.1.3" or not self.server.metadata.is_file():
             self.send_error(404)
             return
         data = self.server.metadata.read_bytes()
@@ -48,8 +48,8 @@ class PublishIntegrationTests(unittest.TestCase):
         self.root = Path(self.scratch.name)
         self.bundle = self.root / "bundle"
         self.bundle.mkdir()
-        self.tarball = self.bundle / "jevscript-0.1.0.tgz"
-        data = json.dumps({"name": "jevscript", "version": "0.1.0"}).encode()
+        self.tarball = self.bundle / "theaileverage-jevscript-0.1.3.tgz"
+        data = json.dumps({"name": "@theaileverage/jevscript", "version": "0.1.3"}).encode()
         with tarfile.open(self.tarball, "w:gz") as archive:
             member = tarfile.TarInfo("package/package.json")
             member.size = len(data)
@@ -66,11 +66,12 @@ class PublishIntegrationTests(unittest.TestCase):
             "if args[0]=='whoami':\n"
             " print(os.environ['NPM_FAKE_IDENTITY']);sys.exit(0)\n"
             "if args[:2]==['owner','ls']:\n"
+            " if args[2]!='@theaileverage/jevscript': sys.exit(8)\n"
             " print(os.environ['NPM_FAKE_OWNER']+' <owner@example.test>');sys.exit(0)\n"
             "path=pathlib.Path(args[1])\n"
             "pathlib.Path(os.environ['NPM_CALLS']).write_text(json.dumps(args))\n"
             "digest=base64.b64encode(hashlib.sha512(path.read_bytes()).digest()).decode()\n"
-            "pathlib.Path(os.environ['NPM_METADATA']).write_text(json.dumps({'name':'jevscript','version':'0.1.0','dist':{'integrity':'sha512-'+digest}}))\n"
+            "pathlib.Path(os.environ['NPM_METADATA']).write_text(json.dumps({'name':'@theaileverage/jevscript','version':'0.1.3','dist':{'integrity':'sha512-'+digest}}))\n"
         )
         fake_npm.chmod(0o755)
         self.env = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
@@ -87,7 +88,7 @@ class PublishIntegrationTests(unittest.TestCase):
 
     def metadata_for(self, tarball: bytes) -> None:
         digest = base64.b64encode(hashlib.sha512(tarball).digest()).decode()
-        self.metadata.write_text(json.dumps({"name": "jevscript", "version": "0.1.0",
+        self.metadata.write_text(json.dumps({"name": "@theaileverage/jevscript", "version": "0.1.3",
                                              "dist": {"integrity": f"sha512-{digest}"}}))
 
     def run_publish(self, *, bootstrap: bool = False, credential: bool = False,
@@ -107,7 +108,7 @@ class PublishIntegrationTests(unittest.TestCase):
         result = self.run_publish(bootstrap=True, credential=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(self.calls.read_text()),
-                         ["publish", "./bundle/jevscript-0.1.0.tgz", "--access", "public", "--provenance"])
+                         ["publish", "./bundle/theaileverage-jevscript-0.1.3.tgz", "--access", "public", "--provenance"])
         self.assertIn("exact verified tarball", result.stdout)
 
     def test_missing_bootstrap_credential_stops_before_publish(self) -> None:
@@ -148,7 +149,7 @@ class PublishIntegrationTests(unittest.TestCase):
     def test_normal_oidc_path_publishes_missing_version(self) -> None:
         result = self.run_publish()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(self.calls.read_text())[1], "./bundle/jevscript-0.1.0.tgz")
+        self.assertEqual(json.loads(self.calls.read_text())[1], "./bundle/theaileverage-jevscript-0.1.3.tgz")
 
     def test_final_bootstrap_check_rejects_missing_version(self) -> None:
         result = self.run_publish(require_published=True)

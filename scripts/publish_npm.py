@@ -13,6 +13,9 @@ import tarfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import quote
+
+NPM_NAME = "@theaileverage/jevscript"
 
 
 def package_identity(tarball: Path) -> tuple[str, str]:
@@ -25,9 +28,9 @@ def package_identity(tarball: Path) -> tuple[str, str]:
 def published_state(tarball: Path, registry: str) -> str:
     """Compare the registry's exact tarball digest with the staged archive."""
     name, version = package_identity(tarball)
-    if name != "jevscript":
+    if name != NPM_NAME:
         raise ValueError(f"unexpected npm package: {name}")
-    url = f"{registry.rstrip('/')}/{name}/{version}"
+    url = f"{registry.rstrip('/')}/{quote(name, safe='@')}/{version}"
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
             metadata = json.load(response)
@@ -46,11 +49,11 @@ def published_state(tarball: Path, registry: str) -> str:
 
 def require_owner(expected: str, registry: str) -> None:
     """Use npm's current writer list rather than tarball metadata as authority."""
-    result = subprocess.run(["npm", "owner", "ls", "jevscript", f"--registry={registry}"],
+    result = subprocess.run(["npm", "owner", "ls", NPM_NAME, f"--registry={registry}"],
                             check=True, capture_output=True, text=True)
     owners = {line.split(maxsplit=1)[0] for line in result.stdout.splitlines() if line.strip()}
     if expected not in owners:
-        raise ValueError(f"expected npm owner {expected} has no write access to jevscript")
+        raise ValueError(f"expected npm owner {expected} has no write access to {NPM_NAME}")
 
 
 def require_bootstrap_identity(expected: str, registry: str) -> None:
@@ -76,7 +79,7 @@ def main() -> None:
         raise ValueError("NPM_EXPECTED_OWNER must name the intended npm writer")
     if args.bootstrap:
         require_bootstrap_identity(expected_owner, args.registry)
-    tarballs = list(args.bundle.glob("jevscript-*.tgz"))
+    tarballs = list(args.bundle.glob("theaileverage-jevscript-*.tgz"))
     if len(tarballs) != 1:
         raise ValueError("verified bundle must contain exactly one npm tarball")
     tarball = tarballs[0]

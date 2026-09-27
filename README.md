@@ -1,7 +1,7 @@
 # Jevscript
 
 Once the packages are published, install the SDK and release-matched `jevscript` command with
-`npm install jevscript` (Node 22+) or `pipx install jevscript` / `pip install
+`npm install @theaileverage/jevscript` (Node 22+) or `pipx install jevscript` / `pip install
 jevscript` (Python 3.10+). The SDK packages include the CLI binary and use it
 by default. See [npm](sdk/js/README.md) and [Python](sdk/python/README.md)
 installation details. The package release matrix and verification commands are
