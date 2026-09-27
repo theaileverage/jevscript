@@ -32,6 +32,7 @@ step wheel env -C sdk/python JEVSCRIPT_TARGET="$target" JEVSCRIPT_PLATFORM_TAG="
   uv build --wheel --out-dir ../../.release-tmp/wheelhouse
 step npm-build env -C sdk/js sh -c 'pnpm install --frozen-lockfile && pnpm run build'
 step npm-pack env -C sdk/js JEVSCRIPT_PACK_TARGETS="$target" npm pack --pack-destination ../../.release-tmp
+step bundle .claude/skills/verify/scripts/bundle.sh "$target" "$evidence/bundle.outputs"
 step smoke python3 scripts/smoke_packages.py --npm "$tgz" --wheel "$whl"
 shasum -a 256 "$tgz" "$whl" >"$evidence/artifacts.sha256" || exit 1
 grep '^validated' "$evidence/build.log" || exit 1

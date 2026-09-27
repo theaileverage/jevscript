@@ -94,6 +94,8 @@ jobs:
   package-smoke:
     name: offline npm and PyPI artifact smoke (Linux x64)
     runs-on: ubuntu-24.04
+    outputs:
+      sums_sha256: ${{ steps.bundle.outputs.sums-sha256 }}
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: actions/setup-node@v4.4.0
@@ -127,7 +129,29 @@ jobs:
           pnpm run typecheck
           pnpm run build
           npm pack --pack-destination ../../.release-tmp
-      - run: python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-manylinux_2_39_x86_64.whl
+      - name: Verify and upload a representative bundle as release.yml does
+        id: bundle
+        uses: ./.github/actions/upload-package-bundle
+        with:
+          targets: linux-x64-gnu
+      - run: python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-manylinux_2_39_x86_64.whl
+
+  # release.yml's install matrix and publish.yml only ever see the bundle
+  # through an artifact roundtrip, so prove that roundtrip before a tag exists.
+  package-bundle-roundtrip:
+    name: package bundle artifact roundtrip
+    needs: package-smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: package-bundle
+          path: .release-tmp
+      - name: Downloaded bundle matches the uploaded digests, versions and commit
+        env:
+          SUMS_SHA256: ${{ needs.package-smoke.outputs.sums_sha256 }}
+        run: python3 scripts/verify_release_bundle.py .release-tmp --commit "$GITHUB_SHA" --targets linux-x64-gnu --sums-sha256 "$SUMS_SHA256"
 
   # The release workflow runs only on a tag, which can never move, so the
   # Windows build and its embedded-path scan must pass here first.
@@ -169,4 +193,4 @@ jobs:
           pnpm run typecheck
           pnpm run build
           npm pack --pack-destination ../../.release-tmp
-      - run: python scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-win_amd64.whl
+      - run: python scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-win_amd64.whl

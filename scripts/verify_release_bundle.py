@@ -23,7 +23,12 @@ def main() -> None:
     parser.add_argument("bundle", type=Path, help="directory holding SHA256SUMS, the npm tarball and wheelhouse/")
     parser.add_argument("--commit", required=True, help="source commit every artifact must record")
     parser.add_argument("--sums-sha256", help="reviewed SHA-256 of SHA256SUMS itself")
+    parser.add_argument("--targets", default=",".join(PLATFORMS),
+                        help="comma-separated targets of a representative CI bundle; a release holds all of them")
     args = parser.parse_args()
+    targets = args.targets.split(",")
+    if not set(targets) <= set(PLATFORMS):
+        raise SystemExit(f"unsupported targets: {sorted(set(targets) - set(PLATFORMS))}")
     current = version()
     sums = args.bundle / "SHA256SUMS"
     if args.sums_sha256 is not None and sha256(sums) != args.sums_sha256:
@@ -33,7 +38,7 @@ def main() -> None:
         digest, name = line.split(maxsplit=1)
         listed[name.lstrip("*")] = digest
     tarball = f"jevscript-{current}.tgz"
-    wheels = {target: f"wheelhouse/jevscript-{current}-py3-none-{tag}.whl" for target, tag in PLATFORMS.items()}
+    wheels = {target: f"wheelhouse/jevscript-{current}-py3-none-{tag}.whl" for target, tag in PLATFORMS.items() if target in targets}
     expected = {tarball, *wheels.values()}
     present = {path.relative_to(args.bundle).as_posix() for path in args.bundle.rglob("*") if path.is_file()} - {"SHA256SUMS"}
     if set(listed) != expected or present != expected:
@@ -46,8 +51,8 @@ def main() -> None:
         npm_manifest = json.loads(archive.extractfile("package/native/manifest.json").read())  # type: ignore[union-attr]
     if package["name"] != "jevscript" or package["version"] != current or package.get("private"):
         raise SystemExit(f"npm package is not public jevscript@{current}")
-    if set(npm_manifest["targets"]) != set(PLATFORMS):
-        raise SystemExit("npm tarball does not carry every release target")
+    if set(npm_manifest["targets"]) != set(targets):
+        raise SystemExit(f"npm tarball does not carry exactly {sorted(targets)}")
     for target, name in wheels.items():
         with zipfile.ZipFile(args.bundle / name) as archive:
             wheel_manifest = json.loads(archive.read("jevscript/_bin/manifest.json"))

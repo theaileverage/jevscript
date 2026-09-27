@@ -50,7 +50,11 @@ The whole package path for this host, into an evidence directory:
 
 Steps, each logged to `<evidence-dir>/<step>.log`: release build and
 embedded-path scan, npm and wheel staging, `uv build --wheel`, `pnpm build`
-plus `npm pack`, then `scripts/smoke_packages.py`, which installs both
+plus `npm pack`, `scripts/bundle.sh`, which runs the assemble-and-verify
+step of `.github/actions/upload-package-bundle` exactly as CI does on a
+one-target bundle in `.release-tmp/package-bundle` (the upload itself runs
+only on GitHub; see `features/ci-release-lanes.md`), then
+`scripts/smoke_packages.py`, which installs both
 artifacts offline in scratch directories with no repository binary on PATH,
 runs the installed CLI (`--version`, `check`, `setup`), loads and runs a task
 through each SDK, and requires a damaged binary to be rejected. The feature
