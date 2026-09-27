@@ -24,19 +24,9 @@ runs:
     - name: Record and verify the exact bundle digests
       id: assemble
       shell: bash
-      working-directory: .release-tmp
       env:
         TARGETS: ${{ inputs.targets }}
-      run: |
-        rm -rf package-bundle
-        mkdir -p package-bundle/wheelhouse
-        cp jevscript-*.tgz package-bundle/
-        cp wheelhouse/*.whl package-bundle/wheelhouse/
-        cd package-bundle
-        sha256sum jevscript-*.tgz wheelhouse/*.whl > SHA256SUMS
-        python3 ../../scripts/verify_release_bundle.py . --commit "$GITHUB_SHA" ${TARGETS:+--targets "$TARGETS"}
-        echo "sums-sha256=$(sha256sum SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-        echo "SHA256SUMS digest: $(sha256sum SHA256SUMS | cut -d' ' -f1)"
+      run: bash scripts/assemble_release_bundle.sh
     - uses: actions/upload-artifact@v4.6.2
       with:
         name: package-bundle
