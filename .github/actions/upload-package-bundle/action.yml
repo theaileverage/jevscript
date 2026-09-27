@@ -1,0 +1,35 @@
+# The one definition of how a package bundle is assembled, verified and
+# uploaded, shared by release.yml and the PR roundtrip in ci.yml so the path
+# and upload options a release depends on are exercised before a tag exists.
+# The bundle directory's own name must not start with a dot: upload-artifact
+# skips a hidden search root whole when include-hidden-files is false, which
+# is how v0.1.1's `.release-bundle/` uploaded nothing.
+name: upload package bundle
+description: Assemble the npm tarball, wheels and SHA256SUMS from .release-tmp, verify them and upload them as package-bundle.
+
+inputs:
+  targets:
+    description: Comma-separated targets of a representative bundle; empty means the complete release set
+    required: false
+    default: ""
+
+outputs:
+  sums-sha256:
+    description: SHA-256 of the uploaded SHA256SUMS
+    value: ${{ steps.assemble.outputs.sums-sha256 }}
+
+runs:
+  using: composite
+  steps:
+    - name: Record and verify the exact bundle digests
+      id: assemble
+      shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+      run: bash scripts/assemble_release_bundle.sh
+    - uses: actions/upload-artifact@v4.6.2
+      with:
+        name: package-bundle
+        path: .release-tmp/package-bundle/
+        if-no-files-found: error
+        include-hidden-files: false

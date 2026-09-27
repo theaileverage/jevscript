@@ -1,6 +1,6 @@
 # Jevscript SDK and CLI package release
 
-This guide describes the **staged** 0.1.1 release. Nothing in this repository
+This guide describes the **staged** 0.1.2 release. Nothing in this repository
 uploads to npm or PyPI automatically. The spec's command is `jevscript`, and
 both host SDKs invoke the release-matched `jevscript serve` binary (spec §11.5–11.6).
 
@@ -55,7 +55,7 @@ JEVSCRIPT_PACK_TARGETS=darwin-arm64 npm pack --pack-destination ../../.release-t
 cd ../python
 JEVSCRIPT_TARGET=darwin-arm64 JEVSCRIPT_PLATFORM_TAG=macosx_11_0_arm64 JEVSCRIPT_WHEEL_TAG=py3-none-macosx_11_0_arm64 uv build --wheel --out-dir ../../.release-tmp/wheelhouse
 cd ../..
-python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-macosx_11_0_arm64.whl
+python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-macosx_11_0_arm64.whl
 ```
 
 The smoke opens each archive and checks an allowlist, license, wheel tag,
@@ -77,7 +77,12 @@ Linux and Windows, use the matching matrix target and wheel tag from
 
 `.github/workflows/ci.yml` runs Linux x64 and Windows x64 package smokes on
 every push and pull request, so the MSVC build and its embedded-path scan
-pass before a release tag, which never moves, exists. `.gitattributes` checks
+pass before a release tag, which never moves, exists. The Linux lane also
+uploads a representative one-target `package-bundle` through the same
+`.github/actions/upload-package-bundle` action the release uses, and a
+separate job downloads it and verifies its digests against the uploaded
+`SHA256SUMS`, so the artifact roundtrip the install matrix and publication
+depend on is proven before tagging. `.gitattributes` checks
 every text file out with LF on every platform, so the Windows wheel's Skill
 bytes and digest match the Linux-built npm tarball. The manual
 `.github/workflows/release.yml` builds all five platform wheels and binaries,
@@ -86,13 +91,18 @@ with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks.
 It uploads **workflow artifacts only**: a `package-bundle` holding the npm
 tarball, the five wheels and their `SHA256SUMS`, which
 `scripts/verify_release_bundle.py` has checked for one version, one source
-commit, and identical CLI bytes per target across npm and PyPI.
+commit, and identical CLI bytes per target across npm and PyPI. The upload
+fails the job when it finds no files, and the log prints the SHA-256 of
+`SHA256SUMS` for review. Keep the bundle search root nonhidden: the upload
+action skips a hidden root when `include-hidden-files` is false. v0.1.0 and
+v0.1.1 were tagged but never published, so 0.1.2 is the first release.
 
-`.github/workflows/publish.yml` uploads that bundle and rebuilds nothing.
+`.github/workflows/publish.yml` publishes the verified tarball and wheels from
+that bundle and rebuilds nothing.
 Before a release:
 
 1. Merge the reviewed release commit into protected `main`. Protect `v*`
-   against retargeting and deletion, then tag that merged commit `v0.1.1`.
+   against retargeting and deletion, then tag that merged commit `v0.1.2`.
    Run `release.yml` on the tag. Its source-ref job requires the tag's commit
    to be in `main` history; every target job must pass.
 2. Download its `package-bundle`, read the archive contents and `SHA256SUMS`,
@@ -113,14 +123,14 @@ Before a release:
    protected bootstrap job checks that the credential's `npm whoami` matches
    `NPM_EXPECTED_OWNER`. It publishes the exact reviewed npm tarball with
    provenance, then requires that account to appear in `npm owner ls` as a
-   writer. If `0.1.1` already exists, it accepts the version only when both
+   writer. If `0.1.2` already exists, it accepts the version only when both
    the registry SHA-512 integrity and owner match; a same-byte package under
    another account fails. The PyPI job runs after bootstrap; it compares any
    existing wheels with the reviewed bytes, uploads missing wheels, and then
    requires exactly the five reviewed filenames and SHA-256 digests, with no
    sdist. The final npm job checks the same tarball and owner. Neither package
    is rebuilt.
-5. Once npm holds `jevscript@0.1.1`, configure its trusted publisher for
+5. Once npm holds `jevscript@0.1.2`, configure its trusted publisher for
    `theaileverage/jevscript`, workflow filename `publish.yml`, environment
    `npm`, and permission for `npm publish`. Remove `NPM_BOOTSTRAP_TOKEN` from
    the GitHub environment. For later releases, dispatch `publish.yml` with

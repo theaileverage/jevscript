@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 # The host needs only the Jevscript SDK; everything else is the standard
 # library. Pinned exactly, like every dependency in this repository.
-dependencies = ["jevscript==0.1.1"]
+dependencies = ["jevscript==0.1.2"]
 
 [project.optional-dependencies]
 dev = ["pytest==9.0.2"]

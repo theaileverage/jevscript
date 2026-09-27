@@ -6,6 +6,9 @@ Targets other than the host are proven only by GitHub Actions.
 
 - `ci.yml` job `package-smoke`: Linux x64 build, stage, pack and smoke on every
   push and PR.
+- `ci.yml` job `package-bundle-roundtrip`: checks the downloaded Linux bundle
+  against the digest recorded by `package-smoke`. See
+  `docs/package-release.md` for the release bundle contract.
 - `ci.yml` job `windows-package-smoke`: the same on `windows-2022`, so the
   MSVC build and its path scan run before a tag exists.
 - `release.yml` (manual, on a `v*` tag): all five targets build, stage and
@@ -29,3 +32,5 @@ gh run view <run-id> --log --job <job-id> | grep -E 'validated|embeds|smoke pass
   release tags cannot move, so a failure there costs a version. Get the
   matching PR lane green first.
 - A skipped job is not a pass.
+- Read the upload step for `Artifact package-bundle has been successfully
+  uploaded`, not just the job's colour.
