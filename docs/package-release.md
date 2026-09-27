@@ -4,6 +4,27 @@ This guide describes the **staged** 0.1.3 release. Nothing in this repository
 uploads to npm or PyPI automatically. The spec's command is `jevscript`, and
 both host SDKs invoke the release-matched `jevscript serve` binary (spec §11.5–11.6).
 
+## Where a release appears
+
+The workflows leave three kinds of record:
+
+- A Git tag, such as `v0.1.3`, on the merged release commit. Tags never move.
+- A `package-bundle` GitHub Actions artifact from a `release.yml` run. It
+  holds the npm tarball, the five wheels, and `SHA256SUMS`. GitHub deletes
+  workflow artifacts after the repository's retention period.
+- The published packages on npm and PyPI, uploaded by `publish.yml` from that
+  bundle.
+
+Neither workflow creates a GitHub Release or uploads release assets. A tag
+appears on the repository's **Releases** page only after a maintainer creates
+a GitHub Release for it by hand. A registry is the record of what is
+published, and each registry can hold a different latest version:
+
+```sh
+npm view @theaileverage/jevscript version
+python -m pip index versions jevscript
+```
+
 ## Artifacts and target claims
 
 `npm` package `@theaileverage/jevscript` contains its ESM SDK, a `jevscript` command shim and
