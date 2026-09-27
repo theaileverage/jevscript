@@ -33,6 +33,6 @@ step wheel env -C sdk/python JEVSCRIPT_TARGET="$target" JEVSCRIPT_PLATFORM_TAG="
 step npm-build env -C sdk/js sh -c 'pnpm install --frozen-lockfile && pnpm run build'
 step npm-pack env -C sdk/js JEVSCRIPT_PACK_TARGETS="$target" npm pack --pack-destination ../../.release-tmp
 step smoke python3 scripts/smoke_packages.py --npm "$tgz" --wheel "$whl"
-shasum -a 256 "$tgz" "$whl" >"$evidence/artifacts.sha256"
-grep '^validated' "$evidence/build.log"
+shasum -a 256 "$tgz" "$whl" >"$evidence/artifacts.sha256" || exit 1
+grep '^validated' "$evidence/build.log" || exit 1
 echo "PASS $target $version; evidence: $evidence"

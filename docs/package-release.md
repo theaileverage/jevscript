@@ -59,16 +59,13 @@ python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel
 ```
 
 The smoke opens each archive and checks an allowlist, license, wheel tag,
-example, Skill digest, manifest, and forbidden content, including a
-case-insensitive scan for external supervisor branding in tracked source and
-both archives. It installs each package offline
+example, Skill digest, manifest, LF-only Skill and examples, and forbidden
+content, including a case-insensitive scan for external supervisor branding
+in tracked source and both archives. It installs each package offline
 with no repository binary on PATH; runs the real command for `--version` and
 `check`; runs setup from both installed CLIs in scratch project and home
 directories without `npx` or `skills` on PATH; loads `inbox_triage.jev` through
 each SDK; executes a no-model task;
-compiles `sdk/fixtures/line_endings.jev` from LF and CRLF copies through both
-installed CLIs and requires the same program, then runs the CRLF copy through
-each SDK;
 then damages each installed binary and requires the command and SDK to reject
 it. `build_release_cli.py` builds with its own `CARGO_HOME` under
 `.release-tmp` (the first run downloads the registry), remaps local build
@@ -80,7 +77,9 @@ Linux and Windows, use the matching matrix target and wheel tag from
 
 `.github/workflows/ci.yml` runs Linux x64 and Windows x64 package smokes on
 every push and pull request, so the MSVC build and its embedded-path scan
-pass before a release tag, which never moves, exists. The manual
+pass before a release tag, which never moves, exists. `.gitattributes` checks
+every text file out with LF on every platform, so the Windows wheel's Skill
+bytes and digest match the Linux-built npm tarball. The manual
 `.github/workflows/release.yml` builds all five platform wheels and binaries,
 assembles the npm tarball, then installs both artifact types on each target
 with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks.
