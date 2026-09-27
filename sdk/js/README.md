@@ -1,26 +1,32 @@
-# jevscript (npm)
+# @theaileverage/jevscript (npm)
 
 The JavaScript SDK spawns `jevscript serve` and implements the section 11.2
 host surface over JSON-RPC stdio.
 
-Install with `npm install jevscript` in a Node 22+ project. The package includes
-the release-matched Rust CLI; no Cargo or install-time download is needed. Run
-`npx jevscript --version` or `npx jevscript check node_modules/jevscript/examples/inbox_triage.jev`.
-For a user-level command, use `npm install -g jevscript` and ensure npm's global
-bin directory is on PATH. See the [package release guide](../../docs/package-release.md)
+Install with `npm install @theaileverage/jevscript` in a Node 22+ project. The
+package includes the release-matched Rust CLI; no Cargo or install-time download
+is needed. For example:
+
+```sh
+npm exec --package=@theaileverage/jevscript -- jevscript --version
+npm exec --package=@theaileverage/jevscript -- jevscript check node_modules/@theaileverage/jevscript/examples/inbox_triage.jev
+```
+For a user-level command, use `npm install -g @theaileverage/jevscript` and ensure
+npm's global bin directory is on PATH. See the [package release guide](../../docs/package-release.md)
 for supported platforms, OS floors, and package smoke requirements.
 An unsupported platform reports a clear error. Offline installation works from
-the complete saved `.tgz` with `npm install --offline ./jevscript-0.1.2.tgz`.
+the complete saved `.tgz` with `npm install --offline ./theaileverage-jevscript-0.1.3.tgz`.
 `load({ bin })` and `JEVSCRIPT_BIN` are explicit host overrides; the usual SDK
 path uses the binary in this package after checking its digest.
 
-Run `npx jevscript setup --agent codex` or `--agent claude-code` from a
+Run `npm exec --package=@theaileverage/jevscript -- jevscript setup --agent codex`
+or use `--agent claude-code` from a
 project to install the bundled coding-agent Skill offline. Repeat `--agent`
 for both, add `--global` for user scope, or `--copy` for separate directories
 instead of links. Setup runs only when invoked; npm install has no postinstall.
 
 ```ts
-import { load } from 'jevscript'
+import { load } from '@theaileverage/jevscript'
 
 const program = await load('examples/fix_issue.jev', { paths: ['./lib'] })
 const run = program.task('main').start({
@@ -66,7 +72,7 @@ Use the same agent executable as `jevscript run --bind` with
 `subprocessAgent` (spec sections 9.1 and 11.6):
 
 ```ts
-import { load, subprocessAgent } from 'jevscript'
+import { load, subprocessAgent } from '@theaileverage/jevscript'
 
 const agent = subprocessAgent('jevscript-adapter-codex', ['--backend', 'tmux'])
 try {

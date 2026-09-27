@@ -71,7 +71,16 @@ def inspect_tarball(path: pathlib.Path) -> tuple[dict, bytes]:
         for required in ("package/LICENSE", "package/examples/inbox_triage.jev", "package/examples/package_smoke.jev", "package/native/manifest.json", "package/native/THIRD_PARTY_NOTICES.txt", "package/skills/jevscript/SKILL.md"):
             if required not in names:
                 raise AssertionError(f"missing npm member: {required}")
-        return (json.loads(archive.extractfile("package/native/manifest.json").read()),
+        package = json.loads(archive.extractfile("package/package.json").read())
+        manifest = json.loads(archive.extractfile("package/native/manifest.json").read())
+        if package["name"] != "@theaileverage/jevscript" or package["version"] != manifest["version"]:
+            raise AssertionError("npm tarball package identity differs from its CLI manifest")
+        for target, record in manifest["targets"].items():
+            binary = "jevscript.exe" if target == "win32-x64" else "jevscript"
+            member = archive.extractfile(f"package/native/{target}/{binary}")
+            if member is None or hashlib.sha256(member.read()).hexdigest() != record["sha256"]:
+                raise AssertionError(f"missing or different npm {target} CLI bytes")
+        return (manifest,
                 archive.extractfile("package/skills/jevscript/SKILL.md").read())  # type: ignore[union-attr]
 
 
@@ -151,7 +160,8 @@ def main() -> None:
         env["npm_config_cache"] = str(base / "npm-cache")
         run("npm.cmd" if os.name == "nt" else "npm", "install", "--offline", "--ignore-scripts", "--no-audit", str(npm), cwd=js, env=env)
         command = js / "node_modules" / ".bin" / ("jevscript.cmd" if os.name == "nt" else "jevscript")
-        example = js / "node_modules" / "jevscript" / "examples" / "inbox_triage.jev"
+        package = js / "node_modules" / "@theaileverage" / "jevscript"
+        example = package / "examples" / "inbox_triage.jev"
         run(str(command), "--version", cwd=js, env=env)
         project = base / "project"
         project.mkdir()
@@ -168,9 +178,9 @@ def main() -> None:
         assert_skill(project / ".agents/skills/jevscript/SKILL.md", source_skill)
         assert_skill(project / ".claude/skills/jevscript/SKILL.md", source_skill)
         run(str(command), "check", str(example), cwd=js, env=env)
-        run("node", "--input-type=module", "-e", "import { load } from 'jevscript'; const p=await load(process.argv[1]); if (!p.judgments.some(j=>j.name==='triage')) throw Error('missing judgment'); await p.close()", str(example), cwd=js, env=env)
-        no_model = js / "node_modules" / "jevscript" / "examples" / "package_smoke.jev"
-        run("node", "--input-type=module", "-e", "import { load } from 'jevscript'; const p=await load(process.argv[1]); const pause=await p.task('main').start().next(); if(pause.kind!=='done') throw Error(JSON.stringify(pause)); await p.close()", str(no_model), cwd=js, env=env)
+        run("node", "--input-type=module", "-e", "import { load } from '@theaileverage/jevscript'; const p=await load(process.argv[1]); if (!p.judgments.some(j=>j.name==='triage')) throw Error('missing judgment'); await p.close()", str(example), cwd=js, env=env)
+        no_model = package / "examples" / "package_smoke.jev"
+        run("node", "--input-type=module", "-e", "import { load } from '@theaileverage/jevscript'; const p=await load(process.argv[1]); const pause=await p.task('main').start().next(); if(pause.kind!=='done') throw Error(JSON.stringify(pause)); await p.close()", str(no_model), cwd=js, env=env)
         venv_dir = py / "venv"
         venv.EnvBuilder(with_pip=True).create(venv_dir)
         python = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -187,10 +197,10 @@ def main() -> None:
         py_example = subprocess.check_output([str(python), "-c", "from importlib.resources import files; print(files('jevscript').joinpath('examples','inbox_triage.jev'))"], cwd=py, env=env, text=True).strip()
         run(str(cli), "check", py_example, cwd=py, env=env)
         native_name = "jevscript.exe" if os.name == "nt" else "jevscript"
-        js_native = js / "node_modules" / "jevscript" / "native" / target / native_name
+        js_native = package / "native" / target / native_name
         js_native.write_bytes(b"damaged binary")
         must_fail_integrity(str(command), "--version", cwd=js, env=env)
-        must_fail_integrity("node", "--input-type=module", "-e", "import {load} from 'jevscript'; await load(process.argv[1])", str(example), cwd=js, env=env)
+        must_fail_integrity("node", "--input-type=module", "-e", "import {load} from '@theaileverage/jevscript'; await load(process.argv[1])", str(example), cwd=js, env=env)
         py_native = pathlib.Path(subprocess.check_output([str(python), "-c", "from importlib.resources import files; print(files('jevscript').joinpath('_bin', 'jevscript.exe' if __import__('os').name == 'nt' else 'jevscript'))"], cwd=py, env=env, text=True).strip())
         py_native.write_bytes(b"damaged binary")
         must_fail_integrity(str(cli), "--version", cwd=py, env=env)

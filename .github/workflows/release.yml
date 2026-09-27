@@ -130,4 +130,4 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install both built packages offline and run their real CLI and SDK
-        run: python scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-${{ matrix.wheel }}.whl
+        run: python scripts/smoke_packages.py --npm .release-tmp/theaileverage-jevscript-0.1.3.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.3-py3-none-${{ matrix.wheel }}.whl

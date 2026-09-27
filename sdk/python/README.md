@@ -11,7 +11,7 @@ install-time download. Run `jevscript --version` and `jevscript check` on your
 program; the installed package also contains `examples/inbox_triage.jev`.
 Activate a virtual environment before expecting its `jevscript` command on
 PATH. Offline installation works from the matching wheel with
-`python -m pip install --no-index ./jevscript-0.1.2-*.whl`. Unsupported
+`python -m pip install --no-index ./jevscript-0.1.3-*.whl`. Unsupported
 platforms have no wheel and installation fails rather than installing an SDK
 without a command. See the [package release guide](../../docs/package-release.md)
 for supported platforms and OS floors. Explicit `bin=` and `JEVSCRIPT_BIN`

@@ -37,7 +37,7 @@ def main() -> None:
     for line in sums.read_text().splitlines():
         digest, name = line.split(maxsplit=1)
         listed[name.lstrip("*")] = digest
-    tarball = f"jevscript-{current}.tgz"
+    tarball = f"theaileverage-jevscript-{current}.tgz"
     wheels = {target: f"wheelhouse/jevscript-{current}-py3-none-{tag}.whl" for target, tag in PLATFORMS.items() if target in targets}
     expected = {tarball, *wheels.values()}
     present = {path.relative_to(args.bundle).as_posix() for path in args.bundle.rglob("*") if path.is_file()} - {"SHA256SUMS"}
@@ -49,8 +49,13 @@ def main() -> None:
     with tarfile.open(args.bundle / tarball, "r:gz") as archive:
         package = json.loads(archive.extractfile("package/package.json").read())  # type: ignore[union-attr]
         npm_manifest = json.loads(archive.extractfile("package/native/manifest.json").read())  # type: ignore[union-attr]
-    if package["name"] != "jevscript" or package["version"] != current or package.get("private"):
-        raise SystemExit(f"npm package is not public jevscript@{current}")
+        for target in targets:
+            binary = "jevscript.exe" if target == "win32-x64" else "jevscript"
+            member = archive.extractfile(f"package/native/{target}/{binary}")
+            if member is None or hashlib.sha256(member.read()).hexdigest() != npm_manifest["targets"][target]["sha256"]:
+                raise SystemExit(f"npm tarball has missing or different {target} CLI bytes")
+    if package["name"] != "@theaileverage/jevscript" or package["version"] != current or package.get("private"):
+        raise SystemExit(f"npm package is not public @theaileverage/jevscript@{current}")
     if set(npm_manifest["targets"]) != set(targets):
         raise SystemExit(f"npm tarball does not carry exactly {sorted(targets)}")
     for target, name in wheels.items():

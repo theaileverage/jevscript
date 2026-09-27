@@ -1,12 +1,12 @@
 # Jevscript SDK and CLI package release
 
-This guide describes the **staged** 0.1.2 release. Nothing in this repository
+This guide describes the **staged** 0.1.3 release. Nothing in this repository
 uploads to npm or PyPI automatically. The spec's command is `jevscript`, and
 both host SDKs invoke the release-matched `jevscript serve` binary (spec §11.5–11.6).
 
 ## Artifacts and target claims
 
-`npm` package `jevscript` contains its ESM SDK, a `jevscript` command shim and
+`npm` package `@theaileverage/jevscript` contains its ESM SDK, a `jevscript` command shim and
 all five target binaries. PyPI project `jevscript` has one wheel per target,
 each with its Python SDK, command entry point and native binary. Binary SHA-256
 digests live in the package manifest and are checked before execution.
@@ -57,7 +57,7 @@ JEVSCRIPT_PACK_TARGETS=darwin-arm64 npm pack --pack-destination ../../.release-t
 cd ../python
 JEVSCRIPT_TARGET=darwin-arm64 JEVSCRIPT_PLATFORM_TAG=macosx_15_0_arm64 JEVSCRIPT_WHEEL_TAG=py3-none-macosx_15_0_arm64 uv build --wheel --out-dir ../../.release-tmp/wheelhouse
 cd ../..
-python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-macosx_15_0_arm64.whl
+python3 scripts/smoke_packages.py --npm .release-tmp/theaileverage-jevscript-0.1.3.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.3-py3-none-macosx_15_0_arm64.whl
 ```
 
 The smoke opens each archive and checks an allowlist, license, wheel tag,
@@ -98,24 +98,26 @@ tarball, the five wheels and their `SHA256SUMS`, which
 commit, and identical CLI bytes per target across npm and PyPI. The upload
 fails the job when it finds no files, and the log prints the SHA-256 of
 `SHA256SUMS` for review. Keep the bundle search root nonhidden: the upload
-action skips a hidden root when `include-hidden-files` is false. v0.1.0 and
-v0.1.1 were tagged but never published, so 0.1.2 is the first release.
+action skips a hidden root when `include-hidden-files` is false. PyPI already
+holds `jevscript` 0.1.2, and the pushed `v0.1.2` tag is immutable. This
+release stages 0.1.3 from a new commit and leaves those artifacts untouched.
 
 `.github/workflows/publish.yml` publishes the verified tarball and wheels from
 that bundle and rebuilds nothing.
 Before a release:
 
 1. Merge the reviewed release commit into protected `main`. Protect `v*`
-   against retargeting and deletion, then tag that merged commit `v0.1.2`.
+   against retargeting and deletion, then tag that merged commit `v0.1.3`.
    Run `release.yml` on the tag. Its source-ref job requires the tag's commit
    to be in `main` history; every target job must pass.
 2. Download its `package-bundle`, read the archive contents and `SHA256SUMS`,
    and record the SHA-256 of `SHA256SUMS` itself.
-3. Create protected GitHub environments `npm` and `pypi` with required
-   reviewers. Register a PyPI pending trusted publisher for project `jevscript`,
-   GitHub owner `theaileverage`, repository `jevscript`, workflow `publish.yml`,
-   and environment `pypi`. A pending publisher does not reserve the name.
-   Confirm the npm account can create `jevscript` and has 2FA enabled. Set
+3. Confirm protected GitHub environments `npm` and `pypi` have required
+   reviewers. Confirm the existing PyPI project `jevscript` has a trusted
+   publisher for GitHub owner `theaileverage`, repository `jevscript`, workflow
+   `publish.yml`, and environment `pypi`.
+   Confirm the npm organization `theaileverage` exists and the bootstrap npm
+   account has package publishing access in that organization and 2FA enabled. Set
    `NPM_EXPECTED_OWNER` in the protected `npm` environment to that account's
    exact npm username. npm requires an existing package before a trusted
    publisher can be configured.
@@ -127,22 +129,22 @@ Before a release:
    protected bootstrap job checks that the credential's `npm whoami` matches
    `NPM_EXPECTED_OWNER`. It publishes the exact reviewed npm tarball with
    provenance, then requires that account to appear in `npm owner ls` as a
-   writer. If `0.1.2` already exists, it accepts the version only when both
+   writer for `@theaileverage/jevscript`. If 0.1.3 already exists, it accepts the version only when both
    the registry SHA-512 integrity and owner match; a same-byte package under
    another account fails. The PyPI job runs after bootstrap; it compares any
    existing wheels with the reviewed bytes, uploads missing wheels, and then
    requires exactly the five reviewed filenames and SHA-256 digests, with no
    sdist. The final npm job checks the same tarball and owner. Neither package
    is rebuilt.
-5. Once npm holds `jevscript@0.1.2`, configure its trusted publisher for
+5. Once npm holds `@theaileverage/jevscript@0.1.3`, configure its trusted publisher for
    `theaileverage/jevscript`, workflow filename `publish.yml`, environment
    `npm`, and permission for `npm publish`. Remove `NPM_BOOTSTRAP_TOKEN` from
    the GitHub environment. For later releases, dispatch `publish.yml` with
    `npm_bootstrap: false`; its normal job publishes through OIDC and accepts an
    already published version only after the same exact-integrity check.
 
-Registry names were unclaimed by public lookup on 2026-09-26, but that does
-not reserve them. npm/PyPI versions and the packaged CLI version must match
+The pending review of the unscoped `jevscript` npm name is separate from this
+scoped release. npm/PyPI versions and the packaged CLI version must match
 exactly. A broken publication needs a new patch version; never rebuild or
 overwrite an existing name/version pair. If only one registry accepts a
 version, treat it as an incident. Read PyPI's version JSON and npm's version

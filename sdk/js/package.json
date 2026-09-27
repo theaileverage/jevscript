@@ -1,6 +1,6 @@
 {
-  "name": "jevscript",
-  "version": "0.1.2",
+  "name": "@theaileverage/jevscript",
+  "version": "0.1.3",
   "homepage": "https://jevscript.sh",
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "git+https://github.com/theaileverage/jevscript.git", "directory": "sdk/js" },

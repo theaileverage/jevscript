@@ -1,11 +1,9 @@
 # Jevscript
 
-Once the packages are published, install the SDK and release-matched `jevscript` command with
-`npm install jevscript` (Node 22+) or `pipx install jevscript` / `pip install
-jevscript` (Python 3.10+). The SDK packages include the CLI binary and use it
-by default. See [npm](sdk/js/README.md) and [Python](sdk/python/README.md)
-installation details. The package release matrix and verification commands are
-in [the package release guide](docs/package-release.md).
+Python package `jevscript` 0.1.2 is published on PyPI. The JavaScript SDK and
+CLI are prepared here as `@theaileverage/jevscript` 0.1.3; **the scoped npm
+package is not published yet**. The pushed `v0.1.2` tag and PyPI release remain
+unchanged. The public source is [theaileverage/jevscript](https://github.com/theaileverage/jevscript).
 
 https://jevscript.sh
 
@@ -34,6 +32,43 @@ judgment triage(message):
 ```
 
 Three typed answers, one model call, no parsing.
+
+## Install the SDK and CLI
+
+For the published Python package (Python 3.10+):
+
+```sh
+python -m pip install 'jevscript==0.1.2'  # or: pipx install 'jevscript==0.1.2'
+jevscript --version
+```
+
+After the scoped npm package is published (Node 22+):
+
+```sh
+npm install @theaileverage/jevscript@0.1.3
+npm exec --package=@theaileverage/jevscript@0.1.3 -- jevscript --version
+```
+
+Both SDKs use their bundled, release-matched Rust CLI for the `jevscript serve`
+stdio protocol; installation needs no Rust toolchain, install hook or binary
+download. In JavaScript, import from `@theaileverage/jevscript`; in Python,
+import from `jevscript`. The `jevscript` command also supports `check`, `run`,
+`replay` and `lsp`. See the [npm SDK](sdk/js/README.md),
+[Python SDK](sdk/python/README.md), and [release guide](docs/package-release.md)
+for API examples, supported platforms and artifact verification.
+
+Install the bundled coding-agent Skill explicitly in a project:
+
+```sh
+jevscript setup --agent codex --agent claude-code
+```
+
+The project Skill lives at `.agents/skills/jevscript`; Claude Code also gets a
+link at `.claude/skills/jevscript`. Use `--project <dir>` for another existing
+project, `--global` for a user-level installation, or `--copy` for independent
+copies instead of links. Global setup links into `~/.codex/skills/jevscript`
+and/or `~/.claude/skills/jevscript`. Setup runs offline, refuses unmanaged or
+changed destinations, and never runs during package installation.
 
 ## The loop
 
@@ -113,6 +148,7 @@ examples/
   lib/agent_loop.jev   the harness loop as a reusable library
   inbox_triage.jev     a judgment-only program
   review_loop.jev      a review machine
+  chief-of-staff/      a runnable host showcase with its own Python CLI
 ```
 
 ## Build and run
@@ -135,6 +171,7 @@ The binary lands at `target/debug/jevscript`:
 | `jevscript replay <recording.jsonl>` | Replay with no model calls, reproducing the recorded `log` lines. |
 | `jevscript serve` | The JSON-RPC stdio server the SDKs drive. |
 | `jevscript lsp` | The language server for editors, over stdio. |
+| `jevscript setup --agent codex` | Install the bundled coding-agent Skill in a project. |
 
 Bind each capability explicitly when running a task:
 
@@ -169,6 +206,11 @@ Point them at a binary other than `jevscript` on the PATH with `JEVSCRIPT_BIN`.
 Editors get diagnostics, highlighting, hover, navigation and completion from
 `jevscript lsp`: see [editor support](docs/editors.md) for VS Code, Cursor,
 Windsurf, Neovim, Helix and Zed.
+
+For a larger application built on the same runtime, see the
+[Chief of Staff example](examples/chief-of-staff/README.md). It has a separate
+Python host, durable state and terminal-agent backends; its source checkout
+setup is described there.
 
 ## Configuration
 
