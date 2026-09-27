@@ -66,6 +66,9 @@ with no repository binary on PATH; runs the real command for `--version` and
 `check`; runs setup from both installed CLIs in scratch project and home
 directories without `npx` or `skills` on PATH; loads `inbox_triage.jev` through
 each SDK; executes a no-model task;
+compiles `sdk/fixtures/line_endings.jev` from LF and CRLF copies through both
+installed CLIs and requires the same program, then runs the CRLF copy through
+each SDK;
 then damages each installed binary and requires the command and SDK to reject
 it. `build_release_cli.py` builds with its own `CARGO_HOME` under
 `.release-tmp` (the first run downloads the registry), remaps local build

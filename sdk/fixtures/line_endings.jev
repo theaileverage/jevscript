@@ -1,0 +1,11 @@
+program line_endings
+
+# A comment-only line, then a blank one: the lines a CRLF checkout used to break.
+
+def banner(name):
+  # An indented comment.
+  return """hello {name}
+  second line"""  # a trailing comment
+
+task main:
+  return banner("crlf")

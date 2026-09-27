@@ -12,6 +12,11 @@ branding in tracked source) and then acts as a user would.
 - `jevscript setup --agent codex --agent claude-code` into scratch project and
   home directories, and the installed Skill bytes.
 - `load` of `inbox_triage.jev` through each SDK, and a no-model task run.
+- Line endings: `sdk/fixtures/line_endings.jev` (comment-only and blank
+  lines, comments, a multi-line text) compiles to the same IR from LF and
+  CRLF copies, byte offsets and source path aside, through both installed
+  CLIs; the CRLF copy runs to `done` through each SDK. A Windows checkout also
+  embeds the prelude with CRLF, so the Windows lane covers that too.
 - A damaged installed binary is refused (`integrity check`) by the command and
   the SDK.
 

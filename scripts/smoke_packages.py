@@ -100,6 +100,33 @@ def assert_skill(path: pathlib.Path, expected: bytes) -> None:
         raise AssertionError(f"installed Skill bytes differ: {path}")
 
 
+def line_ending_copies(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """Write LF and CRLF copies of one fixture; a Windows checkout turns sources into CRLF."""
+    source = (ROOT / "sdk/fixtures/line_endings.jev").read_bytes().replace(b"\r\n", b"\n")
+    lf = directory / "line_endings_lf.jev"
+    crlf = directory / "line_endings_crlf.jev"
+    lf.write_bytes(source)
+    crlf.write_bytes(source.replace(b"\n", b"\r\n"))
+    return lf, crlf
+
+
+def comparable_ir(value: object) -> object:
+    """Drop byte offsets, which a line ending legitimately moves, and the source path."""
+    if isinstance(value, dict):
+        return {key: comparable_ir(item) for key, item in value.items() if key not in ("offset", "file")}
+    if isinstance(value, list):
+        return [comparable_ir(item) for item in value]
+    return value
+
+
+def assert_line_endings_agree(cli: str, lf: pathlib.Path, crlf: pathlib.Path, cwd: pathlib.Path, env: dict[str, str]) -> None:
+    """The installed CLI must compile a CRLF source to exactly the program its LF form is."""
+    lf_ir, crlf_ir = (comparable_ir(json.loads(subprocess.check_output([cli, "compile", str(path)], cwd=cwd, env=env)))
+                      for path in (lf, crlf))
+    if lf_ir != crlf_ir:
+        raise AssertionError("a CRLF source compiles to a different program than its LF form")
+
+
 def main() -> None:
     """Exercise both artifacts with no registry or repository runtime path."""
     parser = argparse.ArgumentParser()
@@ -157,6 +184,9 @@ def main() -> None:
         run("node", "--input-type=module", "-e", "import { load } from 'jevscript'; const p=await load(process.argv[1]); if (!p.judgments.some(j=>j.name==='triage')) throw Error('missing judgment'); await p.close()", str(example), cwd=js, env=env)
         no_model = js / "node_modules" / "jevscript" / "examples" / "package_smoke.jev"
         run("node", "--input-type=module", "-e", "import { load } from 'jevscript'; const p=await load(process.argv[1]); const pause=await p.task('main').start().next(); if(pause.kind!=='done') throw Error(JSON.stringify(pause)); await p.close()", str(no_model), cwd=js, env=env)
+        lf, crlf = line_ending_copies(base)
+        assert_line_endings_agree(str(command), lf, crlf, cwd=js, env=env)
+        run("node", "--input-type=module", "-e", "import { load } from 'jevscript'; const p=await load(process.argv[1]); const pause=await p.task('main').start().next(); if(pause.kind!=='done') throw Error(JSON.stringify(pause)); await p.close()", str(crlf), cwd=js, env=env)
         venv_dir = py / "venv"
         venv.EnvBuilder(with_pip=True).create(venv_dir)
         python = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -172,6 +202,9 @@ def main() -> None:
         run(str(python), "-c", task_code, cwd=py, env=env)
         py_example = subprocess.check_output([str(python), "-c", "from importlib.resources import files; print(files('jevscript').joinpath('examples','inbox_triage.jev'))"], cwd=py, env=env, text=True).strip()
         run(str(cli), "check", py_example, cwd=py, env=env)
+        assert_line_endings_agree(str(cli), lf, crlf, cwd=py, env=env)
+        crlf_code = "import sys; from jevscript import load; p=load(sys.argv[1]); assert p.task('main').start().next()['kind'] == 'done'; p.close()"
+        run(str(python), "-c", crlf_code, str(crlf), cwd=py, env=env)
         native_name = "jevscript.exe" if os.name == "nt" else "jevscript"
         js_native = js / "node_modules" / "jevscript" / "native" / target / native_name
         js_native.write_bytes(b"damaged binary")
