@@ -93,11 +93,12 @@ tarball, the five wheels and their `SHA256SUMS`, which
 `scripts/verify_release_bundle.py` has checked for one version, one source
 commit, and identical CLI bytes per target across npm and PyPI. The upload
 fails the job when it finds no files, and the log prints the SHA-256 of
-`SHA256SUMS` for review. v0.1.0 and v0.1.1 were tagged but never published;
-v0.1.1's staging run uploaded no bundle because its hidden `.release-bundle/`
-directory was skipped by the upload action, so 0.1.2 is the first release.
+`SHA256SUMS` for review. Keep the bundle search root nonhidden: the upload
+action skips a hidden root when `include-hidden-files` is false. v0.1.0 and
+v0.1.1 were tagged but never published, so 0.1.2 is the first release.
 
-`.github/workflows/publish.yml` uploads that bundle and rebuilds nothing.
+`.github/workflows/publish.yml` publishes the verified tarball and wheels from
+that bundle and rebuilds nothing.
 Before a release:
 
 1. Merge the reviewed release commit into protected `main`. Protect `v*`

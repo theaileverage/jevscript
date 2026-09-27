@@ -50,12 +50,10 @@ The whole package path for this host, into an evidence directory:
 
 Steps, each logged to `<evidence-dir>/<step>.log`: release build and
 embedded-path scan, npm and wheel staging, `uv build --wheel`, `pnpm build`
-plus `npm pack`, `scripts/bundle.sh`, which runs the assemble-and-verify
-step of `.github/actions/upload-package-bundle` exactly as CI does on a
-one-target bundle in `.release-tmp/package-bundle` (the upload itself runs
-only on GitHub; see `features/ci-release-lanes.md`), then
-`scripts/smoke_packages.py`, which installs both
-artifacts offline in scratch directories with no repository binary on PATH,
+plus `npm pack`, `.claude/skills/verify/scripts/bundle.sh`, which runs the
+bundle assembly and verification step on a one-target bundle in
+`.release-tmp/package-bundle`, then `scripts/smoke_packages.py`, which installs
+both artifacts offline in scratch directories with no repository binary on PATH,
 runs the installed CLI (`--version`, `check`, `setup`), loads and runs a task
 through each SDK, and requires a damaged binary to be rejected. The feature
 files say what each step proves.
@@ -65,7 +63,9 @@ files say what each step proves.
 The evidence directory defaults to
 `${TMPDIR:-/tmp}/jevscript-verify/<epoch>` and is printed at the start and the
 end. It holds every step log, `summary.txt` (step, exit code) and
-`artifacts.sha256` for the built tarball and wheel. Proof standards:
+`artifacts.sha256` for the built tarball and wheel, and `bundle.outputs` with
+the bundle's `SHA256SUMS` digest. The upload runs only on GitHub; see
+`features/ci-release-lanes.md`. Proof standards:
 
 - Only the installed packages count. A passing `cargo test` or SDK unit run
   says nothing about what the archives contain.
@@ -82,7 +82,8 @@ end. It holds every step log, `summary.txt` (step, exit code) and
 ```
 
 Removes the staged trees (`.release-tmp/binaries`, `.release-tmp/wheelhouse`,
-`.release-tmp/*.tgz`, `sdk/js/native`, `sdk/js/examples`, `sdk/js/skills`,
+`.release-tmp/*.tgz`, `.release-tmp/package-bundle`, `sdk/js/native`,
+`sdk/js/examples`, `sdk/js/skills`,
 `sdk/python/src/jevscript/_bin`, `.../examples`, `.../skills`). It keeps
 `.release-tmp/cargo-home` (a download cache) and never touches the evidence
 directory. Every path it removes is gitignored.
