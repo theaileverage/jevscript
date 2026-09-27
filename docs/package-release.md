@@ -1,6 +1,6 @@
 # Jevscript SDK and CLI package release
 
-This guide describes the **staged** 0.1.0 release. Nothing in this repository
+This guide describes the **staged** 0.1.1 release. Nothing in this repository
 uploads to npm or PyPI automatically. The spec's command is `jevscript`, and
 both host SDKs invoke the release-matched `jevscript serve` binary (spec §11.5–11.6).
 
@@ -55,25 +55,31 @@ JEVSCRIPT_PACK_TARGETS=darwin-arm64 npm pack --pack-destination ../../.release-t
 cd ../python
 JEVSCRIPT_TARGET=darwin-arm64 JEVSCRIPT_PLATFORM_TAG=macosx_11_0_arm64 JEVSCRIPT_WHEEL_TAG=py3-none-macosx_11_0_arm64 uv build --wheel --out-dir ../../.release-tmp/wheelhouse
 cd ../..
-python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.0.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.0-py3-none-macosx_11_0_arm64.whl
+python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-macosx_11_0_arm64.whl
 ```
 
 The smoke opens each archive and checks an allowlist, license, wheel tag,
-example, Skill digest, manifest, and forbidden content, including a
-case-insensitive scan for external supervisor branding in tracked source and
-both archives. It installs each package offline
+example, Skill digest, manifest, LF-only Skill and examples, and forbidden
+content, including a case-insensitive scan for external supervisor branding
+in tracked source and both archives. It installs each package offline
 with no repository binary on PATH; runs the real command for `--version` and
 `check`; runs setup from both installed CLIs in scratch project and home
 directories without `npx` or `skills` on PATH; loads `inbox_triage.jev` through
 each SDK; executes a no-model task;
 then damages each installed binary and requires the command and SDK to reject
-it. `build_release_cli.py` remaps local build paths and rejects personal path
-or credential markers in the binary. For Linux and Windows, use the matching
-matrix target and wheel tag from `scripts/stage_release.py`.
+it. `build_release_cli.py` builds with its own `CARGO_HOME` under
+`.release-tmp` (the first run downloads the registry), remaps local build
+paths and rejects personal path or credential markers in the binary. For
+Linux and Windows, use the matching matrix target and wheel tag from
+`scripts/stage_release.py`.
 
 ## Staging and publication boundary
 
-`.github/workflows/ci.yml` runs a Linux x64 package smoke. The manual
+`.github/workflows/ci.yml` runs Linux x64 and Windows x64 package smokes on
+every push and pull request, so the MSVC build and its embedded-path scan
+pass before a release tag, which never moves, exists. `.gitattributes` checks
+every text file out with LF on every platform, so the Windows wheel's Skill
+bytes and digest match the Linux-built npm tarball. The manual
 `.github/workflows/release.yml` builds all five platform wheels and binaries,
 assembles the npm tarball, then installs both artifact types on each target
 with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks.
@@ -86,7 +92,7 @@ commit, and identical CLI bytes per target across npm and PyPI.
 Before a release:
 
 1. Merge the reviewed release commit into protected `main`. Protect `v*`
-   against retargeting and deletion, then tag that merged commit `v0.1.0`.
+   against retargeting and deletion, then tag that merged commit `v0.1.1`.
    Run `release.yml` on the tag. Its source-ref job requires the tag's commit
    to be in `main` history; every target job must pass.
 2. Download its `package-bundle`, read the archive contents and `SHA256SUMS`,
@@ -107,14 +113,14 @@ Before a release:
    protected bootstrap job checks that the credential's `npm whoami` matches
    `NPM_EXPECTED_OWNER`. It publishes the exact reviewed npm tarball with
    provenance, then requires that account to appear in `npm owner ls` as a
-   writer. If `0.1.0` already exists, it accepts the version only when both
+   writer. If `0.1.1` already exists, it accepts the version only when both
    the registry SHA-512 integrity and owner match; a same-byte package under
    another account fails. The PyPI job runs after bootstrap; it compares any
    existing wheels with the reviewed bytes, uploads missing wheels, and then
    requires exactly the five reviewed filenames and SHA-256 digests, with no
    sdist. The final npm job checks the same tarball and owner. Neither package
    is rebuilt.
-5. Once npm holds `jevscript@0.1.0`, configure its trusted publisher for
+5. Once npm holds `jevscript@0.1.1`, configure its trusted publisher for
    `theaileverage/jevscript`, workflow filename `publish.yml`, environment
    `npm`, and permission for `npm publish`. Remove `NPM_BOOTSTRAP_TOKEN` from
    the GitHub environment. For later releases, dispatch `publish.yml` with

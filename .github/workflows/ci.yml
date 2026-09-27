@@ -127,4 +127,46 @@ jobs:
           pnpm run typecheck
           pnpm run build
           npm pack --pack-destination ../../.release-tmp
-      - run: python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.0.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.0-py3-none-manylinux_2_39_x86_64.whl
+      - run: python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-manylinux_2_39_x86_64.whl
+
+  # The release workflow runs only on a tag, which can never move, so the
+  # Windows build and its embedded-path scan must pass here first.
+  windows-package-smoke:
+    name: offline npm and PyPI artifact smoke (Windows x64)
+    runs-on: windows-2022
+    defaults:
+      run:
+        # PowerShell ignores a failing native command before a step's last line.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10
+      - run: python scripts/build_release_cli.py --target win32-x64
+      - run: python scripts/stage_release.py npm --binary-root .release-tmp/binaries --targets win32-x64
+      - run: python scripts/stage_release.py wheel --binary-root .release-tmp/binaries --targets win32-x64
+      - run: python -m pip install build==1.3.0 hatchling==1.28.0
+      - name: Build Windows wheel
+        working-directory: sdk/python
+        env:
+          JEVSCRIPT_TARGET: win32-x64
+          JEVSCRIPT_PLATFORM_TAG: win_amd64
+          JEVSCRIPT_WHEEL_TAG: py3-none-win_amd64
+        run: python -m build --wheel --no-isolation --outdir ../../.release-tmp/wheelhouse
+      - name: Build npm tarball
+        working-directory: sdk/js
+        env:
+          JEVSCRIPT_PACK_TARGETS: win32-x64
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run build
+          npm pack --pack-destination ../../.release-tmp
+      - run: python scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.1.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.1-py3-none-win_amd64.whl

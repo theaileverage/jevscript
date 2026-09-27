@@ -44,6 +44,12 @@ def must_fail_integrity(*args: str, cwd: pathlib.Path, env: dict[str, str]) -> N
         raise AssertionError(f"damaged CLI was not rejected: {result.returncode}: {result.stderr}")
 
 
+def assert_lf(name: str, data: bytes) -> None:
+    """A packaged Skill or example carries LF only, whatever runner built it."""
+    if name.endswith((".jev", "/SKILL.md")) and b"\r" in data:
+        raise AssertionError(f"carriage return in packaged text: {name}")
+
+
 def inspect_tarball(path: pathlib.Path) -> tuple[dict, bytes]:
     """Audit exact npm package members and sensitive bytes."""
     allowed = ("package/dist/", "package/native/", "package/bin/", "package/examples/", "package/skills/")
@@ -61,6 +67,7 @@ def inspect_tarball(path: pathlib.Path) -> tuple[dict, bytes]:
             data = archive.extractfile(member).read()  # type: ignore[union-attr]
             if any(pattern in data for pattern in FORBIDDEN) or EXTERNAL_NAME in data.lower():
                 raise AssertionError(f"sensitive npm member: {member.name}")
+            assert_lf(member.name, data)
         for required in ("package/LICENSE", "package/examples/inbox_triage.jev", "package/examples/package_smoke.jev", "package/native/manifest.json", "package/native/THIRD_PARTY_NOTICES.txt", "package/skills/jevscript/SKILL.md"):
             if required not in names:
                 raise AssertionError(f"missing npm member: {required}")
@@ -79,8 +86,10 @@ def inspect_wheel(path: pathlib.Path, version: str) -> tuple[dict, bytes]:
                 raise AssertionError(f"environment file in wheel: {name}")
             if not (name.startswith("jevscript/") or name.startswith(f"jevscript-{version}.dist-info/")):
                 raise AssertionError(f"unexpected wheel member: {name}")
-            if any(pattern in archive.read(name) for pattern in FORBIDDEN) or EXTERNAL_NAME in archive.read(name).lower():
+            data = archive.read(name)
+            if any(pattern in data for pattern in FORBIDDEN) or EXTERNAL_NAME in data.lower():
                 raise AssertionError(f"sensitive wheel member: {name}")
+            assert_lf(name, data)
         for suffix in ("entry_points.txt", "RECORD", "WHEEL"):
             if not any(name.endswith(suffix) for name in names):
                 raise AssertionError(f"missing wheel {suffix}")
