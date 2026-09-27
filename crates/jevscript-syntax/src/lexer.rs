@@ -136,6 +136,26 @@ impl Lexer {
         self.i >= self.src.len()
     }
 
+    /// Whether the cursor sits on a line ending. A carriage return before the
+    /// newline is part of the ending, never a character of the line, so a CRLF
+    /// file (git's `autocrlf` on Windows) lexes exactly as its LF form does.
+    fn at_newline(&self) -> bool {
+        match self.peek() {
+            Some('\n') => true,
+            Some('\r') => self.peek_at(1) == Some('\n'),
+            _ => false,
+        }
+    }
+
+    /// Consumes one line ending, LF or CRLF.
+    fn eat_newline(&mut self) -> bool {
+        if !self.at_newline() {
+            return false;
+        }
+        self.eat('\r');
+        self.eat('\n')
+    }
+
     fn push(&mut self, kind: TokenKind, start: Pos) {
         let span = Span::new(start, self.pos());
         self.tokens.push(Token::new(kind, span));
@@ -204,18 +224,14 @@ impl Lexer {
         }
 
         // A blank or comment-only line has no indentation and no newline token.
-        match self.peek() {
-            None => return LineKind::Blank,
-            Some('\n') => {
-                self.bump();
-                return LineKind::Blank;
-            }
-            Some('#') => {
-                self.skip_comment();
-                self.eat('\n');
-                return LineKind::Blank;
-            }
-            _ => {}
+        if self.at_end() || self.at_newline() {
+            self.eat_newline();
+            return LineKind::Blank;
+        }
+        if self.peek() == Some('#') {
+            self.skip_comment();
+            self.eat_newline();
+            return LineKind::Blank;
         }
 
         let current = *self.indents.last().unwrap_or(&0);
@@ -241,10 +257,7 @@ impl Lexer {
 
     fn skip_comment(&mut self) {
         let start = self.pos();
-        while let Some(c) = self.peek() {
-            if c == '\n' {
-                break;
-            }
+        while !self.at_end() && !self.at_newline() {
             self.bump();
         }
         let span = Span::new(start, self.pos());
@@ -453,8 +466,13 @@ impl Lexer {
                 terminated = true;
                 break;
             }
-            if c == '\n' && !multiline {
-                break;
+            if self.at_newline() {
+                if !multiline {
+                    break;
+                }
+                self.eat_newline();
+                literal.push('\n');
+                continue;
             }
             match c {
                 '\\' => {

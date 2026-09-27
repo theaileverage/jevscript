@@ -3,12 +3,13 @@
 //! These fixtures are copied verbatim from the spec, so a change here means the
 //! spec moved and the lexer has to follow.
 
-use jevscript_syntax::{ErrorCode, Keyword, Op, TextPart, TokenKind, lex, lex_all};
+use jevscript_syntax::{ErrorCode, Keyword, Op, Span, TextLit, TextPart, TokenKind, lex, lex_all};
 
 const FIX_ISSUE: &str = include_str!("../../../examples/fix_issue.jev");
 const AGENT_LOOP: &str = include_str!("../../../examples/lib/agent_loop.jev");
 const INBOX_TRIAGE: &str = include_str!("../../../examples/inbox_triage.jev");
 const REVIEW_LOOP: &str = include_str!("../../../examples/review_loop.jev");
+const PRELUDE: &str = include_str!("../../jevscript-compiler/src/prelude.jev");
 
 fn kinds(source: &str) -> Vec<TokenKind> {
     lex(source)
@@ -292,4 +293,70 @@ fn lex_all_keeps_tokens_and_comments_past_an_error() {
         "lexing continued past the error"
     );
     assert!(lex(source).is_err(), "`lex` still refuses the source");
+}
+
+/// Token kinds with the spans of interpolation holes erased, since those
+/// offsets legitimately differ between line endings.
+fn kinds_without_spans(source: &str) -> Vec<TokenKind> {
+    kinds(source)
+        .into_iter()
+        .map(|kind| match kind {
+            TokenKind::Text(TextLit { parts, multiline }) => TokenKind::Text(TextLit {
+                parts: parts
+                    .into_iter()
+                    .map(|part| match part {
+                        TextPart::Interpolation { source, .. } => TextPart::Interpolation {
+                            source,
+                            span: Span::default(),
+                        },
+                        literal => literal,
+                    })
+                    .collect(),
+                multiline,
+            }),
+            other => other,
+        })
+        .collect()
+}
+
+/// Section 13: the lexer handles indentation as Python's does, so a carriage
+/// return before a newline is part of the line ending and never of the line.
+/// A CRLF checkout, which git's `autocrlf` produces on Windows, lexes to the
+/// same tokens as its LF form, blank lines and comment-only lines included.
+#[test]
+fn crlf_line_endings_lex_as_lf() {
+    for source in [FIX_ISSUE, AGENT_LOOP, INBOX_TRIAGE, REVIEW_LOOP, PRELUDE] {
+        let lf = source.replace("\r\n", "\n");
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(kinds_without_spans(&crlf), kinds_without_spans(&lf));
+    }
+}
+
+/// Section 2.2: a triple-quoted text keeps its newlines as part of the value,
+/// and that value is the same whichever line ending the file uses. Section 2.3:
+/// a comment runs to the end of its line, which excludes the carriage return.
+#[test]
+fn crlf_inside_multiline_text_and_comments_lexes_as_lf() {
+    let lf = "program p\n\n# a comment\ndef f():\n  return \"\"\"one\n  two\"\"\" # tail\n";
+    let crlf = lf.replace('\n', "\r\n");
+    assert_eq!(kinds(&crlf), kinds(lf));
+    let text = kinds(lf)
+        .into_iter()
+        .find_map(|k| match k {
+            TokenKind::Text(text) => Some(text),
+            _ => None,
+        })
+        .expect("a text token");
+    assert_eq!(
+        text.parts,
+        vec![TextPart::Literal("one\n  two".to_string())]
+    );
+    let columns = |source: &str| -> Vec<(u32, u32)> {
+        lex_all(source)
+            .comments
+            .iter()
+            .map(|span| (span.start.column, span.end.column))
+            .collect()
+    };
+    assert_eq!(columns(&crlf), columns(lf));
 }
