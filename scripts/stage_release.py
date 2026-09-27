@@ -14,8 +14,8 @@ from third_party_notices import render as third_party_notices
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
-    "darwin-arm64": "macosx_11_0_arm64",
-    "darwin-x64": "macosx_10_15_x86_64",
+    "darwin-arm64": "macosx_15_0_arm64",
+    "darwin-x64": "macosx_15_0_x86_64",
     "linux-arm64-gnu": "manylinux_2_39_aarch64",
     "linux-x64-gnu": "manylinux_2_39_x86_64",
     "win32-x64": "win_amd64",

@@ -29,22 +29,24 @@ offline, and refuses unmanaged or changed destinations. Repeating the same
 setup reports already installed paths; resolve any collision yourself before
 rerunning. Package installation never invokes setup automatically.
 
-Target staging matrix: macOS arm64/x86_64, glibc Linux arm64/x86_64, and Windows
-x86_64. Linux wheels currently target `manylinux_2_39`, matching the configured
-Ubuntu 24.04 build runners; do not advertise older glibc compatibility. macOS
-wheel floors are checked against the final binary's Mach-O minimum OS by
-`scripts/build_release_cli.py` before staging. Node >=22 and Python >=3.10 are required. The only locally
-tested release artifact so far is **macOS arm64**, as recorded below; the
-other targets require passing the staged workflow on their own runners.
-That Mach-O check reads the main executable header. Before upload, inspect
-`otool -L` and `otool -l` on both final macOS binaries for linked-library
-requirements, then run the installed packages on macOS 10.15 x86_64 and
-macOS 11 arm64 or raise the wheel tags to the oldest versions actually tested.
+Target staging matrix: macOS 15 arm64/x86_64, glibc Linux arm64/x86_64, and
+Windows x86_64. Both macOS wheel tags declare macOS 15.0, and the npm CLI's
+supported macOS floor is also 15. Linux wheels currently target
+`manylinux_2_39`, matching the configured Ubuntu 24.04 build runners; do not
+advertise older glibc compatibility. The release build sets
+`MACOSX_DEPLOYMENT_TARGET=15.0` and checks that the final binary's Mach-O
+minimum OS equals the wheel floor before staging. Node >=22 and Python >=3.10
+are required. The Mach-O check reads the main executable header. Before upload,
+inspect `otool -L` and `otool -l` on both final macOS binaries for linked-library
+requirements. Require the installed npm and wheel
+smokes to pass on macOS 15 arm64 and macOS 15 x86_64 runners; the smoke rejects
+a Mac runner whose actual major OS version is not 15.
 
 ## Local artifact proof
 
-Use the pinned Rust toolchain and release version. The following commands
-write generated artifacts only under ignored package staging paths:
+On macOS 15 arm64, use the pinned Rust toolchain and release version. The
+following commands write generated artifacts only under ignored package
+staging paths:
 
 ```sh
 python3 scripts/build_release_cli.py --target darwin-arm64
@@ -53,9 +55,9 @@ python3 scripts/stage_release.py wheel --binary-root .release-tmp/binaries --tar
 cd sdk/js && pnpm install --frozen-lockfile && pnpm run build
 JEVSCRIPT_PACK_TARGETS=darwin-arm64 npm pack --pack-destination ../../.release-tmp
 cd ../python
-JEVSCRIPT_TARGET=darwin-arm64 JEVSCRIPT_PLATFORM_TAG=macosx_11_0_arm64 JEVSCRIPT_WHEEL_TAG=py3-none-macosx_11_0_arm64 uv build --wheel --out-dir ../../.release-tmp/wheelhouse
+JEVSCRIPT_TARGET=darwin-arm64 JEVSCRIPT_PLATFORM_TAG=macosx_15_0_arm64 JEVSCRIPT_WHEEL_TAG=py3-none-macosx_15_0_arm64 uv build --wheel --out-dir ../../.release-tmp/wheelhouse
 cd ../..
-python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-macosx_11_0_arm64.whl
+python3 scripts/smoke_packages.py --npm .release-tmp/jevscript-0.1.2.tgz --wheel .release-tmp/wheelhouse/jevscript-0.1.2-py3-none-macosx_15_0_arm64.whl
 ```
 
 The smoke opens each archive and checks an allowlist, license, wheel tag,
@@ -87,7 +89,9 @@ every text file out with LF on every platform, so the Windows wheel's Skill
 bytes and digest match the Linux-built npm tarball. The manual
 `.github/workflows/release.yml` builds all five platform wheels and binaries,
 assembles the npm tarball, then installs both artifact types on each target
-with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks.
+with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks. The Mac
+install lanes run on `macos-15` arm64 and `macos-15-intel` x86_64 and verify
+their running OS version before exercising the installed CLI and both SDKs.
 It uploads **workflow artifacts only**: a `package-bundle` holding the npm
 tarball, the five wheels and their `SHA256SUMS`, which
 `scripts/verify_release_bundle.py` has checked for one version, one source

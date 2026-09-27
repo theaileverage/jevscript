@@ -7,8 +7,8 @@ Install with `npm install jevscript` in a Node 22+ project. The package includes
 the release-matched Rust CLI; no Cargo or install-time download is needed. Run
 `npx jevscript --version` or `npx jevscript check node_modules/jevscript/examples/inbox_triage.jev`.
 For a user-level command, use `npm install -g jevscript` and ensure npm's global
-bin directory is on PATH. macOS arm64/x64, glibc Linux arm64/x64, and Windows
-x64 are release targets; each must pass its own package smoke before publishing.
+bin directory is on PATH. See the [package release guide](../../docs/package-release.md)
+for supported platforms, OS floors, and package smoke requirements.
 An unsupported platform reports a clear error. Offline installation works from
 the complete saved `.tgz` with `npm install --offline ./jevscript-0.1.2.tgz`.
 `load({ bin })` and `JEVSCRIPT_BIN` are explicit host overrides; the usual SDK
