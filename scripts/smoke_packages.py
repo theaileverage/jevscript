@@ -129,6 +129,11 @@ def main() -> None:
     from build_release_cli import host_target
 
     target = host_target()
+    if target.startswith("darwin-"):
+        macos_version = subprocess.check_output(["sw_vers", "-productVersion"], text=True).strip()
+        if macos_version.split(".")[0] != "15":
+            raise AssertionError(f"macOS 15 installed-package smoke required, runner is {macos_version}")
+        print(f"installed-package smoke on macOS {macos_version} {target}")
     if any(npm_manifest[key] != wheel_manifest[key] for key in ("version", "source_commit")):
         raise AssertionError("npm and wheel come from different versions or commits")
     if npm_manifest["targets"].get(target) != wheel_manifest["targets"].get(target):

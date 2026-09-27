@@ -31,11 +31,12 @@ class MacosMinimumIntegrationTests(unittest.TestCase):
                 return subprocess.run([sys.executable, str(CHECKER), "--target", target, str(binary)],
                                       env=env, capture_output=True, text=True)
 
-            self.assertEqual(run("darwin-arm64", "11.0").returncode, 0)
-            self.assertEqual(run("darwin-x64", "10.15.0").returncode, 0)
-            too_new = run("darwin-x64", "11.0")
-            self.assertNotEqual(too_new.returncode, 0)
-            self.assertIn("wheel advertises", too_new.stderr)
+            for target in ("darwin-arm64", "darwin-x64"):
+                self.assertEqual(run(target, "15.0.0").returncode, 0)
+                for minimum in ("14.0", "15.1"):
+                    mismatch = run(target, minimum)
+                    self.assertNotEqual(mismatch.returncode, 0)
+                    self.assertIn("wheel advertises", mismatch.stderr)
 
 
 if __name__ == "__main__":

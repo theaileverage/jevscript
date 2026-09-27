@@ -61,6 +61,8 @@ def main() -> None:
     if args.target != host_target():
         raise SystemExit(f"runner is {host_target()}, not {args.target}")
     env = os.environ.copy()
+    if args.target.startswith("darwin-"):
+        env["MACOSX_DEPLOYMENT_TARGET"] = "15.0"
     # aws-lc-sys strips its C __FILE__ prefix only for GCC and Clang, so under MSVC a
     # registry inside the user profile would embed that profile's path in the binary.
     cargo_home = ROOT / ".release-tmp" / "cargo-home"

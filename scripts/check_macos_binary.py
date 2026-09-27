@@ -1,4 +1,4 @@
-"""Reject a macOS release binary newer than its advertised wheel floor."""
+"""Require the final macOS binary to declare the advertised wheel floor."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import re
 import subprocess
 
 
-FLOORS = {"darwin-arm64": (11, 0), "darwin-x64": (10, 15)}
+FLOORS = {"darwin-arm64": (15, 0), "darwin-x64": (15, 0)}
 
 
 def version_tuple(text: str) -> tuple[int, ...]:
@@ -37,8 +37,8 @@ def check(binary: Path, target: str) -> None:
     actual = minimums[0]
     floor = FLOORS[target]
     width = max(len(actual), len(floor))
-    if actual + (0,) * (width - len(actual)) > floor + (0,) * (width - len(floor)):
-        raise ValueError(f"{target} binary requires macOS {actual}, wheel advertises {floor}")
+    if actual + (0,) * (width - len(actual)) != floor + (0,) * (width - len(floor)):
+        raise ValueError(f"{target} binary declares macOS {actual}, wheel advertises {floor}")
     print(f"validated {target} Mach-O minimum macOS {'.'.join(map(str, actual))}")
 
 

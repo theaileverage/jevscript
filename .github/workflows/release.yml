@@ -28,10 +28,10 @@ jobs:
         include:
           - target: darwin-arm64
             runner: macos-15
-            platform_tag: macosx_11_0_arm64
+            platform_tag: macosx_15_0_arm64
           - target: darwin-x64
             runner: macos-15-intel
-            platform_tag: macosx_10_15_x86_64
+            platform_tag: macosx_15_0_x86_64
           - target: linux-x64-gnu
             runner: ubuntu-24.04
             platform_tag: manylinux_2_39_x86_64
@@ -103,10 +103,10 @@ jobs:
         include:
           - platform: darwin-arm64
             runner: macos-15
-            wheel: macosx_11_0_arm64
+            wheel: macosx_15_0_arm64
           - platform: darwin-x64
             runner: macos-15-intel
-            wheel: macosx_10_15_x86_64
+            wheel: macosx_15_0_x86_64
           - platform: linux-x64-gnu
             runner: ubuntu-24.04
             wheel: manylinux_2_39_x86_64

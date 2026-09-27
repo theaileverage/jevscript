@@ -14,7 +14,7 @@ import unittest
 
 
 CHECKER = Path(__file__).resolve().parent / "check_pypi_wheels.py"
-TAGS = ["macosx_11_0_arm64", "macosx_10_15_x86_64", "manylinux_2_39_aarch64",
+TAGS = ["macosx_15_0_arm64", "macosx_15_0_x86_64", "manylinux_2_39_aarch64",
         "manylinux_2_39_x86_64", "win_amd64"]
 
 
