@@ -20,7 +20,7 @@ Open the PR's checks, or the staging run for a tag.
 
 ```sh
 gh run list --workflow ci.yml --branch <branch> --limit 1
-gh run view <run-id> --log --job <job-id> | grep -E 'validated|embeds|PASS|Error'
+gh run view <run-id> --log --job <job-id> | grep -E 'validated|embeds|smoke passed|Error'
 ```
 
 ## Gotchas

@@ -67,13 +67,17 @@ with no repository binary on PATH; runs the real command for `--version` and
 directories without `npx` or `skills` on PATH; loads `inbox_triage.jev` through
 each SDK; executes a no-model task;
 then damages each installed binary and requires the command and SDK to reject
-it. `build_release_cli.py` remaps local build paths and rejects personal path
-or credential markers in the binary. For Linux and Windows, use the matching
-matrix target and wheel tag from `scripts/stage_release.py`.
+it. `build_release_cli.py` builds with its own `CARGO_HOME` under
+`.release-tmp` (the first run downloads the registry), remaps local build
+paths and rejects personal path or credential markers in the binary. For
+Linux and Windows, use the matching matrix target and wheel tag from
+`scripts/stage_release.py`.
 
 ## Staging and publication boundary
 
-`.github/workflows/ci.yml` runs a Linux x64 package smoke. The manual
+`.github/workflows/ci.yml` runs Linux x64 and Windows x64 package smokes on
+every push and pull request, so the MSVC build and its embedded-path scan
+pass before a release tag, which never moves, exists. The manual
 `.github/workflows/release.yml` builds all five platform wheels and binaries,
 assembles the npm tarball, then installs both artifact types on each target
 with Python 3.10, 3.12, and 3.14. Node 22 is used for the npm checks.
