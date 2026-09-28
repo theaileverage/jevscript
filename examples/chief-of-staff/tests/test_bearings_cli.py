@@ -42,17 +42,21 @@ def test_active_fleet_digest_reports_stored_holds_and_dependencies(make_host, je
     run_until(host, lambda: bool(host.workers.all()))
     assert len(host.workers.all()) == 1
     backlog = host.backlog
+    backlog.keep_done = 0
     for item_id, title, status in (("t1", "Finished", "done"), ("t2", "Waiting", "queued")):
         backlog.add({"id": item_id, "title": title, "text": title, "project": "proj"})
         if status == "done":
             backlog.finish(item_id, "done", "landed")
+    assert not any(item["id"] == "t1" for item in backlog.items())
+    assert backlog.get("t1")["status"] == "done"
+    assert any(item["id"] == "t1" for item in read_jsonl(backlog.history_path))
     backlog.add({"id": "t3", "title": "Plain", "text": "Plain", "project": "proj"})
     backlog.add({"id": "t4", "title": "Past", "text": "Past", "project": "proj"})
     backlog.hold("t4", "review", until=now() - 3600)
     backlog.add({"id": "t5", "title": "Future", "text": "Future", "project": "proj"})
     future = now() + 3600
     backlog.hold("t5", "window", until=future)
-    backlog.add({"id": "t6", "title": "Held", "text": "Held", "project": "proj"})
+    backlog.add({"id": "t6", "title": "Held", "text": "Held", "project": "proj", "deps": ["t1", "t2", "missing"]})
     backlog.hold("t6", "owner")
     backlog.add({"id": "t7", "title": "Dependent", "text": "Dependent", "project": "proj", "deps": ["t1", "t2", "missing"]})
     host.decisions.record("choice", "Choose a path?", ["A", "B"])
@@ -64,8 +68,11 @@ def test_active_fleet_digest_reports_stored_holds_and_dependencies(make_host, je
     assert status.startswith("1 under way, ") and status.endswith("1 waiting on you.")
     assert f"Past [t4]: hold expired {iso(backlog.get('t4')['hold']['until'])}, review" in bearings
     assert f"Future [t5]: held until {iso(future)}, window" in bearings
-    assert "Held [t6]: held, owner" in bearings
+    assert "Held [t6]: held, owner; after t1 (done), t2 (queued), missing (unknown)" in bearings
     assert "Dependent [t7]: after t1 (done), t2 (queued), missing (unknown)" in bearings
+    queued_section = bearings.split("\nQueued and held\n", 1)[1].split("\nRecently finished\n", 1)[0]
+    assert "Finished [t1]" not in queued_section
+    assert "Finished [t1]: landed" in bearings
     for _ in range(3):
         cli(home, jevscript_bin, "bearings")
     assert counts(home) == before
