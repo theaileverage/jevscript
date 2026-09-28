@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print Jev questions and executable call boundaries in compiled Jevscript IR.
+"""Print judgment expressions and call boundaries in compiled Jevscript IR.
 
 Usage:
     request_groups.py FILE.jev [--all] [--jevscript PATH]
@@ -52,7 +52,7 @@ def verb_text(judge: dict[str, Any]) -> str:
         text = "pick among" + (f" by {verb['by']}" if verb.get("by") else "") + (", none" if verb.get("allow_none") else "")
     else:
         text = kind
-    return ("each " if judge["each"] else "") + text
+    return f"each {text} (one question per runtime item)" if judge["each"] else text
 
 
 class Units:
@@ -90,7 +90,7 @@ class Units:
 
 
 def events(node: Any, units: Units, capabilities: dict[str, str], target: str | None = None) -> list[tuple[int, str, Any]]:
-    """Return possible question and call rows in runtime evaluation order."""
+    """Return possible judgment-expression and call rows in runtime evaluation order."""
     found: list[tuple[int, str, Any]] = []
     if isinstance(node, list):
         for child in node:
@@ -190,7 +190,7 @@ def report(ir: dict[str, Any], show_all: bool) -> str:
                     groups[group] = groups.get(group, 0) + 1
                     out.append(f"  L{row_line:<4} group {group}  {text}")
             if groups:
-                sizes = ", ".join(f"group {g}: {n} question{'s' if n != 1 else ''}" for g, n in sorted(groups.items()))
+                sizes = ", ".join(f"group {g}: {n} judgment expression{'s' if n != 1 else ''}" for g, n in sorted(groups.items()))
                 out.append(f"  compiled logical groups: {len(groups)} ({sizes}); branches, loops and called units change which groups run and how often")
                 out.append("  network request count depends on the profile question cap and runtime list sizes; an oversized group may fail before sending")
     return "\n".join(out)

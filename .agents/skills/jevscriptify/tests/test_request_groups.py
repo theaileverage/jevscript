@@ -33,6 +33,8 @@ class RequestGroupsTest(unittest.TestCase):
         judgment, task = output.split("\ntask main", 1)
         self.assert_order(judgment, "first = message feels", "many = messages each feels", "calls def echo")
         self.assertIn("one logical group", judgment)
+        self.assertIn("many = messages each feels (one question per runtime item)", judgment)
+        self.assertIn("group 0: 2 judgment expressions", judgment)
         self.assertIn("network request count depends on the profile question cap", judgment)
         self.assert_order(
             task,
