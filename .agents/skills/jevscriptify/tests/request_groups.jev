@@ -1,0 +1,24 @@
+program request_groups
+
+needs agent: agent
+needs tree: tool
+
+def echo(x):
+  return x
+
+judgment read(message, messages):
+  first = message feels "needs work"
+  many = each messages feels "needs work"
+  log info echo(message)
+
+task main:
+  dev = agent.spawn in tree, prompt "hello"
+  x = "x"
+  a = x feels "before"
+  tree.note(dev.observe)
+  b = x feels "after"
+  text = focus dev.observe.last_message on "summary", max 10
+  c = x feels "after focus"
+  dev.send echo(tree.diff.files)
+  d = read("x", ["x"])
+  dev.stop
