@@ -204,7 +204,7 @@ Every rule above applies to `.jev` programs. The language writes the API's parts
 | `focus`, `note`, `compare` | detail keys of the same names; `note` only on `feels`, and none of them in a `pick among` block |
 | Choice `what`, `not_for`, `examples` | a label written as a record with those keys |
 | Noul `true` and `false` examples | `yes` and `no` detail keys |
-| One request | one request group: consecutive independent questions, or one `judgment` block; a unit call, capability call, gate or pause starts the next |
+| Logical request group | consecutive independent questions, or one `judgment` block; a unit call, capability call, gate or pause starts the next. A long `each` may split into multiple network requests under the selected profile |
 | `state` | exactly the subject and `compare` paths, or every parameter of a `judgment` block |
 | Labeled examples | `jevscript eval file.jev <judgment> --cases cases.jsonl`, which runs only a `judgment` block |
 | Confidence-gated routing | an `if` on `.confidence` or a probability, or `thresholds` on a task or machine gate |
@@ -219,7 +219,7 @@ Every rule above applies to `.jev` programs. The language writes the API's parts
 - [ ] Choices that may not cover every input have an `other` option.
 - [ ] Code does all counting, arithmetic, and date comparison.
 - [ ] The state holds only what the questions need and fits the token limits.
-- [ ] All questions on the same state travel in one request.
+- [ ] Independent questions on the same state share a logical request group.
 - [ ] Every action has a confidence threshold matched to its risk, and low confidence has a fallback.
 - [ ] Weights and thresholds live in code.
 - [ ] Labeled examples back every revision.

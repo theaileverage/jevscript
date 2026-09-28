@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Print every Jev question in a compiled Jevscript program with its request group.
+"""Print Jev questions and executable call boundaries in compiled Jevscript IR.
 
 Usage:
     request_groups.py FILE.jev [--all] [--jevscript PATH]
     jevscript compile FILE.jev | request_groups.py - [--all]
 
 The compiler assigns each judgment expression a `request_group` (spec section 6.6).
-Questions that share a group travel in one Jev request and see one state. Unit
-calls, capability calls and `llm` generations are listed in source order too,
-because they are what separate groups. By default only units written in FILE
-are shown; `--all` adds imported modules and the `std` prelude. Non-relative
+Questions that share a group use one logical request and see one state. An
+oversized `each` can split it into profile-dependent requests; other oversized
+groups fail before sending. Unit, capability, handle and `focus` calls are
+listed in evaluation order because they separate groups. By default only units
+written in FILE are shown; `--all` adds imported modules and the `std` prelude. Non-relative
 `use` paths resolve through `JEVSCRIPT_PATH`, as for `jevscript compile`.
 """
 
@@ -59,43 +60,80 @@ class Units:
             for unit in ir.get(key) or []:
                 self.kind[unit["name"]] = kind
         self.capabilities = {need["name"]: need["kind"] for need in ir.get("needs") or []}
+        self.modules = ir.get("modules") or []
 
-    def describe_call(self, call: dict[str, Any]) -> str | None:
+    def capabilities_for(self, unit: str) -> dict[str, str]:
+        module = max((m for m in self.modules if unit.startswith(m["alias"] + ".")),
+                     key=lambda m: len(m["alias"]), default=None)
+        return ({m["inner"]: m["kind"] for m in module.get("mapping") or []}
+                if module else self.capabilities)
+
+    def describe_call(self, call: dict[str, Any], capabilities: dict[str, str]) -> str | None:
         callee = call["callee"]
         if callee.get("node") == "name" and callee["name"] in self.kind:
             kind = self.kind[callee["name"]]
-            suffix = " (one request)" if kind == "judgment" else ""
+            suffix = " (one logical group)" if kind == "judgment" else ""
             return f"calls {kind} {callee['name']}{suffix}"
-        if callee.get("node") == "field" and callee["target"].get("node") == "name":
-            capability = callee["target"]["name"]
-            if capability in self.capabilities:
-                kind = self.capabilities[capability]
-                note = " (model call)" if kind == "llm" else ""
-                return f"effect {capability}.{callee['name']} [{kind}]{note}"
+        if callee.get("node") == "field":
+            target = callee["target"]
+            if target.get("node") == "name":
+                capability = target["name"]
+                if capability in capabilities:
+                    kind = capabilities[capability]
+                    note = " (model call)" if kind == "llm" else ""
+                    return f"effect {capability}.{callee['name']} [{kind}]{note}"
+                return f"effect {capability}.{callee['name']} [handle]"
+            return f"effect .{callee['name']} [handle]"
         return None
 
 
-def events(node: Any, units: Units, target: str | None = None) -> list[tuple[int, int, str, Any]]:
-    """(line, column, text, group) for each judge and call under `node`, in source order."""
-    found: list[tuple[int, int, str, Any]] = []
+def events(node: Any, units: Units, capabilities: dict[str, str], target: str | None = None) -> list[tuple[int, str, Any]]:
+    """Return question and call rows in expression evaluation order."""
+    found: list[tuple[int, str, Any]] = []
     if isinstance(node, list):
         for child in node:
-            found += events(child, units)
+            found += events(child, units, capabilities)
     elif isinstance(node, dict):
         if node.get("stmt") == "assign":
             target = node["root"] + "".join(f".{p}" if isinstance(p, str) else "[]" for p in node.get("path") or [])
-        if node.get("node") == "judge":
+        if "question" in node and "name" in node:
+            return events(node["question"], units, capabilities, node["name"])
+        kind = node.get("node")
+        if kind == "call":
+            for arg in node["args"]:
+                found += events(arg["value"], units, capabilities)
+            callee = node["callee"]
+            found += events(callee["target"] if callee.get("node") == "field" else callee,
+                            units, capabilities)
+            description = units.describe_call(node, capabilities)
+            if description:
+                found.append((line(node), description, None))
+            return found
+        if kind == "field":
+            found += events(node["target"], units, capabilities)
+            target_node = node["target"]
+            if target_node.get("node") == "name" and target_node["name"] in capabilities:
+                capability = target_node["name"]
+                found.append((line(node), f"effect {capability}.{node['name']} [{capabilities[capability]}]", None))
+            elif target_node.get("node") == "name" and node["name"] in ("observe", "stop"):
+                found.append((line(node), f"effect {target_node['name']}.{node['name']} [handle]", None))
+            return found
+        if kind == "focus":
+            found += events(node["text"], units, capabilities)
+            found += events(node["on"], units, capabilities)
+            found.append((line(node), "calls focus (Jev)", None))
+            return found
+        if "request_group" in node and "subject" in node:
+            found += events(node["subject"], units, capabilities)
+            found += events(node["verb"], units, capabilities)
+            found += events(node.get("detail"), units, capabilities)
             start = node["span"]["start"]
             name = f"{target} = " if target else ""
-            found.append((start["line"], start["column"], f"{name}{node['subject']['state_path']} {verb_text(node)}", node["request_group"]))
-        elif node.get("node") == "call":
-            text = units.describe_call(node)
-            if text:
-                start = node["span"]["start"]
-                found.append((start["line"], start["column"], text, None))
+            found.append((start["line"], f"{name}{node['subject']['state_path']} {verb_text(node)}", node["request_group"]))
+            return found
         for key, child in node.items():
-            if key not in ("span", "subject", "verb"):
-                found += events(child, units, target if key == "value" else None)
+            if key != "span":
+                found += events(child, units, capabilities, target if key == "value" else None)
     return found
 
 
@@ -108,19 +146,17 @@ def report(ir: dict[str, Any], show_all: bool) -> str:
             if not show_all and "." in name:
                 continue
             kind = units.kind[name]
+            capabilities = units.capabilities_for(name)
             if kind == "judgment":
-                out.append(f"\njudgment {name}({', '.join(unit['params'])})  line {line(unit)}: one request; state is every parameter in full")
-                for result in unit["results"]:
-                    question = result["question"]
-                    out.append(f"  L{line(question):<4} group {question['request_group']}  {result['name']} = {question['subject']['state_path']} {verb_text(question)}")
-                continue
-            header = f"\n{kind} {name}  line {line(unit)}"
+                header = f"\njudgment {name}({', '.join(unit['params'])})  line {line(unit)}: one logical group; state is every parameter in full"
+            else:
+                header = f"\n{kind} {name}  line {line(unit)}"
             if kind == "machine":
                 header += ": each step sends one Choice over the enabled events, plus stay (spec 7.8)"
             out.append(header)
-            rows = sorted(events(unit, units))
+            rows = events(unit, units, capabilities)
             groups: dict[int, int] = {}
-            for row_line, _, text, group in rows:
+            for row_line, text, group in rows:
                 if group is None:
                     out.append(f"  L{row_line:<4} {'':8} {text}")
                 else:
@@ -128,7 +164,8 @@ def report(ir: dict[str, Any], show_all: bool) -> str:
                     out.append(f"  L{row_line:<4} group {group}  {text}")
             if groups:
                 sizes = ", ".join(f"group {g}: {n} question{'s' if n != 1 else ''}" for g, n in sorted(groups.items()))
-                out.append(f"  own requests if every question runs: {len(groups)} ({sizes}); branches, loops and called units change the count")
+                out.append(f"  own logical groups if every question runs: {len(groups)} ({sizes}); branches, loops and called units change the count")
+                out.append("  network request count depends on the profile question cap and runtime list sizes; an oversized group may fail before sending")
     return "\n".join(out)
 
 

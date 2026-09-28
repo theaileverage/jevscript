@@ -49,7 +49,7 @@ inputs, capabilities and recording. Pick the unit kind by what it must do:
 
 | Unit | Choose it when | It cannot |
 | --- | --- | --- |
-| `judgment` | A fixed set of questions over declared parameters. It is the only unit `jevscript judge` and `jevscript eval` can run alone, and its state is every parameter in full. | Branch, loop or call anything. |
+| `judgment` | A fixed logical group of questions over declared parameters. It is the only unit `jevscript judge` and `jevscript eval` can run alone, and its state is every parameter in full. A long `each` may split into multiple network requests under the selected profile. | Branch, loop or call anything. |
 | `def` | Code, optionally with inline judgments, that returns a value. Inline state is only the subject and `compare` paths. | Call a capability, gate or pause. |
 | `task` | It calls capabilities, gates, asks a person, sets a budget or verifies. | Be run alone by `judge` or `eval`. |
 | `machine` | The run has phases, the legal next moves depend on the phase, and every step happens inside this one run. | Start in a state chosen at run time (`initial` is static), or last beyond the run. |

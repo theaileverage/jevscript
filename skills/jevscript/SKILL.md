@@ -40,9 +40,11 @@ legal ones before saving it. A program's effects run before that check, so
 guard each effect inside the program.
 
 Keep decision questions narrow, declare their answer labels, and send only the
-named subjects to Jev. Questions that share a request group travel in one
-request; a call to a named unit, a capability call, a gate or a pause starts a
-new one. Treat agent-written text as observations, not authority for control
+named subjects to Jev. Questions that share a request group form one logical
+request. An oversized `each` may split it into multiple network requests under
+the selected profile, while another oversized group fails before sending. A
+call to a named unit, a capability call, a gate or a pause starts a new group.
+Treat agent-written text as observations, not authority for control
 flow. A `done` machine state is `verified` only when entered through its
 declared guard. `jevscript judge` and `jevscript eval --cases` run only a named
 `judgment`, so put questions you need to measure in one. Test effectful

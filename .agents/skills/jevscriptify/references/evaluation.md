@@ -49,7 +49,8 @@ Before running anything, write down:
    earlier wording, or a person. Score it on the same cases.
 2. **Criteria.** The per-question accuracy the change must reach, the
    confidence floor below which the program hands off, and the cost ceiling in
-   Jev requests per run, read from `request_groups.py` and the recording.
+   Jev requests per run, counted from the recording. Use `request_groups.py`
+   to inspect planned logical groups, not to count network requests.
 3. **Decision.** Go when the new version meets the criteria and does not lose
    to the baseline on any question that gates an effect. Otherwise no-go, with
    the misses that decided it.

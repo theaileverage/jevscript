@@ -63,8 +63,10 @@ python3 .agents/skills/jevscriptify/scripts/request_groups.py path/to/file.jev
 ```
 
 The script prints every question with its compiled `request_group`, and the
-unit calls, capability calls and `llm` generations between them. Questions with
-the same group share one request and one state. Save its output as evidence.
+unit, capability, handle and `focus` calls between them. Questions with the
+same group share one logical request and one state. An oversized `each` may
+split into several network requests under the selected profile; another
+oversized group fails before sending. Save its output as static evidence.
 
 ### 2. Classify each one
 
@@ -76,10 +78,9 @@ Name what should make the decision:
 | Code | Facts decide it: comparisons, counts, dates, arithmetic, set membership, thresholds over Jev answers. |
 | `llm` generation | The output is new text a person or agent reads. Never branch on its content without a judgment. |
 | Agent | Multi-step work in the world. |
-| Person | Authority, taste or information only the owner has. |
 
-Split a decision that mixes classes. Jev estimates, code decides and a person
-authorizes.
+Split a decision that mixes classes. Jev estimates, code decides, and the host
+obtains and validates owner authority before acting.
 
 ### 3. Place each one
 
@@ -110,22 +111,23 @@ forms:
 | The same question per item | `each <list> ...`, then count or filter in code |
 | A long text | `shape` with `max` caps, or `focus ... on "<purpose>"` |
 | Questions to measure alone | a named `judgment` block, called by the `def` or `task` |
-| Several questions on one state | consecutive inline judgments, or one `judgment` block, so they share a request |
+| Several questions on one state | consecutive inline judgments, or one `judgment` block, so they share a logical group |
 
-Ask every question a path might need in one request (speculative fan-out), and
-leave a second request only for a question that depends on an earlier answer.
+Ask every question a path might need in one logical group (speculative fan-out),
+and leave another group only for a question that depends on an earlier answer.
 A call to a named unit, a capability call, a gate or a pause closes the open
-request group, so reorder or merge before accepting an extra request. Keep
+logical group, so reorder or merge before accepting another group. The selected
+profile and runtime list sizes determine the network request count. Keep
 thresholds and weights in a policy input, never in question text.
 
 ### 5. Write the Jevscript and check it
 
-1. Write the planned request groups down first: which questions share a
-   request and how many requests the main path sends.
+1. Write the planned logical request groups down first: which questions share
+   a group and where the main path crosses a boundary.
 2. `jevscript check file.jev` must report no errors. Read every warning.
 3. Run `request_groups.py` and compare the groups with the plan. A mismatch is
    a finding to fix, not a note.
-4. When the program runs, record it and count the `request` events.
+4. When the program runs, record it and count the actual `request` events.
 
 ### 6. Bind the host
 
