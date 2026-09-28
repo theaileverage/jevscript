@@ -1,4 +1,4 @@
-"""``cos``: the command line for one Chief of Staff home."""
+"""``cos``: the command line for one CoS home."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import backends
-from .state.home import Home, LockHeld
+from .state.home import DEFAULT_CONFIG, Home, LockHeld
 from .jevbin import SetupError, find_jevscript, keychain_key
 
 DEFAULT_HOME = os.environ.get("COS_HOME", "~/.cos")
@@ -99,7 +99,7 @@ def cmd_steer(args: argparse.Namespace) -> None:
         _say(c.steer(args.task, " ".join(args.text)))
 
 
-def cmd_decisions(args: argparse.Namespace) -> None:
+def cmd_red_box(args: argparse.Namespace) -> None:
     with _commands(args) as c:
         _say(c.decisions_open())
 
@@ -124,9 +124,9 @@ def cmd_remember(args: argparse.Namespace) -> None:
         _say(c.remember(" ".join(args.text)))
 
 
-def cmd_bearings(args: argparse.Namespace) -> None:
+def cmd_briefing(args: argparse.Namespace) -> None:
     with _commands(args) as c:
-        _say(c.bearings())
+        _say(c.briefing())
 
 
 def cmd_tick(args: argparse.Namespace) -> None:
@@ -147,7 +147,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(render(host), file=sys.stderr)
             host.watch(interval=args.interval, max_ticks=args.ticks)
     except LockHeld as error:
-        raise SystemExit(f"{error}. This home is already being supervised; `cos bearings` is read-only and safe.") from None
+        raise SystemExit(f"{error}. This home is already being supervised; `cos briefing` is read-only and safe.") from None
     except KeyboardInterrupt:
         pass
     finally:
@@ -164,23 +164,23 @@ def cmd_playbooks(args: argparse.Namespace) -> None:
         _say(c.playbooks(args.action, args.name))
 
 
-def cmd_mate(args: argparse.Namespace) -> None:
+def cmd_minister(args: argparse.Namespace) -> None:
     if args.action == "add":
         _, registry, _, _ = _without_host(args)
         record = registry.add_mate(args.name, args.scope)
-        print(f"Second mate {record['name']} ready at {record['home']} for: {record['scope']}")
+        print(f"Minister {record['name']} ready at {record['home']} with the portfolio: {record['scope']}")
         return
     if args.action == "start":
         host = _host(args)
         try:
             endpoint = host.mates.ensure_running(args.name)
-            print(f"Second mate {args.name} is running: {endpoint}")
+            print(f"Minister {args.name} is running: {endpoint}")
         finally:
             host.close()
         return
     _, registry, _, _ = _without_host(args)
     for mate in registry.mates():
-        print(f"{mate['name']}: {mate['scope']} ({mate['home']})")
+        print(f"{mate['name']} (portfolio: {mate['scope']}): {mate['home']}")
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:
@@ -198,10 +198,13 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             print(f"TypeSafe key: MISSING - {error}")
     else:
         print("Jev: offline fake")
-    for name in ("crew", "writer"):
+    print(f"identity: {config['identity']['name']}, working for {config['identity']['principal']}")
+    for name in ("staff", "writer"):
         entry = config.get("adapters", {}).get(name)
-        default = "built-in terminal agent" if name == "crew" else "built-in template"
+        default = "built-in terminal agent" if name == "staff" else "built-in template"
         print(f"{name} adapter: {entry['command'] if isinstance(entry, dict) else entry or default}")
+    for note in home.unresolved():
+        print(f"migration: UNRESOLVED - {note}")
     print(f"terminal backend: {config['backend']} (auto picks {backends.detect()})")
     for name, cls in backends.BACKENDS.items():
         if name == "fake":
@@ -231,8 +234,25 @@ def cmd_session(args: argparse.Namespace) -> None:
     raise SystemExit(run_session(Home(args.home), args.agent, watch=not args.no_watch))
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cos", description="A Chief of Staff for agent work, programmed in Jevscript.")
+def _pre_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--home", default=DEFAULT_HOME)
+    return parser
+
+
+def help_identity(argv: list[str] | None) -> dict[str, str]:
+    """The names help text uses, read from ``--home`` without creating or
+    migrating it; a missing or unreadable home gives the defaults."""
+    known, _ = _pre_parser().parse_known_args(argv)
+    try:
+        return Home(known.home).identity
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return dict(DEFAULT_CONFIG["identity"])
+
+
+def build_parser(identity: dict[str, str] | None = None) -> argparse.ArgumentParser:
+    name = (identity or DEFAULT_CONFIG["identity"])["name"]
+    parser = argparse.ArgumentParser(prog="cos", description=f"{name} runs your administration of agent work. Programmed in Jevscript.")
     parser.add_argument("--home", default=DEFAULT_HOME, help="the home directory (default: $COS_HOME or ~/.cos)")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -258,8 +278,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("file", nargs="?")
     p.set_defaults(func=cmd_profiles)
 
-    for name in ("say", "ask"):
-        p = sub.add_parser(name, help="hand the Chief of Staff a request" + (" (alias of say)" if name == "ask" else ""))
+    for verb in ("say", "ask"):
+        p = sub.add_parser(verb, help=f"hand a request to {name}" + (" (alias of say)" if verb == "ask" else ""))
         p.add_argument("text", nargs="+")
         p.add_argument("--after", action="append", help="a backlog id this depends on")
         p.add_argument("--project")
@@ -275,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("text", nargs="+")
     p.set_defaults(func=cmd_steer)
 
-    sub.add_parser("decisions", help="what needs you").set_defaults(func=cmd_decisions)
+    sub.add_parser("red-box", aliases=["decisions"], help="the red box: what needs you").set_defaults(func=cmd_red_box)
     p = sub.add_parser("answer", help="answer a decision")
     p.add_argument("key")
     p.add_argument("answer", nargs="+")
@@ -293,7 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("text", nargs="+")
     p.set_defaults(func=cmd_remember)
 
-    sub.add_parser("bearings", help="the fleet digest").set_defaults(func=cmd_bearings)
+    sub.add_parser("briefing", aliases=["bearings"], help="the daily brief of the administration").set_defaults(func=cmd_briefing)
     sub.add_parser("tick", help="run one wake of everything and exit").set_defaults(func=cmd_tick)
     p = sub.add_parser("watch", help="session start, then supervise until interrupted")
     p.add_argument("--interval", type=float)
@@ -301,17 +321,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_watch)
 
     sub.add_parser("learn", help="run a learning pass now").set_defaults(func=cmd_learn)
-    for name in ("playbooks", "playbook"):
-        p = sub.add_parser(name, help="review, disable, enable or revert learned playbooks")
+    for verb in ("playbooks", "playbook"):
+        p = sub.add_parser(verb, help="review, disable, enable or revert learned playbooks")
         p.add_argument("action", nargs="?", default="list", choices=["list", "show", "disable", "enable", "revert"])
         p.add_argument("name", nargs="?")
         p.set_defaults(func=cmd_playbooks)
 
-    p = sub.add_parser("mate", help="second mates: scoped sub-instances")
+    p = sub.add_parser("minister", aliases=["mate"], help=f"ministers: instances of {name} that each hold a portfolio")
     p.add_argument("action", choices=["add", "list", "start"])
     p.add_argument("name", nargs="?")
-    p.add_argument("--scope", default="")
-    p.set_defaults(func=cmd_mate)
+    p.add_argument("--portfolio", "--scope", dest="scope", default="", help="the work this minister takes")
+    p.set_defaults(func=cmd_minister)
 
     sub.add_parser("doctor", help="check the binary, the key, adapters and backends").set_defaults(func=cmd_doctor)
     p = sub.add_parser("smoke", help="live smoke check of one terminal backend")
@@ -320,7 +340,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("demo", help="an offline end-to-end run with a fake Jev and a fake agent")
     p.add_argument("--dir")
     p.set_defaults(func=cmd_demo)
-    p = sub.add_parser("session", help="open an interactive agent session over the Chief of Staff")
+    p = sub.add_parser("session", help=f"open an interactive agent session with {name}")
     p.add_argument("--agent", choices=["claude", "codex"], default="claude")
     p.add_argument("--no-watch", action="store_true", help="connect to an already running watcher")
     p.set_defaults(func=cmd_session)
@@ -328,8 +348,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+    args = build_parser(help_identity(argv)).parse_args(argv)
     try:
+        home = Home(args.home)
+        if args.command not in ("demo", "smoke") and home.config_path.exists():
+            for note in home.unresolved():
+                print(f"cos: unresolved migration: {note}", file=sys.stderr)
         args.func(args)
     except SetupError as error:
         raise SystemExit(f"cos: {error}") from None

@@ -1,7 +1,7 @@
-"""The command layer: everything the person can ask of the Chief of Staff.
+"""The command layer: everything the principal can ask of the CoS.
 
 The CLI is one front end over this class; an agent session acting as the
-chat (a Claude Code or Codex session calling the Chief of Staff as a tool) is
+chat (a Claude Code or Codex session calling the CoS as a tool) is
 meant to be another. Every method returns a ``Reply``: a short outcome summary
 for the person (written by the `llm` capability through
 ``escalation.summarize`` when it describes something that happened) plus
@@ -133,7 +133,7 @@ class Commands:
         if route == "status":
             return f"{self.status().text} Thread {d.get('thread_id')}."
         if route == "mate":
-            return f"Passed '{title}' to second mate {d.get('mate')} in thread {d.get('thread_id')}"
+            return f"Passed '{title}' to minister {d.get('mate')} in thread {d.get('thread_id')}"
         if route == "declined":
             return f"Dropped '{title}' as you asked"
         return f"Could not place '{title}': {d.get('reason') or 'it stayed unclear'}"
@@ -147,7 +147,7 @@ class Commands:
         text = headline(len(workers), len(queued), len(open_decisions))
         return Reply(text, {"workers": [w["id"] for w in workers], "queued": [i["id"] for i in queued], "decisions": [d["key"] for d in open_decisions]})
 
-    def bearings(self) -> Reply:
+    def briefing(self) -> Reply:
         from .bearings import render
 
         return Reply(render(self.host))

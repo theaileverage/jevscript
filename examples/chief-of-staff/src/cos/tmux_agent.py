@@ -1,6 +1,6 @@
 """A reattachable JSONL agent adapter over the terminal backends (9.1).
 
-The terminal belongs to this adapter; the Chief of Staff owns the worktree.
+The terminal belongs to this adapter; the CoS owns the worktree.
 Each handle stores the terminal backend's exact endpoint so a restarted
 adapter can observe the same agent without creating another session.
 """

@@ -25,7 +25,7 @@ Runner = Callable[..., subprocess.CompletedProcess]
 
 ANSI = re.compile(r"\x1b\[[0-9;:?]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]")
 
-#: Keys the Chief of Staff presses. Each backend maps them to its own names.
+#: Keys the CoS presses. Each backend maps them to its own names.
 KEYS = ("Enter", "Escape", "C-c", "C-u")
 
 

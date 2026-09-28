@@ -31,7 +31,7 @@ def test_empty_headline_and_repeated_bearings_are_read_only(make_host, jevscript
     assert cli(home, jevscript_bin, "status") == expected
     before = counts(home)
     for _ in range(3):
-        assert cli(home, jevscript_bin, "bearings").splitlines()[0] == f"Bearings: {expected}"
+        assert cli(home, jevscript_bin, "bearings").splitlines()[0] == f"Briefing: {expected}"
     assert counts(home) == before
     assert not list((home / "state" / "recordings").glob("*-bearings-*.jsonl"))
 
@@ -64,7 +64,7 @@ def test_active_fleet_digest_reports_stored_holds_and_dependencies(make_host, je
     before = counts(home)
     status = cli(home, jevscript_bin, "status")
     bearings = cli(home, jevscript_bin, "bearings")
-    assert bearings.splitlines()[0] == f"Bearings: {status}"
+    assert bearings.splitlines()[0] == f"Briefing: {status}"
     assert status.startswith("1 under way, ") and status.endswith("1 waiting on you.")
     assert f"Past [t4]: hold expired {iso(backlog.get('t4')['hold']['until'])}, review" in bearings
     assert f"Future [t5]: held until {iso(future)}, window" in bearings

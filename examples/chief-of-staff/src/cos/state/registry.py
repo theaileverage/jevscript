@@ -1,6 +1,7 @@
-"""Project registry, delivery posture, second mates and dispatch profiles.
+"""Project registry, delivery posture, ministers and dispatch profiles.
 
-Projects, second mates and dispatch profiles are kept as JSON in a home.
+Projects, ministers (stored as ``mates``) and dispatch profiles are kept as
+JSON in a home.
 Each list reaches Jevscript as a snapshot field; the program chooses among
 the entries with judgments.
 """
@@ -93,7 +94,7 @@ class Registry:
             raise RuntimeError(f"`{name}` still has work under way: {', '.join(in_flight)}")
         write_json(self.projects_path, [p for p in self.projects() if p["name"] != name])
 
-    # -- second mates ---------------------------------------------------------
+    # -- ministers -------------------------------------------------------------
 
     @property
     def mates_path(self) -> Path:
@@ -106,11 +107,11 @@ class Registry:
         child = Home(self.home.root / "mates" / name).init()
         record = {"name": name, "scope": scope, "home": str(child.root)}
         write_json(self.mates_path, [m for m in self.mates() if m["name"] != name] + [record])
-        charter = f"# Charter\n\nSecond mate `{name}` of {self.home.root}.\nScope: {scope}\n"
+        charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
         atomic_write(child.data / "charter.md", charter)
         write_json(child.data / "parent.json", {"home": str(self.home.root), "name": name})
-        # A mate shares the parent's projects, profiles and memory at creation.
-        for record_name in ("projects.json", "profiles.json", "captain.md"):
+        # A minister shares the parent's projects, profiles and memory at creation.
+        for record_name in ("projects.json", "profiles.json", self.home.preferences_path.name):
             source = self.home.data / record_name
             if source.exists():
                 atomic_write(child.data / record_name, source.read_text(encoding="utf-8"))

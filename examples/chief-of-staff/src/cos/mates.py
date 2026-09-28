@@ -1,13 +1,13 @@
-"""Second mates: scoped Chief of Staff instances with homes of their own.
+"""Ministers: CoS instances with homes of their own, each holding a portfolio.
 
-A second mate is a full home
+A minister (stored as a ``mate``) is a full home
 (``mates/<name>`` under the parent) with its own backlog, workers, ledger,
-playbooks and session lock, and a scope. Intake routes in-scope requests to
-it (``homes`` in ``intake.assess``); the parent drops the request into the
-mate's request queue and keeps the mate's own watcher running in a terminal
-backend. A mate is idle by default and acts only on routed work. It reports
-finished work up to ``state/mates/<name>.log`` in the parent, which bearings
-reads; the parent never reaches into the mate's workers.
+playbooks and session lock, and a portfolio (its ``scope``). Intake routes
+in-portfolio requests to it (``homes`` in ``intake.assess``); the parent drops
+the request into the minister's request queue and keeps its watcher running in
+a terminal backend. A minister is idle by default and acts only on routed work.
+It reports finished work up to ``state/mates/<name>.log`` in the parent, which
+the briefing reads; the parent never reaches into the minister's workers.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class Mates:
         for mate in self.host.registry.mates():
             if mate["name"] == name:
                 return Home(mate["home"])
-        raise KeyError(f"no second mate `{name}`")
+        raise KeyError(f"no minister `{name}`")
 
     def accepts_project(self, name: str, project: str) -> bool:
         parent = next((row for row in self.host.registry.projects() if row["name"] == project), None)
@@ -40,7 +40,7 @@ class Mates:
     def forward(self, name: str, request: dict[str, Any]) -> None:
         child = self._home(name).init()
         write_json(child.state / "requests" / f"{request['id']}.json", {**request, "from_parent": True, "at": iso()})
-        self.host.decisions.digest(f"Passed '{request['text'][:60]}' to second mate {name}.")
+        self.host.decisions.digest(f"Passed '{request['text'][:60]}' to minister {name}.")
         self.ensure_running(name)
 
     def command(self, name: str) -> str:
