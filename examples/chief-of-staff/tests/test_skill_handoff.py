@@ -41,10 +41,11 @@ def add_support(entry: dict[str, Any], relative: str, content: bytes, mode: int 
     entry.setdefault("files", {"SKILL.md": entry["sha256"]})[relative] = hashlib.sha256(content).hexdigest()
 
 
-def fits(*selected: int, uncertain: tuple[int, ...] = ()) -> list[dict[str, Any]]:
-    return [
-        {"match": {"id": rf"^fits\[{index}\]$"}, "answer": {"noul": 0.5 if index in uncertain else 0.94 if index in selected else 0.1}}
-        for index in range(8)
+def fits(*selected: str, uncertain: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """Fake Jev fits by Skill id: the shortlist is in the host's ranked order, not catalog order."""
+    judged = [(skill_id, 0.94) for skill_id in selected] + [(skill_id, 0.5) for skill_id in uncertain]
+    return [{"match": {"id": r"^fits\[", "text": rf'"id": "{skill_id}"'}, "answer": {"noul": fit}} for skill_id, fit in judged] + [
+        {"match": {"id": r"^fits\["}, "answer": {"noul": 0.1}}
     ]
 
 
@@ -52,11 +53,11 @@ def fits(*selected: int, uncertain: tuple[int, ...] = ()) -> list[dict[str, Any]
     ("task_text", "chosen", "expected"),
     [
         ("Explain what documentation tests are", [], []),
-        ("Update the docs", [0], ["docs"]),
-        ("Update the docs and run the tests", [0, 2], ["docs", "base", "tests"]),
+        ("Update the docs", ["docs"], ["docs"]),
+        ("Update the docs and run the tests", ["docs", "tests"], ["docs", "base", "tests"]),
     ],
 )
-def test_host_selects_zero_one_or_many_skills_before_worker_start(make_host, tmp_path: Path, task_text: str, chosen: list[int], expected: list[str]) -> None:
+def test_host_selects_zero_one_or_many_skills_before_worker_start(make_host, tmp_path: Path, task_text: str, chosen: list[str], expected: list[str]) -> None:
     """§6.5/9.6: independent fits retain both task facets, then the host
     adds prerequisites and hands verified project paths to the worker."""
     catalog = approved_skills(tmp_path, ["docs", "base", "tests", "unrelated"], {"tests": ["base"]})
@@ -84,7 +85,7 @@ def test_host_selects_zero_one_or_many_skills_before_worker_start(make_host, tmp
 
 def test_uncertain_selection_keeps_confident_skills_and_names_the_open_question(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs", "tests"])
-    host = make_host(rules=fits(0, uncertain=(1,)), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs", uncertain=("tests",)), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update docs and tests")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     [worker] = host.workers.all()
@@ -101,7 +102,7 @@ def test_collision_or_changed_source_prevents_spawn(make_host, tmp_path: Path, p
     colliding.write_text("unapproved contents\n")
     git(project, "add", ".")
     git(project, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "existing skill")
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update docs")
     host.tick()
     workers = host.workers.all(live_only=False)
@@ -114,7 +115,7 @@ def test_collision_or_changed_source_prevents_spawn(make_host, tmp_path: Path, p
 def test_selected_skill_lands_and_cleanup_does_not_commit_host_files(make_host, tmp_path: Path, project: Path) -> None:
     """§9.6: verified host files do not make normal git landing dirty."""
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=True, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=True, config={"skill_catalog": catalog})
     remove_owned = host.skills.remove_owned
 
     def after_agent_stop(task_id: str, worktree: str, **kwargs):
@@ -136,7 +137,7 @@ def test_selected_skill_lands_and_cleanup_does_not_commit_host_files(make_host, 
 
 def test_changed_or_staged_host_skill_cannot_launder_into_landing(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     [worker] = host.workers.all()
@@ -150,7 +151,7 @@ def test_changed_or_staged_host_skill_cannot_launder_into_landing(make_host, tmp
 
 
 def test_changed_parent_link_blocks_cleanup_before_external_file_access(make_host, tmp_path: Path) -> None:
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
     host.submit("Update docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     [worker] = host.workers.all()
@@ -169,7 +170,7 @@ def test_changed_parent_link_blocks_cleanup_before_external_file_access(make_hos
 
 def test_retry_reconciles_files_and_replay_performs_no_effects(make_host, tmp_path: Path, jevscript_bin: str) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     [worker] = host.workers.all()
@@ -212,7 +213,7 @@ def test_installed_cos_wheel_selects_and_hands_off_through_cli(tmp_path: Path, p
     catalog = approved_skills(tmp_path, ["docs"])
     add_support(catalog[0], "references/checklist.md", b"# Required checklist\n")
     rule_file = tmp_path / "rules.json"
-    rule_file.write_text(json.dumps(fits(0) + [
+    rule_file.write_text(json.dumps(fits("docs") + [
         {"match": {"id": "^work$"}, "answer": {"choice": "ship"}},
         {"match": {"id": "^project$"}, "answer": {"choice": "i0"}},
         {"match": {"id": "^home$"}, "answer": {"choice": "i0"}},
@@ -242,7 +243,7 @@ def test_installed_cos_wheel_selects_and_hands_off_through_cli(tmp_path: Path, p
 
 def test_duplicate_approval_or_unpinned_source_never_reaches_spawn(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     write_json(host.home.config_path, {"skill_catalog": catalog + catalog})
     host.submit("Update docs")
     host.tick()
@@ -259,7 +260,7 @@ def test_duplicate_approval_or_unpinned_source_never_reaches_spawn(make_host, tm
 
 def test_bad_catalog_parks_dispatch_without_starving_worker(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog},
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog},
                      scripts=[{"match": "docs", "steps": ["work", "work", "work", "commit", "done"]}])
     host.submit("Update the docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
@@ -274,7 +275,7 @@ def test_bad_catalog_parks_dispatch_without_starving_worker(make_host, tmp_path:
 
 def test_recovery_keeps_first_verified_selection(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs", "tests"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update the docs and tests")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     worker_id = host.workers.all()[0]["id"]
@@ -282,7 +283,7 @@ def test_recovery_keeps_first_verified_selection(make_host, tmp_path: Path) -> N
     host.workers.update(worker_id, handle=None)
     host.backlog.update(worker_id, status="in_flight")
     host.close()
-    restarted = make_host(rules=fits(0, 1), yolo=False, config={"skill_catalog": catalog},
+    restarted = make_host(rules=fits("docs", "tests"), yolo=False, config={"skill_catalog": catalog},
                           home_dir=tmp_path / "home", register=False)
     restarted.recover()
     restarted.wakes.push("dispatch", "backlog", ["recovered"])
@@ -306,7 +307,7 @@ def test_multifile_skill_pinned_installed_and_reconciled(make_host, tmp_path: Pa
     catalog = approved_skills(tmp_path, ["docs"])
     add_support(catalog[0], "references/checklist.md", b"# Read this\n")
     add_support(catalog[0], "scripts/check.sh", b"#!/bin/sh\nexit 0\n", mode=0o755)
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     host.submit("Update docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("brief")))
     [worker] = host.workers.all()
@@ -325,7 +326,7 @@ def test_multifile_manifest_and_folded_description_at_host_boundary(make_host, t
     source.write_text("---\nname: docs\ndescription: >-\n  Use the docs guide for\n  documentation work.\n---\n# Guide\n")
     catalog[0]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
     add_support(catalog[0], "references/guide.md", b"# Guide\n")
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": catalog})
     assert host.skills.catalog()[0]["description"] == "Use the docs guide for documentation work."
     (source.parent / "references/guide.md").write_text("changed\n")
     host.submit("Update docs")
@@ -342,7 +343,7 @@ def test_shared_claude_skills_symlink(make_host, tmp_path: Path, project: Path, 
     os.symlink("../.agents/skills", project / ".claude" / "skills")
     git(project, "add", ".")
     git(project, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "shared skill location")
-    host = make_host(rules=fits(0) if selected else fits(), yolo=False,
+    host = make_host(rules=fits("docs") if selected else fits(), yolo=False,
                      config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
     host.submit("Update docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
@@ -354,7 +355,7 @@ def test_shared_claude_skills_symlink(make_host, tmp_path: Path, project: Path, 
 
 
 def test_codex_harness_receives_project_skill_without_claude_link(make_host, tmp_path: Path) -> None:
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
     [profile] = host.registry.profiles()
     host.registry.set_profiles([{**profile, "harness": "codex"}])
     host.submit("Update docs")
@@ -375,7 +376,7 @@ def test_colliding_item_is_held_while_clean_item_starts(make_host, tmp_path: Pat
     collision.write_text("project owns this Skill\n")
     git(other, "add", ".")
     git(other, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "own skill")
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
     host.registry.add_project("other", str(other), "another project", mode="local-only")
     requests = [("Update the docs B", "other"), ("Update the docs A", "proj")] if blocked_first else [("Update the docs A", "proj"), ("Update the docs B", "other")]
     for text, project_name in requests:
@@ -420,7 +421,7 @@ def test_pr_skill_commit_prompts_correction_and_merged_state_stays_visible(make_
     gh.write_text(f"#!/bin/sh\nif [ \"$2\" = merge ]; then echo merge >> '{merge_calls}'; fi\ncat '{forge_state}'\n")
     gh.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
-    host = make_host(rules=fits(0), yolo=True, mode="direct-PR",
+    host = make_host(rules=fits("docs"), yolo=True, mode="direct-PR",
                      config={"skill_catalog": approved_skills(tmp_path, ["docs"])},
                      scripts=[{"match": "docs", "steps": ["work", "work", "commit", "done:https://github.com/example/repo/pull/7"]}])
     host.submit("Update the docs")
@@ -468,7 +469,7 @@ def test_merged_pr_with_committed_host_skill_is_reported_and_cleaned(make_host, 
     gh.write_text(f"#!/bin/sh\ncat '{forge_state}'\n")
     gh.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
-    host = make_host(rules=fits(0), yolo=True, mode="direct-PR",
+    host = make_host(rules=fits("docs"), yolo=True, mode="direct-PR",
                      config={"skill_catalog": approved_skills(tmp_path, ["docs"])},
                      scripts=[{"match": "docs", "steps": ["work", "work", "commit", "done:https://github.com/example/repo/pull/7"]}])
     host.submit("Update the docs")
@@ -492,7 +493,7 @@ def test_merged_pr_with_committed_host_skill_is_reported_and_cleaned(make_host, 
 def test_deleted_host_copy_and_quoted_support_file_still_land(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
     add_support(catalog[0], "references/style guide.md", b"# Style\n")
-    host = make_host(rules=fits(0), yolo=True, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=True, config={"skill_catalog": catalog})
     host.submit("Update the docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
     [worker] = host.workers.all()
@@ -506,7 +507,7 @@ def test_quoted_support_file_remains_installed_through_landing(make_host, tmp_pa
     catalog = approved_skills(tmp_path, ["docs"])
     add_support(catalog[0], "references/style guide.md", b"# Style\n")
     add_support(catalog[0], "references/café.md", b"# Cafe\n")
-    host = make_host(rules=fits(0), yolo=True, config={"skill_catalog": catalog})
+    host = make_host(rules=fits("docs"), yolo=True, config={"skill_catalog": catalog})
     host.submit("Update the docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
     [worker] = host.workers.all()
@@ -519,7 +520,7 @@ def test_quoted_support_file_remains_installed_through_landing(make_host, tmp_pa
 def test_unreadable_support_file_parks_dispatch_and_worker_keeps_progress(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
     add_support(catalog[0], "references/a.md", b"# A\n")
-    host = make_host(rules=fits(0), yolo=True, config={"skill_catalog": catalog},
+    host = make_host(rules=fits("docs"), yolo=True, config={"skill_catalog": catalog},
                      scripts=[{"match": "docs", "steps": ["work", "work", "work", "commit", "done"]}])
     host.submit("Update the docs")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
@@ -536,7 +537,7 @@ def test_unreadable_support_file_parks_dispatch_and_worker_keeps_progress(make_h
 
 
 def test_missing_worker_copy_uses_normal_landable_recovery(make_host, tmp_path: Path) -> None:
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
+    host = make_host(rules=fits("docs"), yolo=False, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
     host.submit("Update the docs")
     run_until(host, lambda: any("Land it" in decision["question"] for decision in host.decisions.open()), ticks=16)
     [worker] = host.workers.all()
@@ -550,7 +551,7 @@ def test_missing_worker_copy_uses_normal_landable_recovery(make_host, tmp_path: 
 
 
 def test_cleanup_abort_is_recorded_and_owner_is_told(make_host, tmp_path: Path, monkeypatch) -> None:
-    host = make_host(rules=fits(0), yolo=True, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
+    host = make_host(rules=fits("docs"), yolo=True, config={"skill_catalog": approved_skills(tmp_path, ["docs"])})
 
     def fail_cleanup(*_args, **_kwargs):
         raise SkillError("verified Skill cleanup interrupted")
