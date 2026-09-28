@@ -124,6 +124,34 @@ def test_replay_serves_the_recorded_shortlist_without_scout_or_search(make_host,
     assert [s["id"] for s in started["skills"]] == [s["id"] for s in worker["skills"]] and set(LARGE_RELEVANT) <= set(recorded["ids"])
 
 
+@pytest.mark.parametrize("mandatory_kind", [None, "pinned", "playbook"])
+def test_small_catalog_is_ranked_without_scout_and_replays(make_host, tmp_path: Path, jevscript_bin: str, mandatory_kind: str | None) -> None:
+    catalog = [
+        write_skill(tmp_path / "catalog", "docs-guide", "Use when writing documentation.", pinned=mandatory_kind == "pinned"),
+        write_skill(tmp_path / "catalog", "rust-fixes", "Use when fixing Rust tests."),
+    ]
+    if mandatory_kind == "playbook":
+        catalog[0]["playbooks"] = ["pb_docs"]
+    host = make_host(rules=fit_ids(["rust-fixes"]), yolo=False, config={"skill_catalog": catalog})
+    item = host.backlog.add({"text": "Fix Rust tests", "title": "Rust tests", "project": "proj", "kind": "ship", "effort": "low", "profile": "default", "playbook": "pb_docs" if mandatory_kind == "playbook" else None})
+    host.wakes.push("dispatch", "backlog", ["test"])
+    run_until(host, lambda: bool(host.workers.get(item["id"])) and bool(host.workers.get(item["id"]).get("handle")))
+    worker = host.workers.get(item["id"])
+    events = dispatch_events(worker)
+    [search] = calls(events, "skill_search")
+    assert search["result"]["always"] == (["docs-guide"] if mandatory_kind else [])
+    assert search["result"]["ids"] == (["docs-guide", "rust-fixes"] if mandatory_kind else ["rust-fixes", "docs-guide"])
+    assert (search["result"]["scanned"], search["result"]["kept"], search["result"]["filtered_out"]) == (2, 2, 0)
+    assert not [event for event in events if event.get("event") == "generate" and event.get("capability") == "scout"]
+    assert [skill["id"] for skill in worker["skills"]] == ["rust-fixes"]
+    host.close()
+    shutil.rmtree(tmp_path / "catalog")
+    replay = subprocess.run([jevscript_bin, "replay", worker["dispatch_recording"]], capture_output=True, text=True, check=False)
+    assert replay.returncode == 0, replay.stderr
+    [started] = json.loads(replay.stdout.strip().splitlines()[-1])["outputs"]["result"]["started"]
+    assert started["calls"] == 2 and started["skill_search"] == worker["skill_search"]
+
+
 @pytest.mark.parametrize(("failure", "reason", "attempts"), [
     ("missing", "the scout for harness 'claude' needs `claude` on PATH", 0),
     ("timeout", "the claude scout did not answer within 0.5s", 1),
@@ -331,8 +359,27 @@ def test_an_item_whose_always_list_cannot_fit_is_held_with_the_count_and_ids(mak
     [decision] = [d for d in host.decisions.open() if d["key"].endswith(":skills")]
     assert "would need 9 model calls, over the 8 one dispatch allows: 449 Skills to judge, 449 of them always included" in decision["question"]
     assert catalog[0]["id"] in decision["question"] and catalog[-1]["id"] in decision["question"]
+    assert "Lower policy.skill_shortlist" not in decision["question"] and "raise the budget" not in decision["question"]
     assert not host.workers.all(live_only=False) and not harness_calls()
     assert host.session.fake is not None and not [r for r in host.session.fake.requests if any(q.startswith("fits[") for q in r["questions"])]
+
+
+def test_oversize_found_after_snapshot_uses_actual_count_and_ids(make_host, tmp_path: Path) -> None:
+    seed = write_skill(tmp_path / "catalog", "seed", "Use for a seed task.")
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": [seed]})
+    item = host.backlog.add({"text": "Fix the README typo", "title": "README typo", "project": "proj", "kind": "ship", "effort": "low", "profile": "default"})
+    wake = host.wakes.push("dispatch", "backlog", ["test"])
+    snapshot = host.snapshot_for(wake)
+    catalog = [write_skill(tmp_path / "catalog", skill_id, text, pinned=True) for skill_id, text in list(distractors().items())[:449]]
+    host.home.set_config("skill_catalog", catalog)
+    episode = host.run_task("on_wake", snapshot, subject=wake["subject"], wake_id=wake["id"])
+    host.settle(wake, episode)
+    [decision] = [d for d in host.decisions.open() if d["key"].endswith(":skills")]
+    assert "would need 9 model calls, over the 8 one dispatch allows: 449 Skills to judge, 449 of them always included" in decision["question"]
+    assert catalog[0]["id"] in decision["question"] and catalog[-1]["id"] in decision["question"]
+    assert "Lower policy.skill_shortlist" not in decision["question"] and "raise the budget" not in decision["question"]
+    [search] = calls(read_jsonl(Path(episode.recording)), "skill_search")
+    assert search["result"]["kept"] == 449 and not host.workers.all(live_only=False)
 
 
 def test_overlong_description_is_rejected_at_catalog_validation(make_host, tmp_path: Path) -> None:

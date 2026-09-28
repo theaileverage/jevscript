@@ -84,7 +84,7 @@ Shape: {item.kind}. Effort: {item.effort}.{conversation}{notes}
 
 task start(item, project, profiles, prefs, paths, plan, scouts, policy) budget calls 8:
   if plan.always_calls > 8:
-    return { id: item.id, calls: 0, blocked: "Skill selection would need {plan.always_calls} model calls, over the 8 one dispatch allows: {len(plan.always)} Skills to judge, {len(plan.always)} of them always included ({join(plan.always, ", ")}). Lower policy.skill_shortlist, unpin Skills, or raise the budget." }
+    return { id: item.id, calls: 0, blocked: "Skill selection would need {plan.always_calls} model calls, over the 8 one dispatch allows: {len(plan.always)} Skills to judge, {len(plan.always)} of them always included ({join(plan.always, ", ")})." }
   p = routing.profile_named(profiles, item.profile)
   effort = item.effort
   if p.effort != none and p.effort != "":
@@ -98,7 +98,7 @@ task start(item, project, profiles, prefs, paths, plan, scouts, policy) budget c
     return { id: item.id, calls: spent, blocked: found.blocked }
   calls = spent + found.chunks
   if calls > 8:
-    return { id: item.id, calls: spent, blocked: "Skill selection would need {calls} model calls, over the 8 one dispatch allows: {found.kept} Skills to judge, {len(found.always)} of them always included ({join(found.always, ", ")}). Lower policy.skill_shortlist, unpin Skills, or raise the budget." }
+    return { id: item.id, calls: spent, blocked: "Skill selection would need {calls} model calls, over the 8 one dispatch allows: {found.kept} Skills to judge, {len(found.always)} of them always included ({join(found.always, ", ")})." }
   choice = skills.select(statement, item.text, item.notes, found.skills, policy.skill_fit, policy.skill_uncertain)
   wt = fleet.worktree(item.id, project.name)
   ensured = fleet.ensure_skills(item.id, wt.path, p.harness, choice.ids, choice.status, choice.uncertain)

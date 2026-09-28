@@ -242,8 +242,14 @@ class Skills:
                 query, terms, kind = f"{parsed.text()} {request}", list(parsed.terms), parsed.kind
         if needed:
             ids = skill_search.rank(catalog, always, query, terms, limit)
-        else:  # the whole catalog fits, or the always-included Skills fill it
-            ids = always if len(always) >= limit else always + [e["id"] for e in catalog if e["id"] not in always]
+        elif len(always) >= limit:
+            ids = always
+        else:
+            mandatory = set(always)
+            ranked = skill_search.Index(catalog).ranked(query)
+            ids = always + [skill_id for skill_id in ranked if skill_id not in mandatory]
+            included = set(ids)
+            ids += [e["id"] for e in catalog if e["id"] not in included]
         by_id = {entry["id"]: entry for entry in catalog}
         for skill_id in ids:
             self._source(by_id[skill_id])
