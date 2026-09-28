@@ -13,7 +13,14 @@ CLI = Path(os.environ.get("JEVSCRIPT_BIN", ROOT / "target/debug/jevscript"))
 class RequestGroupsTest(unittest.TestCase):
     def report(self, source, *options):
         result = subprocess.run(
-            [sys.executable, str(HELPER), str(source), "--jevscript", str(CLI), *options],
+            [
+                sys.executable,
+                str(HELPER),
+                str(source),
+                "--jevscript",
+                str(CLI),
+                *options,
+            ],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -25,17 +32,28 @@ class RequestGroupsTest(unittest.TestCase):
         position = 0
         for part in parts:
             found = output.find(part, position)
-            self.assertGreaterEqual(found, 0, f"missing or out of order: {part}\n{output}")
+            self.assertGreaterEqual(
+                found, 0, f"missing or out of order: {part}\n{output}"
+            )
             position = found + len(part)
 
     def test_compiled_nested_effects_and_judgment_logs(self):
         output = self.report(Path(__file__).with_name("request_groups.jev"))
         judgment, task = output.split("\ntask main", 1)
-        self.assert_order(judgment, "first = message feels", "many = messages each feels", "calls def echo")
+        self.assert_order(
+            judgment,
+            "first = message feels",
+            "many = messages each feels",
+            "calls def echo",
+        )
         self.assertIn("one logical group", judgment)
-        self.assertIn("many = messages each feels (one question per runtime item)", judgment)
+        self.assertIn(
+            "many = messages each feels (one question per runtime item)", judgment
+        )
         self.assertIn("group 0: 2 judgment expressions", judgment)
-        self.assertIn("network request count depends on the profile question cap", judgment)
+        self.assertIn(
+            "network request count depends on the profile question cap", judgment
+        )
         self.assert_order(
             task,
             "effect agent.spawn [agent]",
@@ -71,7 +89,9 @@ class RequestGroupsTest(unittest.TestCase):
     def test_comprehension_boundaries_follow_runtime_calls(self):
         source = Path(__file__).with_name("comprehension_order.jev")
         task = self.report(source).split("\ntask main", 1)[1]
-        self.assert_order(task, "calls def source", "calls def keep", "calls def render")
+        self.assert_order(
+            task, "calls def source", "calls def keep", "calls def render"
+        )
 
         run = subprocess.run(
             [str(CLI), "run", str(source)],
@@ -86,7 +106,9 @@ class RequestGroupsTest(unittest.TestCase):
     def test_supervisor_guards_precede_any_approved_action(self):
         source = ROOT / "examples/chief-of-staff/jev/supervise.jev"
         machine = self.report(source, "--all").split("\nmachine lifecycle", 1)[1]
-        approved = machine.split("state approved (possible step)", 1)[1].split("state landing (possible step)", 1)[0]
+        approved = machine.split("state approved (possible step)", 1)[1].split(
+            "state landing (possible step)", 1
+        )[0]
         self.assert_order(
             approved,
             "guard land (if evaluated)",
