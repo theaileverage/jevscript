@@ -1,0 +1,13 @@
+{
+  "acked": "2026-09-28T20:06:15Z",
+  "at": "2026-09-28T20:06:15Z",
+  "id": "000002-request-r1790625975105-00bc",
+  "kind": "request",
+  "outcome": "persisted",
+  "paused": null,
+  "reasons": [
+    "new request"
+  ],
+  "subject": "r1790625975105-00bc",
+  "ts": 1790625975.1075819
+}

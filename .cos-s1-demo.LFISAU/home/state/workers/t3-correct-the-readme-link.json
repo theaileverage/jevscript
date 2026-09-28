@@ -1,0 +1,152 @@
+{
+  "actions": [
+    {
+      "action": "reported_ready",
+      "args": ""
+    },
+    {
+      "action": "skip_review",
+      "args": ""
+    },
+    {
+      "action": "land",
+      "args": ""
+    },
+    {
+      "action": "landed",
+      "args": ""
+    }
+  ],
+  "alive": true,
+  "backend": null,
+  "base": "main",
+  "branch": "cos/t3-correct-the-readme-link",
+  "brief": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/data/t3-correct-the-readme-link/brief.md",
+  "busy": false,
+  "cleanup": {
+    "reason": "",
+    "removed": true
+  },
+  "created_at": 1790625398.710477,
+  "dispatch_recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195638Z-1038-18-0dbbea-on_wake-backlog.jsonl",
+  "effort": "medium",
+  "handle": {
+    "$jev": "handle",
+    "capability": "crew",
+    "cwd": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t3-correct-the-readme-link",
+    "id": "t3-correct-the-readme-link",
+    "launch": 1,
+    "name": "t3-correct-the-readme-link"
+  },
+  "harness": "claude",
+  "history": [
+    {
+      "at": "2026-09-28T19:56:38Z",
+      "events": [
+        "at_working",
+        "carry_on"
+      ],
+      "phase": "working",
+      "reasons": [
+        "status:working"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195638Z-1038-20-4382a8-on_wake-t3-correct-the-readme-link.jsonl",
+      "wake": "000017-worker-t3-correct-the-readme-link"
+    },
+    {
+      "at": "2026-09-28T19:56:39Z",
+      "events": [
+        "at_working",
+        "reported_ready"
+      ],
+      "phase": "ready",
+      "reasons": [
+        "status:done"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195638Z-1038-21-b3568e-on_wake-t3-correct-the-readme-link.jsonl",
+      "wake": "000018-worker-t3-correct-the-readme-link"
+    },
+    {
+      "at": "2026-09-28T19:56:39Z",
+      "events": [
+        "at_ready",
+        "skip_review"
+      ],
+      "phase": "approved",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195639Z-1038-22-d9f083-on_wake-t3-correct-the-readme-link.jsonl",
+      "wake": "000019-worker-t3-correct-the-readme-link"
+    },
+    {
+      "at": "2026-09-28T19:56:39Z",
+      "events": [
+        "at_approved",
+        "land"
+      ],
+      "phase": "landing",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195639Z-1038-23-3ecf61-on_wake-t3-correct-the-readme-link.jsonl",
+      "wake": "000020-worker-t3-correct-the-readme-link"
+    },
+    {
+      "at": "2026-09-28T19:56:40Z",
+      "events": [
+        "at_landing",
+        "landed"
+      ],
+      "phase": "done",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195639Z-1038-24-e3ba50-on_wake-t3-correct-the-readme-link.jsonl",
+      "wake": "000021-worker-t3-correct-the-readme-link"
+    }
+  ],
+  "id": "t3-correct-the-readme-link",
+  "idle_minutes": 0.0,
+  "kind": "ship",
+  "landed_head": "850306626ce3bd21e90e7890a79353d9e674291a",
+  "last_status": "ready in branch cos/t3-correct-the-readme-link",
+  "last_supervised": 1790625400.0524821,
+  "mode": "local-only",
+  "model": null,
+  "nudges": 0,
+  "outcome": "landed",
+  "phase": "done",
+  "profile": "default",
+  "project": "notes-site",
+  "relaunches": 0,
+  "retired": true,
+  "retired_at": 1790625400.053291,
+  "review_new": false,
+  "screen": "[claude] started in /Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t3-correct-the-readme-link\nworking on: Correct the README link to the docs (step 1)\ncommitted the change\ndone; waiting for input",
+  "screen_changed_at": 1790625398.934557,
+  "screen_hash": "169464af64692d5a",
+  "skill_receipt": "97f8b7d8d0fe0defff53d61fe33ccb1a9b2f1c260bcf1d0ffd43b4c123a84d73",
+  "skill_search": {
+    "always": [],
+    "fallback": false,
+    "fallback_reason": null,
+    "filtered_out": 0,
+    "kept": 0,
+    "scanned": 0,
+    "scouted": false
+  },
+  "skill_selection": "none",
+  "skills": [],
+  "stale": false,
+  "started_at": 1790625398.716774,
+  "status_kind": "done",
+  "status_new": false,
+  "status_offset": 102,
+  "title": "Correct the README link to the docs",
+  "unacked": 0,
+  "unacked_minutes": 0,
+  "worker_id": "w-6a004f419ba885359d7c",
+  "worktree": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t3-correct-the-readme-link",
+  "yolo": true
+}

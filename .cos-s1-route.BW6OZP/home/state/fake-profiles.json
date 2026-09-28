@@ -1,0 +1,1 @@
+[{"model": "cos-offline", "endpoint": "http://127.0.0.1:51928/v1/systemone", "total_tokens": 64000, "state_plus_question_tokens": 32000, "max_questions_per_request": 64, "max_criteria_per_question": 255, "tokenizer": "chars4", "price_per_million_input_usd": 0.0, "price_per_million_output_usd": 0.0}]

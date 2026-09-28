@@ -1,0 +1,26 @@
+{
+  "message_id": "m-6e31472c17125025c228",
+  "reason": "new",
+  "request": {
+    "after": [],
+    "at": "2026-09-28T19:56:38Z",
+    "channel": null,
+    "id": "r1790625398296-9c25",
+    "message_id": "m-6e31472c17125025c228",
+    "native_thread": null,
+    "project": null,
+    "reply_to": null,
+    "source": "cos",
+    "text": "Correct the README link to the docs"
+  },
+  "request_id": "r1790625398296-9c25",
+  "route": "new",
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "status": "done",
+  "task_id": "t3-correct-the-readme-link",
+  "thread_id": "th-9d8f04482e6d44b709a3"
+}

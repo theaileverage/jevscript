@@ -1,0 +1,24 @@
+{
+  "adapters": {
+    "crew": {
+      "command": [
+        "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/examples/chief-of-staff/.venv/bin/python3",
+        "-m",
+        "cos.fake_agent"
+      ],
+      "env": {
+        "COS_FAKE_AGENT_STATE": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-route.BW6OZP/fake-agent-state.json",
+        "PYTHONPATH": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/examples/chief-of-staff/src"
+      }
+    }
+  },
+  "jev": {
+    "fake_rules": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-route.BW6OZP/status-jev-rules.json",
+    "mode": "fake"
+  },
+  "learn_every": 3,
+  "mates_inline": true,
+  "policy": {
+    "min_repeats": 3
+  }
+}

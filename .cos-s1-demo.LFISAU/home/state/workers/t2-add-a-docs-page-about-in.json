@@ -1,0 +1,152 @@
+{
+  "actions": [
+    {
+      "action": "reported_ready",
+      "args": ""
+    },
+    {
+      "action": "skip_review",
+      "args": ""
+    },
+    {
+      "action": "land",
+      "args": ""
+    },
+    {
+      "action": "landed",
+      "args": ""
+    }
+  ],
+  "alive": true,
+  "backend": null,
+  "base": "main",
+  "branch": "cos/t2-add-a-docs-page-about-in",
+  "brief": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/data/t2-add-a-docs-page-about-in/brief.md",
+  "busy": false,
+  "cleanup": {
+    "reason": "",
+    "removed": true
+  },
+  "created_at": 1790625396.956115,
+  "dispatch_recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195636Z-1038-10-a854bf-on_wake-backlog.jsonl",
+  "effort": "medium",
+  "handle": {
+    "$jev": "handle",
+    "capability": "crew",
+    "cwd": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t2-add-a-docs-page-about-in",
+    "id": "t2-add-a-docs-page-about-in",
+    "launch": 1,
+    "name": "t2-add-a-docs-page-about-in"
+  },
+  "harness": "claude",
+  "history": [
+    {
+      "at": "2026-09-28T19:56:37Z",
+      "events": [
+        "at_working",
+        "carry_on"
+      ],
+      "phase": "working",
+      "reasons": [
+        "status:working"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195637Z-1038-12-b2f7cd-on_wake-t2-add-a-docs-page-about-in.jsonl",
+      "wake": "000010-worker-t2-add-a-docs-page-about-in"
+    },
+    {
+      "at": "2026-09-28T19:56:37Z",
+      "events": [
+        "at_working",
+        "reported_ready"
+      ],
+      "phase": "ready",
+      "reasons": [
+        "status:done"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195637Z-1038-13-0136f0-on_wake-t2-add-a-docs-page-about-in.jsonl",
+      "wake": "000011-worker-t2-add-a-docs-page-about-in"
+    },
+    {
+      "at": "2026-09-28T19:56:37Z",
+      "events": [
+        "at_ready",
+        "skip_review"
+      ],
+      "phase": "approved",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195637Z-1038-14-310b6b-on_wake-t2-add-a-docs-page-about-in.jsonl",
+      "wake": "000012-worker-t2-add-a-docs-page-about-in"
+    },
+    {
+      "at": "2026-09-28T19:56:37Z",
+      "events": [
+        "at_approved",
+        "land"
+      ],
+      "phase": "landing",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195637Z-1038-15-0b6c8d-on_wake-t2-add-a-docs-page-about-in.jsonl",
+      "wake": "000013-worker-t2-add-a-docs-page-about-in"
+    },
+    {
+      "at": "2026-09-28T19:56:38Z",
+      "events": [
+        "at_landing",
+        "landed"
+      ],
+      "phase": "done",
+      "reasons": [
+        "continue after a transition"
+      ],
+      "recording": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/state/recordings/20260928T195637Z-1038-16-5146ed-on_wake-t2-add-a-docs-page-about-in.jsonl",
+      "wake": "000014-worker-t2-add-a-docs-page-about-in"
+    }
+  ],
+  "id": "t2-add-a-docs-page-about-in",
+  "idle_minutes": 1.5894571940104166e-08,
+  "kind": "ship",
+  "landed_head": "b550c6973a8c80f6d828180e4453ad0f48d7202a",
+  "last_status": "ready in branch cos/t2-add-a-docs-page-about-in",
+  "last_supervised": 1790625398.291141,
+  "mode": "local-only",
+  "model": null,
+  "nudges": 0,
+  "outcome": "landed",
+  "phase": "done",
+  "profile": "default",
+  "project": "notes-site",
+  "relaunches": 0,
+  "retired": true,
+  "retired_at": 1790625398.291975,
+  "review_new": false,
+  "screen": "[claude] started in /Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t2-add-a-docs-page-about-in\nworking on: Add a docs page about installing (step 1)\ncommitted the change\ndone; waiting for input",
+  "screen_changed_at": 1790625397.18257,
+  "screen_hash": "233a503b6541bc24",
+  "skill_receipt": "86bf88e0c19fed8e2f48f5c6cd5439ad57f6da1ebf57788c5bcfe019cc56487f",
+  "skill_search": {
+    "always": [],
+    "fallback": false,
+    "fallback_reason": null,
+    "filtered_out": 0,
+    "kept": 0,
+    "scanned": 0,
+    "scouted": false
+  },
+  "skill_selection": "none",
+  "skills": [],
+  "stale": false,
+  "started_at": 1790625396.962847,
+  "status_kind": "done",
+  "status_new": false,
+  "status_offset": 103,
+  "title": "Add a docs page about installing",
+  "unacked": 0,
+  "unacked_minutes": 0,
+  "worker_id": "w-8900bc81bbe0ae315325",
+  "worktree": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/worktrees/notes-site/t2-add-a-docs-page-about-in",
+  "yolo": true
+}

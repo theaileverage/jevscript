@@ -1,8 +1,8 @@
 program threads
 
-# Section 6.4a's `pick among` bounds the candidate list. Scoping and
-# message receipts are this example's host design; Jevscript owns priority
-# and the confidence rule for a semantic continuation.
+# Section 6.4a gives `pick among` a profile-defined candidate cap; overlong
+# lists error. This example's host scopes and caps candidates and owns message
+# receipts; Jevscript owns priority and the semantic-continuation confidence rule.
 def route_message(req, policy):
   if req.relation.kind == "valid":
     return { route: "continue", thread_id: req.relation.thread_id, task_id: req.relation.task_id, reason: req.relation.reason }

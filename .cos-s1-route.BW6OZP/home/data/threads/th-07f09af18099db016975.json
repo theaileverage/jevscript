@@ -1,0 +1,20 @@
+{
+  "id": "th-07f09af18099db016975",
+  "messages": [
+    {
+      "at": "2026-09-28T20:06:12Z",
+      "id": "m-77c8b8a68b90dbf8184f",
+      "request_id": "r1790625972961-b265",
+      "text": "What's going on?"
+    }
+  ],
+  "native_thread": null,
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "summary": "What's going on?",
+  "task_id": null,
+  "updated": "2026-09-28T20:06:13Z"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "th-eb99f9632a7740da097a",
+  "messages": [
+    {
+      "at": "2026-09-28T19:56:36Z",
+      "id": "m-10d6e1c54e3977be2049",
+      "request_id": "r1790625396724-2a40",
+      "text": "Add a docs page about installing"
+    }
+  ],
+  "native_thread": null,
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "summary": "Add a docs page about installing",
+  "task_id": "t2-add-a-docs-page-about-in",
+  "updated": "2026-09-28T19:56:36Z"
+}

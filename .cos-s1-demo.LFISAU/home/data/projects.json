@@ -1,0 +1,12 @@
+[
+  {
+    "branch_prefix": "cos/",
+    "default_branch": "main",
+    "description": "the notes website: pages, README and documentation",
+    "mode": "local-only",
+    "name": "notes-site",
+    "path": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/notes-site",
+    "review": null,
+    "yolo": true
+  }
+]

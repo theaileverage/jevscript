@@ -1,0 +1,20 @@
+{
+  "id": "th-0402a18d2039bfe23e13",
+  "messages": [
+    {
+      "at": "2026-09-28T20:06:15Z",
+      "id": "m-dbe470ed477095c7d702",
+      "request_id": "r1790625975105-00bc",
+      "text": "Update the guide"
+    }
+  ],
+  "native_thread": null,
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "summary": "Update the guide",
+  "task_id": "t1-update-the-guide",
+  "updated": "2026-09-28T20:06:15Z"
+}

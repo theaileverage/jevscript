@@ -1,0 +1,20 @@
+{
+  "id": "th-9d8f04482e6d44b709a3",
+  "messages": [
+    {
+      "at": "2026-09-28T19:56:38Z",
+      "id": "m-6e31472c17125025c228",
+      "request_id": "r1790625398296-9c25",
+      "text": "Correct the README link to the docs"
+    }
+  ],
+  "native_thread": null,
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "summary": "Correct the README link to the docs",
+  "task_id": "t3-correct-the-readme-link",
+  "updated": "2026-09-28T19:56:38Z"
+}

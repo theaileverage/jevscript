@@ -1,0 +1,26 @@
+{
+  "message_id": "m-77c8b8a68b90dbf8184f",
+  "reason": "new",
+  "request": {
+    "after": [],
+    "at": "2026-09-28T20:06:12Z",
+    "channel": null,
+    "id": "r1790625972961-b265",
+    "message_id": "m-77c8b8a68b90dbf8184f",
+    "native_thread": null,
+    "project": null,
+    "reply_to": null,
+    "source": "cos",
+    "text": "What's going on?"
+  },
+  "request_id": "r1790625972961-b265",
+  "route": "new",
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "status": "done",
+  "task_id": null,
+  "thread_id": "th-07f09af18099db016975"
+}

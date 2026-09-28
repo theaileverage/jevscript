@@ -1,0 +1,20 @@
+{
+  "id": "th-7d4fb9e31862fa3bff16",
+  "messages": [
+    {
+      "at": "2026-09-28T19:56:40Z",
+      "id": "m-77ee9996c37ea572a2f5",
+      "request_id": "r1790625400786-9062",
+      "text": "Fix the broken docs index page"
+    }
+  ],
+  "native_thread": null,
+  "scope": {
+    "channel": "",
+    "project": "notes-site",
+    "source": "cos"
+  },
+  "summary": "Fix the broken docs index page",
+  "task_id": "t4-fix-the-broken-docs-inde",
+  "updated": "2026-09-28T19:56:40Z"
+}

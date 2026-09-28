@@ -1,0 +1,13 @@
+{
+  "acked": "2026-09-28T19:56:36Z",
+  "at": "2026-09-28T19:56:36Z",
+  "id": "000007-worker-t1-fix-the-typo-in-the-read",
+  "kind": "worker",
+  "outcome": "persisted",
+  "paused": null,
+  "reasons": [
+    "continue after a transition"
+  ],
+  "subject": "t1-fix-the-typo-in-the-read",
+  "ts": 1790625396.1422231
+}

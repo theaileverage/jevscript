@@ -1,0 +1,13 @@
+{
+  "acked": "2026-09-28T19:56:37Z",
+  "at": "2026-09-28T19:56:37Z",
+  "id": "000013-worker-t2-add-a-docs-page-about-in",
+  "kind": "worker",
+  "outcome": "persisted",
+  "paused": null,
+  "reasons": [
+    "continue after a transition"
+  ],
+  "subject": "t2-add-a-docs-page-about-in",
+  "ts": 1790625397.354093
+}

@@ -1,0 +1,62 @@
+{
+  "pb_docs_change": {
+    "active": true,
+    "category": "docs_change",
+    "path": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/data/playbooks/pb_docs_change.v1.jev",
+    "trigger": "asks to write or correct documentation, comments or a README",
+    "version": 1,
+    "versions": [
+      {
+        "at": "2026-09-28T19:56:40Z",
+        "evidence": [
+          "t1-fix-the-typo-in-the-read",
+          "t2-add-a-docs-page-about-in",
+          "t3-correct-the-readme-link"
+        ],
+        "path": "/Users/ankeethsuvarna/.no-mistakes/worktrees/502abf15f49a/01M3MPR5EJE9GAD0521FYN5DZB/.cos-s1-demo.LFISAU/home/data/playbooks/pb_docs_change.v1.jev",
+        "verdict": {
+          "false_hits": 0,
+          "negatives": 0,
+          "ok": true,
+          "positives": 3,
+          "reasons": [],
+          "recall": 1,
+          "replayed": 3,
+          "rows": [
+            {
+              "expected_kind": "ship",
+              "expected_match": true,
+              "expected_project": "notes-site",
+              "id": "t1-fix-the-typo-in-the-read",
+              "matched": true,
+              "plan_kind": "ship",
+              "plan_project": "notes-site",
+              "replay_ok": true
+            },
+            {
+              "expected_kind": "ship",
+              "expected_match": true,
+              "expected_project": "notes-site",
+              "id": "t2-add-a-docs-page-about-in",
+              "matched": true,
+              "plan_kind": "ship",
+              "plan_project": "notes-site",
+              "replay_ok": true
+            },
+            {
+              "expected_kind": "ship",
+              "expected_match": true,
+              "expected_project": "notes-site",
+              "id": "t3-correct-the-readme-link",
+              "matched": true,
+              "plan_kind": "ship",
+              "plan_project": "notes-site",
+              "replay_ok": true
+            }
+          ]
+        },
+        "version": 1
+      }
+    ]
+  }
+}
