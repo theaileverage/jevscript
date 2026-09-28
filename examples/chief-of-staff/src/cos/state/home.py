@@ -31,6 +31,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "writer": "auto",
     "skill_catalog": [],
+    # The cheaper model that writes Skill search terms follows the dispatch
+    # harness; a harness missing here searches with the request's own words.
+    "scout": {
+        "models": {"claude": "claude-haiku-4-5-20251001", "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"},
+        "timeout": 120,
+    },
     "poll_seconds": 30,
     "max_wait_seconds": 120,
     "heartbeat_minutes": 30,
@@ -62,6 +68,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "review_confidence": 0.6,
         "skill_fit": 0.7,
         "skill_uncertain": 0.35,
+        "skill_shortlist": 32,
+        "skill_terms": 24,
         "min_evidence": 2,
         "min_recall": 1.0,
     },

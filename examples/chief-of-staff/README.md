@@ -93,13 +93,44 @@ catalog). A Skill with supporting files also declares `files`, a mapping of
 every relative file path to its SHA-256 digest, including `SKILL.md`. The host
 requires the manifest to cover the whole directory and rejects symlinks.
 The frontmatter must contain a matching `name` and a `description`.
-The host checks the file and digest when it builds a dispatch snapshot and
-again before it installs anything. The catalog is limited to 64 Skills, and
-each directory to 128 files and 8 MiB.
+The host checks every file and digest when it builds a dispatch snapshot,
+again for each shortlisted Skill, and again before it installs anything.
+The catalog has no size limit. A description is limited to 1024 characters and
+each directory to 128 files and 8 MiB. An entry may also list up to 32
+`keywords` for search, set `pinned: true`, or name `playbooks` whose routed
+items always consider it.
 An empty catalog is valid and selects none. The historical cookbook roster is
 not read by this dispatch path.
 
-[`skills.jev`](jev/skills.jev) judges each approved Skill against the task
+Selection has two steps, both in [`skills.jev`](jev/skills.jev). When the
+catalog holds more than `policy.skill_shortlist` Skills (default `32`), a
+cheaper `scout` model writes three lines about the task: `kind`, up to
+`policy.skill_terms` search `terms` (default `24`) and an `ideal_skill`
+sentence. The scout follows the item's harness: Claude Code items use
+`claude-haiku-4-5-20251001` and Codex items use `gpt-6-luna`, through the CLI
+already signed in (`scout.models` in the config; `adapters.scout` binds any
+JSONL `llm` adapter instead). The host's `fleet.skill_search` then ranks the
+whole catalog with Okapi BM25 over each Skill's id, description and keywords.
+Pinned and playbook Skills always come first; half of the remaining places go
+to the best overall matches and half to the best match of each scout term.
+When more than three Skills match the query with identical evidence (the same
+matched words, the same number of times), the rest of them wait until every
+other match has had a place; they are deferred, not dropped.
+A scout reply outside the three-line form, or a harness with no scout model,
+searches with the request's own words and records `fallback` with the reason.
+The search result is a recorded tool call, so replay serves the same shortlist
+without asking the scout or searching again. The brief says how many Skills
+the search left out.
+
+Each dispatch nominally costs the writer, the scout when it runs, and one Jev
+request per profile question cap of shortlisted Skills. The host reads that
+cap from the selected Jev profile and plans each item's calls; `on_wake`
+starts only as many items as fit its 50 calls, and the rest wait for the next
+wake. An item whose always-included Skills alone would exceed the 8 calls a
+dispatch allows is held with a decision naming the count and the IDs.
+These are nominal counts: a retry or a scout fallback can still cost more.
+
+`skills.jev` then judges each shortlisted Skill against the task
 statement, original request and notes independently. It retains every fit
 at or above `policy.skill_fit` (default `0.7`). A fit between
 `policy.skill_uncertain` (default `0.35`) and that threshold stays uncertain;

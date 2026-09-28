@@ -2,6 +2,8 @@
 
 Only the host reads source paths. The Jevscript policy sees IDs and descriptions;
 an answer can never supply a source, destination, command, or download URL.
+The catalog has no size cap: a dispatch judges only the shortlist that
+``search`` returns (``skill_search``), so its cost follows the shortlist.
 """
 
 from __future__ import annotations
@@ -15,11 +17,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from . import skill_search
 from .state.home import Home, read_json, write_json
 
 ID = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
-MAX_SKILLS = 64
+MAX_DESCRIPTION = 1024
+MAX_KEYWORDS = 32
 MAX_BYTES = 65536
 MAX_FILES = 128
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
@@ -34,6 +38,7 @@ class Skills:
 
     def __init__(self, home: Home) -> None:
         self.home = home
+        self._verified: tuple[str, list[dict[str, Any]]] | None = None
 
     @staticmethod
     def _frontmatter(text: str, skill_id: str) -> dict[str, str]:
@@ -110,9 +115,10 @@ class Skills:
         return source, actual
 
     def catalog(self) -> list[dict[str, Any]]:
+        """Validate the whole configured catalog and re-read every pinned byte."""
         configured = self.home.config.get("skill_catalog", [])
-        if not isinstance(configured, list) or len(configured) > MAX_SKILLS:
-            raise SkillError(f"skill_catalog must contain at most {MAX_SKILLS} entries")
+        if not isinstance(configured, list):
+            raise SkillError("skill_catalog must be a list")
         entries: list[dict[str, Any]] = []
         seen: set[str] = set()
         for raw in configured:
@@ -127,24 +133,125 @@ class Skills:
             deps = entry.get("dependencies", [])
             if not isinstance(deps, list) or any(not isinstance(dep, str) or not ID.fullmatch(dep) for dep in deps):
                 raise SkillError(f"skill {skill_id}: invalid dependencies")
+            keywords = entry.get("keywords", [])
+            if not isinstance(keywords, list) or len(keywords) > MAX_KEYWORDS or any(not isinstance(word, str) or not 0 < len(word) <= skill_search.MAX_TERM_CHARS for word in keywords):
+                raise SkillError(f"skill {skill_id}: keywords must be at most {MAX_KEYWORDS} texts of 1 to {skill_search.MAX_TERM_CHARS} characters")
+            playbooks = entry.get("playbooks", [])
+            if not isinstance(playbooks, list) or any(not isinstance(name, str) or not name for name in playbooks):
+                raise SkillError(f"skill {skill_id}: playbooks must be a list of playbook names")
+            if not isinstance(entry.get("pinned", False), bool):
+                raise SkillError(f"skill {skill_id}: pinned must be true or false")
             source, files = self._source(entry)
             try:
                 text = files["SKILL.md"].decode("utf-8")
             except UnicodeDecodeError as error:
                 raise SkillError(f"skill {skill_id}: SKILL.md is not UTF-8") from error
             fields = self._frontmatter(text, skill_id)
+            if len(fields["description"]) > MAX_DESCRIPTION:
+                raise SkillError(f"skill {skill_id}: description exceeds {MAX_DESCRIPTION} characters")
             seen.add(skill_id)
             manifest = entry.get("files", {"SKILL.md": entry["sha256"]})
             tree_sha256 = hashlib.sha256(json.dumps(sorted(manifest.items()), separators=(",", ":")).encode()).hexdigest()
-            entries.append({"id": skill_id, "path": str(source), "sha256": entry["sha256"], "files": manifest, "tree_sha256": tree_sha256, "description": fields["description"], "dependencies": deps})
+            entries.append({"id": skill_id, "path": str(source), "sha256": entry["sha256"], "files": manifest, "tree_sha256": tree_sha256, "description": fields["description"], "dependencies": deps,
+                            "keywords": keywords, "playbooks": playbooks, "pinned": entry.get("pinned", False)})
         ids = {entry["id"] for entry in entries}
         if any(dep not in ids for entry in entries for dep in entry["dependencies"]):
             raise SkillError("skill_catalog has a dependency outside the approved catalog")
         self._closure([entry["id"] for entry in entries], entries)
+        self._verified = (json.dumps(configured, sort_keys=True), entries)
         return entries
 
-    def snapshot(self) -> list[dict[str, Any]]:
-        return [{"id": e["id"], "description": e["description"], "dependencies": e["dependencies"]} for e in self.catalog()]
+    def _current(self) -> list[dict[str, Any]]:
+        """The catalog this session last verified in full, while the config is unchanged.
+
+        A dispatch snapshot verifies every byte once; the verbs that follow it
+        re-read only the entries they return or install.
+        """
+        key = json.dumps(self.home.config.get("skill_catalog", []), sort_keys=True)
+        if self._verified is not None and self._verified[0] == key:
+            return self._verified[1]
+        return self.catalog()
+
+    @staticmethod
+    def _limits(policy: dict[str, Any]) -> tuple[int, int]:
+        k, terms = policy.get("skill_shortlist"), policy.get("skill_terms")
+        if not isinstance(k, int) or isinstance(k, bool) or k < 1:
+            raise SkillError("policy.skill_shortlist must be a positive whole number")
+        if not isinstance(terms, int) or isinstance(terms, bool) or not 1 <= terms <= 64:
+            raise SkillError("policy.skill_terms must be a whole number from 1 to 64")
+        return k, terms
+
+    def _scope(self, item: dict[str, Any], k: int) -> tuple[list[dict[str, Any]], list[str], bool]:
+        """The catalog, the ids that bypass the filter, and whether the filter drops anything.
+
+        Pinned Skills and those of the playbook that routed the item are always
+        judged. Once they fill ``k`` places, nothing is searched for.
+        """
+        catalog = self._current()
+        playbook = item.get("playbook")
+        always = [e["id"] for e in catalog if e["pinned"] or (playbook and playbook in e["playbooks"])]
+        return catalog, always, len(catalog) > k and len(always) < k
+
+    def warnings(self, policy: dict[str, Any]) -> list[str]:
+        k, _ = self._limits(policy)
+        pinned = [e["id"] for e in self._current() if e["pinned"]]
+        if len(pinned) > k:
+            return [f"{len(pinned)} pinned Skills exceed policy.skill_shortlist ({k}); every dispatch judges all of them"]
+        return []
+
+    def plan(self, item: dict[str, Any], policy: dict[str, Any], questions: int) -> dict[str, Any]:
+        """Nominal model calls for one dispatch: writer, scout if the filter drops anything, Jev chunks.
+
+        Static arithmetic under the selected profile's question cap; a retry or
+        a longer answer can still cost more, so the program keeps its budgets.
+        """
+        k, _ = self._limits(policy)
+        catalog, always, scout = self._scope(item, k)
+        judged = len(always) if len(always) >= k else min(len(catalog), k)
+        return {"always": always, "catalog": len(catalog), "shortlist": judged, "scout": scout,
+                "calls": 1 + int(scout) + -(-judged // questions)}
+
+    def search(self, item: dict[str, Any], scout_text: str, request: str, k: int, policy: dict[str, Any]) -> dict[str, Any]:
+        """Rank the catalog for one item and return the shortlist Jev will judge.
+
+        The scout's text is model-written, so it is parsed against a fixed
+        schema; anything else falls back to the request's own words and says so.
+        It narrows which Skills are judged and can never add an id.
+        """
+        limit, max_terms = self._limits(policy)
+        if k != limit:
+            raise SkillError(f"skill search asked for {k} Skills; policy.skill_shortlist is {limit}")
+        catalog, always, needed = self._scope(item, limit)
+        query, terms, kind, fallback = request, [], None, None
+        if needed and not (scout_text or "").strip():
+            fallback = "the scout wrote nothing"
+        elif needed:
+            try:
+                parsed = skill_search.parse_scout(scout_text or "", max_terms)
+            except ValueError as error:
+                fallback = f"scout output rejected: {error}"
+            else:
+                query, terms, kind = f"{parsed.text()} {request}", list(parsed.terms), parsed.kind
+        if needed:
+            ids = skill_search.rank(catalog, always, query, terms, limit)
+        else:  # the whole catalog fits, or the always-included Skills fill it
+            ids = always if len(always) >= limit else always + [e["id"] for e in catalog if e["id"] not in always]
+        by_id = {entry["id"]: entry for entry in catalog}
+        for skill_id in ids:
+            self._source(by_id[skill_id])
+        return {
+            "skills": [{"id": i, "description": by_id[i]["description"], "dependencies": by_id[i]["dependencies"]} for i in ids],
+            "ids": ids,
+            "always": always,
+            "scanned": len(catalog),
+            "kept": len(ids),
+            "filtered_out": len(catalog) - len(ids),
+            "scouted": needed,
+            "kind": kind,
+            "terms": terms,
+            "fallback": fallback is not None,
+            "fallback_reason": fallback,
+        }
 
     @staticmethod
     def _closure(ids: list[str], catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -216,7 +323,7 @@ class Skills:
             ids = [entry["id"] for entry in previous["selected"]]
             status = previous["selection_status"]
             uncertain = previous["uncertain"]
-        catalog = self.catalog()
+        catalog = self._current()
         selected = self._closure(ids, catalog)
         if harness not in ("codex", "claude", "claude-code") and selected:
             raise SkillError(f"no project Skill location is approved for harness {harness!r}")

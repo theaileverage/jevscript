@@ -7,13 +7,14 @@ program cos
 #   learn     find repeated work and draft playbooks, or judge a draft's proof
 #   bearings  the fleet digest
 #   reply     a short outcome summary for a command's reply
+#   limits    nothing; the host reads the selected model profile from its recording
 #
 # Every decision lives in the modules; this file wires capabilities into them.
 
 use "./intake.jev" as intake
 use "./routing.jev" as routing
 use "./threads.jev" as threads
-use "./dispatch.jev" as dispatch with crew, writer, fleet
+use "./dispatch.jev" as dispatch with crew, writer, scout, fleet
 use "./supervise.jev" as supervise with crew, me, writer, fleet
 use "./escalate.jev" as escalation with me, writer, fleet
 use "./learn.jev" as learn with writer
@@ -25,8 +26,10 @@ out result
 needs crew: agent
 needs me: person
 needs writer: llm
+needs scout: llm
 needs fleet: tool:
   worktree(id, project) -> record
+  skill_search(id, scout, request, k) -> record
   ensure_skills(id, worktree, harness, selected, status, uncertain) -> record
   write_brief(id, text) -> text
   steer(id, text) -> record
@@ -110,21 +113,30 @@ task take_request(req, s) budget calls 6:
     d.thread_id = conversation.thread_id
   return d
 
-task on_wake budget calls 40:
+task on_wake budget calls 50:
   s = snapshot
   kind = s.wake.kind
   log info "wake started" { kind: kind, subject: s.wake.subject }
   if kind == "request":
     result = take_request(s.request, s)
   elif kind == "dispatch":
+    # The batch is sized from each item's planned model calls so a larger
+    # shortlist starts fewer items instead of pausing on this task's 50.
     started = []
     batch_limit = min([s.policy.capacity, 15])
-    ready_items = routing.ready(s.backlog, s.now, batch_limit)
-    more_ready = len(routing.ready(s.backlog, s.now, batch_limit + 1)) > batch_limit
+    ready_items = routing.ready(s.backlog, s.now, batch_limit + 1)
+    batch = []
+    planned = 0
     for item in ready_items:
+      calls = dispatch.planned_calls(s.skill_plans[item.id])
+      if len(batch) == batch_limit or planned + calls > 50:
+        break
+      batch = batch + [item]
+      planned = planned + calls
+    for item in batch:
       project = [p for p in s.projects if p.name == item.project][0]
-      started = started + [dispatch.start(item, project, s.profiles, s.prefs, s.paths[item.id], s.skill_catalog, s.policy)]
-    result = { started: started, more_ready: more_ready }
+      started = started + [dispatch.start(item, project, s.profiles, s.prefs, s.paths[item.id], s.skill_plans[item.id], s.scouts, s.policy)]
+    result = { started: started, more_ready: len(ready_items) > len(batch), planned_calls: planned }
   elif kind == "worker":
     result = supervise.step(s.worker, s.policy)
   else:
@@ -144,3 +156,6 @@ task bearings:
 
 task reply budget calls 2:
   result = escalation.summarize(snapshot.facts)
+
+task limits:
+  result = none

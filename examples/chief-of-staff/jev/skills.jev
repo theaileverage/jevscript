@@ -1,8 +1,26 @@
 program skills
 
-# A separate, bounded judgment over the host's approved catalog. Each skill
-# is judged independently, so a task can need none, one, or several. The
-# trusted host closes dependencies and verifies the files before dispatch.
+# Task Skills in two steps. `shortlist` narrows the host's approved catalog:
+# a cheaper `llm` scout writes search terms, and the trusted host ranks every
+# Skill with BM25 behind a recorded tool call, so replay serves the same
+# shortlist without searching again. `select` then judges each shortlisted
+# Skill independently, so a task can need none, one, or several. Neither the
+# scout nor Jev can add an id: the host returns catalog records, code keeps a
+# subset of them, and the host closes dependencies and verifies the files.
+
+needs scout: llm
+needs fleet: tool:
+  skill_search(id, scout, request, k) -> record
+
+task shortlist(item, statement, harness, plan, scouts, policy):
+  terms = ""
+  if plan.scout:
+    models = [s.model for s in scouts if s.harness == harness]
+    if len(models) == 0:
+      log warn "no scout model for this harness; searching with the request's words" { harness }
+    else:
+      terms = scout.write "Write exactly three lines and nothing else, to search a catalog of agent Skills for this task:\nkind: <the kind of work, in a few words>\nterms: <at most max_terms comma-separated lowercase search terms, each under 40 characters: tools, files, activities and synonyms a Skill for this task would mention>\nideal_skill: <one sentence describing the Skill that would help most>" using { task: statement, request: item.text, notes: item.notes, harness: harness, model: models[0], max_terms: policy.skill_terms }
+  return fleet.skill_search(item.id, terms, item.text, policy.skill_shortlist)
 
 def select(statement, request, notes, catalog, threshold, uncertain_floor):
   if len(catalog) == 0:

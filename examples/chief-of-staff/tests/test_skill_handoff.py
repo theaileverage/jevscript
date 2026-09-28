@@ -325,7 +325,7 @@ def test_multifile_manifest_and_folded_description_at_host_boundary(make_host, t
     catalog[0]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
     add_support(catalog[0], "references/guide.md", b"# Guide\n")
     host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
-    assert host.skills.snapshot()[0]["description"] == "Use the docs guide for documentation work."
+    assert host.skills.catalog()[0]["description"] == "Use the docs guide for documentation work."
     (source.parent / "references/guide.md").write_text("changed\n")
     host.submit("Update docs")
     host.tick()
