@@ -17,9 +17,11 @@ This guidance applies to `jev-1.13`. The docs mark several limits as likely to i
 2. Write one question per judgment. Split any question that weighs two properties.
 3. Pick the primitive whose answer your code acts on directly.
 4. Build the smallest state that answers every question. Compute in code whatever code can compute.
-5. Put every question that shares the state into one request, including questions that matter for only some inputs.
+5. For direct Jev calls, put every question that shares the state into one request, including questions that matter for only some inputs.
 6. Combine the answers in code: branches, weights, and confidence gates.
 7. Test against labeled examples. Read `probabilities` on the misses, then revise one or two questions at a time.
+
+In a Jevscript codebase, use the `jevscriptify` Skill for decision placement. Sections 6 and 7 of the language specification define question syntax. This Skill shapes each question.
 
 ## Choose the primitive
 
@@ -199,7 +201,7 @@ Rules for revising:
 - [ ] Choices that may not cover every input have an `other` option.
 - [ ] Code does all counting, arithmetic, and date comparison.
 - [ ] The state holds only what the questions need and fits the token limits.
-- [ ] All questions on the same state travel in one request.
+- [ ] For direct Jev API calls, all questions on the same state travel in one request; Jevscript follows the batching rules in spec section 6.6.
 - [ ] Every action has a confidence threshold matched to its risk, and low confidence has a fallback.
 - [ ] Weights and thresholds live in code.
 - [ ] Labeled examples back every revision.

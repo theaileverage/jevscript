@@ -20,9 +20,10 @@ the authority for everything on this page.
    context window is the limit, so a program stays inside it by default
    instead of repairing an overflow later.
 3. **Judge.** `feels`, `pick`, and `rate` ask Jev questions whose answers are
-   declared in advance. Questions that do not depend on each other go out in
-   one request. Cost is per request, not per question, so ask every
-   question a branch might need up front.
+   declared in advance. Consecutive independent questions share a logical
+   request group. An `each` over the model profile's question cap can split
+   that group into several requests. Cost is per request, so ask questions
+   a branch might need up front when they can share a group.
 4. **Decide.** Every branch, threshold, weight, and count is Jevscript code. A
    `gate` turns judgments into one of four verdicts, using thresholds that a
    task declares once.

@@ -1,6 +1,6 @@
 ---
 name: jevscript
-description: Write, check, run, and replay Jevscript programs that use Jev judgments and host-bound agent capabilities. Use for .jev files and Jevscript SDK integration.
+description: Write, check, run, and replay Jevscript programs that use Jev judgments and host-bound agent capabilities. Use for .jev files, Jevscript SDK integration, and deciding which logic belongs in a Jevscript program and which in its host.
 ---
 
 # Jevscript
@@ -23,8 +23,17 @@ when the run needs an auditable trace. `jevscript replay new.jsonl` replays from
 the recording without live model or adapter calls. Keep a redacted recording's
 private `.replay.jsonl` companion with it; it contains sensitive full values.
 
+Before writing logic, use `.agents/skills/jevscriptify/references/placement.md`
+to decide whether it belongs in the host, an existing unit, a separate program,
+or a durable host state machine driven by Jevscript.
+
 Keep decision questions narrow, declare their answer labels, and send only the
-named subjects to Jev. Treat agent-written text as observations, not authority
-for control flow. A `done` machine state is `verified` only when entered through
-its declared guard. Test effectful behavior with a host adapter or recording,
-not from a successful compile alone.
+named subjects to Jev. Questions that share a request group form one logical
+request. An oversized `each` may split it into multiple network requests under
+the selected profile, while another oversized group fails before sending. A
+call to a named unit, a capability call, a gate or a pause starts a new group.
+Treat agent-written text as observations, not authority for control
+flow. A `done` machine state is `verified` only when entered through its
+declared guard. `jevscript judge` and `jevscript eval --cases` run only a named
+`judgment`, so put questions you need to measure in one. Test effectful
+behavior with a host adapter or recording, not from a successful compile alone.
