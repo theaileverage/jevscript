@@ -32,8 +32,9 @@ Copy these steps into the task list and mark each done or skipped with a reason.
 8. Evaluate and decide go or no-go.
 9. Report, separating measured, inspected and hypothetical evidence.
 
-Stop after step 3 when the request is an audit. Change code only for proposals
-the user approved.
+If the request asks only for an audit, skip implementation and evaluation in
+steps 4 through 8, then complete the report in step 9. Change code only for
+proposals the user approved.
 
 ### 1. Inventory the decision points
 
