@@ -6,12 +6,14 @@ Usage:
     jevscript compile FILE.jev | request_groups.py - [--all]
 
 The compiler assigns each judgment expression a `request_group` (spec section 6.6).
-Questions that share a group use one logical request and see one state. An
-oversized `each` can split it into profile-dependent requests; other oversized
-groups fail before sending. Unit, capability, handle and `focus` calls are
-listed in evaluation order because they separate groups. By default only units
-written in FILE are shown; `--all` adds imported modules and the `std` prelude. Non-relative
-`use` paths resolve through `JEVSCRIPT_PATH`, as for `jevscript compile`.
+An unsplit group sends one request with one state. An oversized inline `each`
+can split into requests that each carry only their own item paths; a named
+judgment carries its full parameters in every chunk. Other oversized groups
+fail before sending. Calls are listed in evaluation order within each possible
+path. This is a static inventory, not a prediction of which path runs. By
+default only units written in FILE are shown; `--all` adds imported modules
+and the `std` prelude. Non-relative `use` paths resolve through
+`JEVSCRIPT_PATH`, as for `jevscript compile`.
 """
 
 from __future__ import annotations
@@ -88,12 +90,32 @@ class Units:
 
 
 def events(node: Any, units: Units, capabilities: dict[str, str], target: str | None = None) -> list[tuple[int, str, Any]]:
-    """Return question and call rows in expression evaluation order."""
+    """Return possible question and call rows in runtime evaluation order."""
     found: list[tuple[int, str, Any]] = []
     if isinstance(node, list):
         for child in node:
             found += events(child, units, capabilities)
     elif isinstance(node, dict):
+        if "states" in node and "observe" in node:
+            found += events(node.get("params"), units, capabilities)
+            for state in node["states"]:
+                found.append((line(state), f"state {state['name']} (possible step)", None))
+                if state["done"]:
+                    continue
+                found += events(node["observe"], units, capabilities)
+                for transition in state["transitions"]:
+                    found.append((line(transition), f"guard {transition['event']} (if evaluated)", None))
+                    found += events(transition.get("when"), units, capabilities)
+                found += events(node.get("goal"), units, capabilities)
+                for transition in state["transitions"]:
+                    found.append((line(transition), f"description {transition['event']} (if enabled)", None))
+                    found += events(transition["description"], units, capabilities)
+                found.append((line(state), "machine Choice (if any event is enabled)", None))
+                for transition in state["transitions"]:
+                    if transition.get("body"):
+                        found.append((line(transition), f"action {transition['event']} (if chosen)", None))
+                        found += events(transition["body"], units, capabilities)
+            return found
         if node.get("stmt") == "assign":
             target = node["root"] + "".join(f".{p}" if isinstance(p, str) else "[]" for p in node.get("path") or [])
         if "question" in node and "name" in node:
@@ -122,6 +144,11 @@ def events(node: Any, units: Units, capabilities: dict[str, str], target: str | 
             found += events(node["text"], units, capabilities)
             found += events(node["on"], units, capabilities)
             found.append((line(node), "calls focus (Jev)", None))
+            return found
+        if kind == "comprehension":
+            found += events(node["iterable"], units, capabilities)
+            found += events(node.get("test"), units, capabilities)
+            found += events(node["expr"], units, capabilities)
             return found
         if "request_group" in node and "subject" in node:
             found += events(node["subject"], units, capabilities)
@@ -152,7 +179,7 @@ def report(ir: dict[str, Any], show_all: bool) -> str:
             else:
                 header = f"\n{kind} {name}  line {line(unit)}"
             if kind == "machine":
-                header += ": each step sends one Choice over the enabled events, plus stay (spec 7.8)"
+                header += ": each nonterminal step observes, checks guards, then may send a Choice over enabled events plus stay (spec 7.8)"
             out.append(header)
             rows = events(unit, units, capabilities)
             groups: dict[int, int] = {}
@@ -164,7 +191,7 @@ def report(ir: dict[str, Any], show_all: bool) -> str:
                     out.append(f"  L{row_line:<4} group {group}  {text}")
             if groups:
                 sizes = ", ".join(f"group {g}: {n} question{'s' if n != 1 else ''}" for g, n in sorted(groups.items()))
-                out.append(f"  own logical groups if every question runs: {len(groups)} ({sizes}); branches, loops and called units change the count")
+                out.append(f"  compiled logical groups: {len(groups)} ({sizes}); branches, loops and called units change which groups run and how often")
                 out.append("  network request count depends on the profile question cap and runtime list sizes; an oversized group may fail before sending")
     return "\n".join(out)
 

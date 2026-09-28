@@ -49,7 +49,7 @@ inputs, capabilities and recording. Pick the unit kind by what it must do:
 
 | Unit | Choose it when | It cannot |
 | --- | --- | --- |
-| `judgment` | A fixed logical group of questions over declared parameters. It is the only unit `jevscript judge` and `jevscript eval` can run alone, and its state is every parameter in full. A long `each` may split into multiple network requests under the selected profile. | Branch, loop or call anything. |
+| `judgment` | A fixed logical group of questions over declared parameters. It is the only unit `jevscript judge` and `jevscript eval` can run alone, and its state is every parameter in full, including every split `each` chunk. | Branch or loop. Its questions cannot call units; post-answer `log` expressions may call defs or judgments. |
 | `def` | Code, optionally with inline judgments, that returns a value. Inline state is only the subject and `compare` paths. | Call a capability, gate or pause. |
 | `task` | It calls capabilities, gates, asks a person, sets a budget or verifies. | Be run alone by `judge` or `eval`. |
 | `machine` | The run has phases, the legal next moves depend on the phase, and every step happens inside this one run. | Start in a state chosen at run time (`initial` is static), or last beyond the run. |
@@ -69,9 +69,10 @@ Give the logic its own program when at least one of these holds:
 - it needs fewer capabilities than the program it would join, and least
   authority matters.
 
-A file with no `in` or `out` is a library: other programs `use` it and hand it
-capabilities explicitly with `with`. Prefer a library when the logic is shared
-and has no entry point of its own.
+An importable library exposes units that other programs call through `use`,
+with capabilities handed in explicitly through `with`. Prefer it when logic is
+shared and needs no entry point of its own. A runnable `task main` needs no
+`in` or `out` declaration.
 
 ### 4. A durable host state machine whose transitions a `.jev` program decides
 

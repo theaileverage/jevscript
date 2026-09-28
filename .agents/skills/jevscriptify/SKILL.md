@@ -62,11 +62,13 @@ For each `.jev` file, list the questions and what separates them:
 python3 .agents/skills/jevscriptify/scripts/request_groups.py path/to/file.jev
 ```
 
-The script prints every question with its compiled `request_group`, and the
-unit, capability, handle and `focus` calls between them. Questions with the
-same group share one logical request and one state. An oversized `each` may
-split into several network requests under the selected profile; another
-oversized group fails before sending. Save its output as static evidence.
+The script inventories compiled logical groups and possible call boundaries in
+runtime evaluation order within each path. It does not predict the branch or
+machine transition taken. An unsplit group sends one request with one state.
+An oversized inline `each` may split into network requests whose states contain
+only each chunk's item paths; a named judgment sends its full parameters in
+every chunk. Another oversized group fails before sending. Save the output as
+static evidence.
 
 ### 2. Classify each one
 

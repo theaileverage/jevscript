@@ -66,6 +66,35 @@ class RequestGroupsTest(unittest.TestCase):
         self.assertIn("task harness.", output)
         self.assertIn("effect tree.diff [tool]", output)
 
+    def test_comprehension_boundaries_follow_runtime_calls(self):
+        source = Path(__file__).with_name("comprehension_order.jev")
+        task = self.report(source).split("\ntask main", 1)[1]
+        self.assert_order(task, "calls def source", "calls def keep", "calls def render")
+
+        run = subprocess.run(
+            [str(CLI), "run", str(source)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assert_order(run.stderr, "iterable", "filter a", "render a", "filter b")
+        self.assertNotIn("render b", run.stderr)
+
+    def test_supervisor_guards_precede_any_approved_action(self):
+        source = ROOT / "examples/chief-of-staff/jev/supervise.jev"
+        machine = self.report(source, "--all").split("\nmachine lifecycle", 1)[1]
+        approved = machine.split("state approved (possible step)", 1)[1].split("state landing (possible step)", 1)[0]
+        self.assert_order(
+            approved,
+            "guard land (if evaluated)",
+            "guard merge (if evaluated)",
+            "guard no_pr (if evaluated)",
+            "machine Choice (if any event is enabled)",
+            "action land (if chosen)",
+            "effect fleet.land [tool]",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,18 @@
+program comprehension_order
+
+out result
+
+def source():
+  log info "iterable"
+  return ["a", "b"]
+
+def keep(x):
+  log info "filter {x}"
+  return x == "a"
+
+def render(x):
+  log info "render {x}"
+  return x
+
+task main:
+  result = [render(x) for x in source() if keep(x)]
