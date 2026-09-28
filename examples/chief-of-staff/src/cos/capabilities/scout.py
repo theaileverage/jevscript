@@ -3,8 +3,8 @@
 The scout follows the harness the item is dispatched to: Claude Code asks
 Haiku and Codex asks Luna, through the same CLI the person already signed in
 to. ``config.json`` maps each harness to an exact model id under
-``scout.models``; a harness with a null entry or no entry has no scout, and the program falls
-back to the request's own words instead of borrowing another family.
+``scout.models``. A null entry disables that harness; an omitted entry keeps
+its default. A disabled harness searches with the request's own words.
 
 ``write`` receives the program's ``using`` record (spec section 9.3)
 ``{task, request, notes, harness, model, max_terms}``. The model id is in the

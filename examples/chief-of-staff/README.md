@@ -102,16 +102,20 @@ items always consider it.
 An empty catalog is valid and selects none. The historical cookbook roster is
 not read by this dispatch path.
 
-Selection has two steps, both in [`skills.jev`](jev/skills.jev). When the
-catalog holds more than `policy.skill_shortlist` Skills (default `32`), a
+[`skills.jev`](jev/skills.jev) scouts, searches, then asks Jev to judge the
+shortlist. When the catalog holds more than `policy.skill_shortlist` Skills
+(default `32`) and the always-included Skills leave room in it, a
 cheaper `scout` model writes three lines about the task: `kind`, up to
 `policy.skill_terms` search `terms` (default `24`) and an `ideal_skill`
 sentence. The scout follows the item's harness: Claude Code items use
 `claude-haiku-4-5-20251001` and Codex items use `gpt-6-luna`, through the CLI
 already signed in. `scout.models` accepts only these model IDs or `null` for a
-disabled harness; omitted entries keep their defaults. The host's
+disabled harness; omitted entries keep their defaults. Set
+`policy.skill_shortlist` to a positive whole number and `policy.skill_terms`
+to a whole number from 1 to 64. The host's
 `fleet.skill_search` scores the whole catalog with Okapi BM25 over each
-Skill's id, description and keywords, then diversifies the shortlist.
+Skill's id, description and keywords. When filtering, it diversifies the
+shortlist.
 Pinned and playbook Skills always come first. Roughly half of the open places
 go to the highest BM25 scores; the remaining places offer one best match to
 each scout term in order, then return unused places to the overall ranking.
@@ -120,6 +124,10 @@ lookalikes wait until distinct matches have been considered. These two
 lexical diversification rules can place a lower BM25 score ahead of a higher
 one. The recorded scout comparisons cover 13, 13, 21 and 1 of the 29 labelled
 dispatches, so they do not establish corpus-wide recall of 1.0.
+When the whole catalog fits, search ranks it with BM25 but skips the scout.
+If always-included Skills fill the shortlist, search keeps all of them and
+skips the scout. Config validation warns when pinned Skills exceed the
+shortlist size; dispatch never drops them.
 A scout reply outside the three-line form, or a harness with no scout model,
 searches with the request's own words and records `fallback` with the reason.
 The search result is a recorded tool call, so replay serves the same shortlist
