@@ -7,8 +7,8 @@
 The host never decides anything a judgment or a policy should decide. For
 each wake it builds the snapshot the wake's task reads, runs one bounded
 episode of ``cos.jev``, persists the episode's ``result`` into the state
-store, and only then acknowledges the wake. A question to the owner parks the
-episode; the answer resumes it (in memory, or from its recording after a
+store, and only then acknowledges the wake. A question to the principal parks
+the episode; the answer resumes it (in memory, or from its recording after a
 restart) and the wake is acknowledged when it finishes.
 """
 
@@ -83,7 +83,7 @@ class Host:
         self.effects = EffectLog(self.home)
         self.skills = Skills(self.home)
         self.session = session or JevSession(self.home)
-        self.crew = AgentBinding(crew if crew is not None else self._adapter("crew", "agent"), self.effects)
+        self.crew = AgentBinding(crew if crew is not None else self._adapter("crew", "agent", key="staff"), self.effects)
         self.writer = writer if writer is not None else (self._adapter("writer", "llm") if "writer" in config.get("adapters", {}) else TemplateWriter())
         self.scout = HarnessScout(config["scout"]["models"])
         self._questions: int | None = None
@@ -99,13 +99,16 @@ class Host:
 
     # -- wiring -------------------------------------------------------------------
 
-    def _adapter(self, name: str, kind: str) -> Any:
-        entry = self.home.config.get("adapters", {}).get(name)
+    def _adapter(self, name: str, kind: str, key: str | None = None) -> Any:
+        """Bind capability ``name`` from ``adapters.<key>``. The staff adapter's
+        config key differs from its capability name, which S3 owns."""
+        key = key or name
+        entry = self.home.config.get("adapters", {}).get(key)
         if name == "crew" and not entry:
             entry = {"command": [sys.executable, "-m", "cos.terminal_agent"]}
         if not entry:
             raise SetupError(
-                f"No `{name}` adapter is bound. Set adapters.{name}.command in {self.home.config_path} to a process "
+                f"No `{key}` adapter is bound. Set adapters.{key}.command in {self.home.config_path} to a process "
                 "that speaks the JSONL adapter protocol (for a dry run: `python -m cos.fake_agent`)."
             )
         log = self.home.state / "adapters" / f"{name}.log"
@@ -240,6 +243,7 @@ class Host:
                 "backlog": [{**i, "deps": i.get("deps") or [], "notes": i.get("notes") or "", "thread_id": i.get("thread_id")} for i in items if i.get("project") in projects or i["status"] != "queued"],
                 "now": now(),
                 "prefs": self.memory.preferences(),
+                "identity": self.home.identity,
                 "paths": paths,
                 "skill_plans": plans,
                 "scouts": [{"harness": harness, "model": model} for harness, model in self.scout.models.items()],
@@ -306,6 +310,7 @@ class Host:
             "review_new": bool(worker.get("review_new")),
             "report_exists": report.exists(),
             "paths": self.paths(worker["id"]),
+            "identity": self.home.identity,
             "recent": recent,
             "screen": worker.get("screen", "")[-6000:],
         }

@@ -1,4 +1,4 @@
-"""Herdr: the default backend. One tab per worker in a Chief of Staff workspace.
+"""Herdr: the default backend. One tab per worker in a CoS workspace.
 
 Workers live as tabs labelled ``cos-<task>`` in one workspace: by default it
 finds the workspace labelled

@@ -1,6 +1,6 @@
 program escalation
 
-# Escalation: how the Chief of Staff talks to the person who owns the work.
+# Escalation: how the CoS talks to the principal.
 # Escalation policy: talk in outcomes rather than mechanics, never
 # relay a worker's own words verbatim, interrupt only for what needs the
 # person, and let away and quiet modes hold routine news for the digest.

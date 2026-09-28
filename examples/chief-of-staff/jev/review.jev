@@ -18,6 +18,8 @@ judgment read_review(report):
 
 def instructions(w, paths):
   return """# Review
+You are working for {w.identity.name} on behalf of {w.identity.principal}.
+
 Review the change on branch {w.branch} in {w.worktree} against {w.base} for the task: {w.title}
 
 Read the diff (`git diff {w.base}...{w.branch}`) and run the project's checks. Do not modify, commit, push or delete anything.

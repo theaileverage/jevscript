@@ -1,7 +1,8 @@
-"""Bearings: gather fleet facts and render a read-only digest.
+"""The briefing: gather the administration's facts and render a read-only digest.
 
-The bearings digest covers what needs the owner, what is under way, what is
-queued or held, what finished, plus second mates and learned playbooks. What
+The briefing (``cos briefing``, formerly ``bearings``) covers what needs the
+principal, what the staff have under way, what is queued or held, what
+finished, plus ministers and learned playbooks. What
 goes in each section is formatting of stored facts; dispatch policy remains
 in Jevscript.
 """
@@ -17,10 +18,10 @@ if TYPE_CHECKING:  # pragma: no cover
 
 SECTIONS = [
     ("needs_you", "Needs you"),
-    ("under_way", "Under way"),
+    ("under_way", "Staff at work"),
     ("queued", "Queued and held"),
     ("finished", "Recently finished"),
-    ("mates", "Second mates"),
+    ("mates", "Ministers"),
     ("playbooks", "Learned playbooks"),
 ]
 
@@ -83,7 +84,7 @@ def digest(facts: dict[str, Any], at: float) -> dict[str, Any]:
         "under_way": [f"{w['title']} [{w['id']}] in {w['project']}: {w['phase']}" for w in facts["workers"]],
         "queued": plain + waiting + held,
         "finished": [f"{item['title']} [{item['id']}]: {item['outcome']}" for item in facts["finished"]],
-        "mates": [f"{mate['name']} ({mate['scope']}): {mate['in_flight']} under way, {mate['open_decisions']} waiting" for mate in facts["mates"]],
+        "mates": [f"{mate['name']} (portfolio: {mate['scope']}): {mate['in_flight']} under way, {mate['open_decisions']} waiting" for mate in facts["mates"]],
         "playbooks": [f"{book['name']} v{book['version']}: {book['state']}" for book in facts["playbooks"]],
     }
 
@@ -91,7 +92,7 @@ def digest(facts: dict[str, Any], at: float) -> dict[str, Any]:
 def render(host: "Host") -> str:
     d = digest(fleet(host), now())
     mode = d.get("mode", "normal")
-    out = [f"Bearings{'' if mode == 'normal' else f' ({mode} mode)'}: {d.get('headline', '')}"]
+    out = [f"Briefing{'' if mode == 'normal' else f' ({mode} mode)'}: {d.get('headline', '')}"]
     for key, title in SECTIONS:
         rows = d.get(key) or []
         if not rows and key in ("mates", "playbooks"):

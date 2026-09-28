@@ -37,7 +37,7 @@ When it is open, append: done [at=<epoch>]: PR <full https url>"""
 def reserved_calls(plan):
   return min([plan.calls, 8])
 
-def instructions(item, statement, project, prefs, wt, paths, ensured, found):
+def instructions(item, statement, project, prefs, wt, paths, ensured, found, identity):
   notes = ""
   if item.notes != none and item.notes != "":
     notes = """
@@ -53,12 +53,13 @@ def instructions(item, statement, project, prefs, wt, paths, ensured, found):
   if len(skill_lines) > 0:
     skill_note = "Load and use every applicable Skill before work starts:\n{join(skill_lines, "\n")}\nThese copies are host-owned. Do not stage or commit .agents/skills/<id> or .claude/skills/<id>."
   if ensured.selection_status == "uncertain":
-    skill_note = "{skill_note}\n\nSelection is uncertain for these approved Skills:\n{join(uncertain_lines, "\n")}\nAsk the owner to resolve them before work on the affected part of the task."
+    skill_note = "{skill_note}\n\nSelection is uncertain for these approved Skills:\n{join(uncertain_lines, "\n")}\nAsk {identity.principal} to resolve them before work on the affected part of the task."
   if found.filtered_out > 0:
     skill_note = "{skill_note}\n\nA text search judged {found.kept} of {found.scanned} approved Skills; {found.filtered_out} were left out. If the task needs a Skill that is not listed, say so in a status line."
   return """# Task
 {statement}
 
+You are working for {identity.name} on behalf of {identity.principal}.
 Original request: {item.text}
 Project: {project.name} ({wt.path})
 Shape: {item.kind}. Effort: {item.effort}.{conversation}{notes}
@@ -75,14 +76,14 @@ Shape: {item.kind}. Effort: {item.effort}.{conversation}{notes}
    <state> [at=<epoch seconds>]: <one short line>
    States: working, needs-decision, blocked, paused, done, failed. Report phase changes only.
 3. Instructions may arrive in {paths.inbox}. Read each NNN.msg in order, act on it, then acknowledge it by moving it into {paths.inbox}/handled/.
-4. If a decision belongs to the person who owns the work, append needs-decision with the options and stop.
+4. If a decision belongs to {identity.principal}, append needs-decision with the options and stop.
 5. Never tear down, force-push or discard work.
 
 # Definition of done
 {delivery(item, project, wt, paths)}
 """
 
-task start(item, project, profiles, prefs, paths, plan, scouts, policy) budget calls 8:
+task start(item, project, profiles, prefs, paths, plan, scouts, policy, identity) budget calls 8:
   if plan.always_calls > 8:
     return { id: item.id, calls: 0, blocked: "Skill selection would need {plan.always_calls} model calls, over the 8 one dispatch allows: {len(plan.always)} Skills to judge, {len(plan.always)} of them always included ({join(plan.always, ", ")})." }
   p = routing.profile_named(profiles, item.profile)
@@ -104,6 +105,6 @@ task start(item, project, profiles, prefs, paths, plan, scouts, policy) budget c
   ensured = fleet.ensure_skills(item.id, wt.path, p.harness, choice.ids, choice.status, choice.uncertain)
   if ensured.blocked != none:
     return { id: item.id, calls: calls, blocked: ensured.blocked }
-  where = fleet.write_brief(item.id, instructions(item, statement, project, prefs, wt, paths, ensured, found))
+  where = fleet.write_brief(item.id, instructions(item, statement, project, prefs, wt, paths, ensured, found, identity))
   dev = crew.spawn in wt, prompt "Read {where} and follow it exactly; it is your whole task.", name item.id, harness p.harness, model p.model, effort effort, backend p.backend, command p.command
   return { id: item.id, calls: calls, blocked: none, handle: dev, worktree: wt.path, branch: wt.branch, base: wt.base, brief: where, harness: p.harness, model: p.model, effort: effort, profile: p.name, backend: p.backend, skills: ensured.selected, skill_selection: ensured.selection_status, skill_receipt: ensured.key, skill_search: { scanned: found.scanned, kept: found.kept, filtered_out: found.filtered_out, always: found.always, scouted: found.scouted, fallback: found.fallback, fallback_reason: found.fallback_reason } }
