@@ -13,7 +13,7 @@ needs fleet: tool:
   skill_search(id, scout, request, k) -> record
 
 task shortlist(item, statement, harness, plan, scouts, policy):
-  terms = ""
+  terms = none
   if plan.scout:
     models = [s.model for s in scouts if s.harness == harness]
     if len(models) == 0:

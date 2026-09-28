@@ -83,7 +83,7 @@ def test_large_catalog_scouts_once_searches_once_and_judges_one_shortlist(make_h
 
     generations = [e for e in events if e.get("event") == "generate"]
     scouts = [e for e in generations if e["capability"] == "scout"]
-    assert len(scouts) == 1 and scouts[0]["using"]["model"] == "claude-haiku-4-5-20251001" and scouts[0]["output"] == LARGE_SCOUT
+    assert len(scouts) == 1 and scouts[0]["using"]["model"] == "claude-haiku-4-5-20251001" and scouts[0]["output"] == LARGE_SCOUT + "\n"
     [scout_call] = harness_calls()
     assert scout_call["cli"] == "claude" and scout_call["argv"][scout_call["argv"].index("--model") + 1] == "claude-haiku-4-5-20251001"
 
@@ -140,7 +140,9 @@ def test_codex_items_scout_with_luna(make_host, harness, tmp_path: Path) -> None
 
 @pytest.mark.parametrize(("harness_name", "reply", "reason"), [
     ("claude", "Here are some terms: tokio, cargo", "scout output rejected: expected 3 lines, got 1"),
-    ("aider", None, "the scout wrote nothing"),
+    ("claude", "kind: rust\n\nterms: tokio\n\nideal_skill: Fix Rust dependencies.", "scout output rejected: expected 3 lines, got 5"),
+    ("aider", None, "no scout model for this harness"),
+    ("claude", None, "no scout model for this harness"),
 ])
 def test_scout_fallback_is_recorded_and_dispatch_continues(make_host, harness, tmp_path: Path, harness_name: str, reply: str | None, reason: str) -> None:
     """A reply outside the three-line schema, or a harness with no scout model,
@@ -148,7 +150,10 @@ def test_scout_fallback_is_recorded_and_dispatch_continues(make_host, harness, t
     script, harness_calls = harness
     if reply is not None:
         script(("Upgrade tokio", reply))
-    host = make_host(rules=[], yolo=False, config={"skill_catalog": write_catalog(tmp_path / "catalog", catalog_texts())})
+    config = {"skill_catalog": write_catalog(tmp_path / "catalog", catalog_texts())}
+    if harness_name == "claude" and reply is None:
+        config["scout"] = {"models": {"claude": None}}
+    host = make_host(rules=[], yolo=False, config=config)
     host.registry.set_profiles([{"name": "default", "rule": "any work", "harness": harness_name}])
     host.submit(LARGE_TASK)
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
@@ -157,6 +162,7 @@ def test_scout_fallback_is_recorded_and_dispatch_continues(make_host, harness, t
     [search] = calls(events, "skill_search")
     assert search["result"]["fallback"] is True and search["result"]["fallback_reason"] == reason
     assert search["result"]["kept"] == 32 and worker["skill_search"]["fallback"] is True
+    assert search["result"]["scouted"] is (reply is not None)
     assert len(harness_calls()) == (1 if reply is not None else 0)
     if reply is None:
         assert any(e.get("event") == "log" and "no scout model" in json.dumps(e) for e in events)
@@ -167,7 +173,7 @@ def test_larger_shortlist_shrinks_the_batch_instead_of_pausing(make_host, harnes
     so a 15-item wake starts 12 (48 calls) and leaves 3 for the next wake."""
     script, _ = harness
     script(("", "kind: docs\nterms: readme, typo\nideal_skill: Use when fixing README typos."))
-    catalog = write_catalog(tmp_path / "catalog", dict(list(distractors().items())[:200]))
+    catalog = write_catalog(tmp_path / "catalog", {f"docs-{index:03d}": "Use when fixing README typos in documentation." for index in range(200)})
     host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog, "policy": {**DEFAULT_CONFIG["policy"], "skill_shortlist": 128}})
     for index in range(15):
         host.backlog.add({"text": f"Fix typo number {index} in the README", "title": f"typo {index}", "project": "proj", "kind": "ship", "effort": "low", "profile": "default"})
@@ -216,12 +222,77 @@ def test_an_item_whose_always_list_cannot_fit_is_held_with_the_count_and_ids(mak
 
 
 def test_overlong_description_is_rejected_at_catalog_validation(make_host, tmp_path: Path) -> None:
-    catalog = [write_skill(tmp_path / "catalog", "verbose", "x" * 1025)]
-    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog})
-    host.submit("Fix the README typo")
-    host.tick()
-    assert any("skill verbose: description exceeds 1024 characters" in d["question"] for d in host.decisions.open())
-    assert not host.workers.all(live_only=False)
+    src = Path(__file__).resolve().parents[1] / "src"
+    home = tmp_path / "cli-home"
+    env = {**os.environ, "PYTHONPATH": str(src)}
+
+    def set_catalog(catalog: list[dict[str, Any]]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-m", "cos", "--home", str(home), "config", "set", "skill_catalog", json.dumps(catalog)], env=env, capture_output=True, text=True, check=False)
+
+    valid = [write_skill(tmp_path / "catalog", "valid", "A valid Skill.")]
+    assert set_catalog(valid).returncode == 0
+    before = (home / "config.json").read_bytes()
+    invalid = [write_skill(tmp_path / "catalog", "verbose", "x" * 1025)]
+    rejected = set_catalog(invalid)
+    assert rejected.returncode != 0 and "skill verbose: description exceeds 1024 characters" in rejected.stderr
+    assert (home / "config.json").read_bytes() == before
+
+
+def test_sparse_large_shortlist_uses_recorded_cardinality(make_host, harness, tmp_path: Path) -> None:
+    script, _ = harness
+    script(("", "kind: needle repair\nterms: needle\nideal_skill: Fix a needle failure."))
+    texts = {f"archive-{index:04d}": "Use for astronomy observations." for index in range(990)}
+    texts.update({f"needle-{index}": "Use when repairing a needle failure." for index in range(10)})
+    host = make_host(rules=fit_ids(["needle-0"]), yolo=False, config={"skill_catalog": write_catalog(tmp_path / "catalog", texts), "policy": {**DEFAULT_CONFIG["policy"], "skill_shortlist": 512}})
+    host.submit("Repair the needle failure")
+    run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
+    [worker] = host.workers.all()
+    events = dispatch_events(worker)
+    [found] = calls(events, "skill_search")
+    assert found["result"]["kept"] == 10 and found["result"]["scanned"] == 1000
+    assert len([e for e in events if e.get("event") == "generate" and e["capability"] == "scout"]) == 1
+    assert len(fit_requests(events)) == 1 and worker["handle"]
+    assert not [d for d in host.decisions.open() if d["key"].endswith(":skills")]
+
+
+def test_long_dependency_chain_installs_through_recorded_dispatch(make_host, harness, tmp_path: Path) -> None:
+    script, _ = harness
+    script(("", "kind: needle repair\nterms: needle\nideal_skill: Repair the needle failure."))
+    catalog = [write_skill(tmp_path / "catalog", f"step-{index:04d}", "Use for a generic chain task." if index < 1049 else "Use when repairing the needle failure.") for index in range(1050)]
+    for index in range(1, len(catalog)):
+        catalog[index]["dependencies"] = [catalog[index - 1]["id"]]
+    host = make_host(rules=fit_ids([catalog[-1]["id"]]), yolo=False, config={"skill_catalog": catalog})
+    host.submit("Repair the needle failure")
+    run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
+    [worker] = host.workers.all()
+    assert len(worker["skills"]) == len(catalog)
+    assert worker["skills"][0]["id"] == catalog[0]["id"]
+    assert worker["skills"][-1]["id"] == catalog[-1]["id"]
+
+
+def test_retry_brief_uses_receipted_uncertainty_after_shortlist_changes(make_host, harness, tmp_path: Path) -> None:
+    script, _ = harness
+    script(("", "kind: docs\nterms: markdown\nideal_skill: Write Markdown docs."))
+    catalog = [write_skill(tmp_path / "catalog", "docs", "Write Markdown docs."), write_skill(tmp_path / "catalog", "tests", "Fix pytest tests.")]
+    config = {"skill_catalog": catalog, "policy": {**DEFAULT_CONFIG["policy"], "skill_shortlist": 1}}
+    uncertain_fit = [{"match": {"id": r"^fits\["}, "answer": {"noul": 0.5}}]
+    host = make_host(rules=uncertain_fit, yolo=False, config=config)
+    host.submit("Handle this item")
+    run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
+    [worker] = host.workers.all()
+    assert "docs: Write Markdown docs." in Path(worker["brief"]).read_text()
+    host.workers.update(worker["id"], handle=None)
+    host.backlog.update(worker["id"], status="in_flight")
+    host.close()
+    script(("", "kind: testing\nterms: pytest\nideal_skill: Fix pytest tests."))
+    restarted = make_host(rules=uncertain_fit, yolo=False, config=config, home_dir=tmp_path / "home", register=False)
+    restarted.recover()
+    restarted.wakes.push("dispatch", "backlog", ["recovered"])
+    run_until(restarted, lambda: bool(restarted.workers.get(worker["id"]).get("handle")))
+    recovered = restarted.workers.get(worker["id"])
+    [found] = calls(dispatch_events(recovered), "skill_search")
+    assert found["result"]["ids"] == ["tests"]
+    assert "docs: Write Markdown docs." in Path(recovered["brief"]).read_text()
 
 
 def test_cos_tick_through_the_cli_selects_from_a_large_catalog(harness, tmp_path: Path, project: Path, jevscript_bin: str) -> None:

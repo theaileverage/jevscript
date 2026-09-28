@@ -108,10 +108,11 @@ class Fleet:
         atomic_write(path, text)
         return str(path)
 
-    def v_skill_search(self, task_id: str, scout: str, request: str, k: int) -> dict[str, Any]:
+    def v_skill_search(self, task_id: str, scout: str | None, request: str, k: int) -> dict[str, Any]:
         """The recorded shortlist for one item; its playbook comes from the backlog, not the program."""
         try:
-            return {**self.host.skills.search(self.host.backlog.get(task_id), scout, request, k, self.host.policy()), "blocked": None}
+            found = self.host.skills.search(self.host.backlog.get(task_id), scout or "", request, k, self.host.policy(), no_model=scout is None)
+            return {**found, "chunks": -(-found["kept"] // self.host.question_cap()), "blocked": None}
         except (SkillError, OSError) as error:
             return {"blocked": str(error)}
 

@@ -59,7 +59,7 @@ class Scout:
 
 def parse_scout(text: str, max_terms: int) -> Scout:
     """Accept exactly the three-line schema or raise ``ValueError`` naming why."""
-    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    lines = [line.strip() for line in text.splitlines()]
     if len(lines) != 3:
         raise ValueError(f"expected 3 lines, got {len(lines)}")
     fields: dict[str, str] = {}

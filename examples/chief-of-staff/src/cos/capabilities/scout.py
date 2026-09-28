@@ -65,4 +65,4 @@ class HarnessScout:
                 raise AdapterError(f"the {harness} scout did not answer within {self.timeout:.0f}s", retryable=True) from error
             if done.returncode != 0:
                 raise AdapterError(f"the {harness} scout exited {done.returncode}: {done.stderr.strip()[-300:]}", retryable=True)
-            return (out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout).strip()
+            return out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout

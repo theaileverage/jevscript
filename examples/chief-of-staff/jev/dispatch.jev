@@ -34,15 +34,10 @@ When checks are green, append: done [at=<epoch>]: PR <full https url> checks gre
   return """Delivery: pull request. Commit on branch {wt.branch}, push it, and open a pull request.
 When it is open, append: done [at=<epoch>]: PR <full https url>"""
 
-# The model calls one `start` is planned to spend, or 0 when it will be held
-# before any: the host's plan counts the writer, the scout and the Jev chunks
-# of the shortlist, and 8 is `start`'s own budget.
-def planned_calls(plan):
-  if plan.calls > 8:
-    return 0
-  return plan.calls
+def reserved_calls(plan):
+  return min([plan.calls, 8])
 
-def instructions(item, statement, project, prefs, wt, paths, choice, ensured, found):
+def instructions(item, statement, project, prefs, wt, paths, ensured, found):
   notes = ""
   if item.notes != none and item.notes != "":
     notes = """
@@ -53,11 +48,11 @@ def instructions(item, statement, project, prefs, wt, paths, choice, ensured, fo
   if item.thread_id != none:
     conversation = "\nConversation thread: {item.thread_id}"
   skill_lines = ["- {skill.id}: {skill.path} (SKILL.md SHA-256 {skill.sha256}; tree SHA-256 {skill.tree_sha256}) — {skill.description}" for skill in ensured.selected]
-  uncertain_lines = ["- {skill.id}: {skill.description}" for skill in found.skills if routing.has(choice.uncertain, skill.id)]
+  uncertain_lines = ["- {skill.id}: {skill.description}" for skill in ensured.uncertain_skills]
   skill_note = "No approved task Skills matched this task."
   if len(skill_lines) > 0:
     skill_note = "Load and use every applicable Skill before work starts:\n{join(skill_lines, "\n")}\nThese copies are host-owned. Do not stage or commit .agents/skills/<id> or .claude/skills/<id>."
-  if choice.status == "uncertain":
+  if ensured.selection_status == "uncertain":
     skill_note = "{skill_note}\n\nSelection is uncertain for these approved Skills:\n{join(uncertain_lines, "\n")}\nAsk the owner to resolve them before work on the affected part of the task."
   if found.filtered_out > 0:
     skill_note = "{skill_note}\n\nA text search judged {found.kept} of {found.scanned} approved Skills; {found.filtered_out} were left out. If the task needs a Skill that is not listed, say so in a status line."
@@ -88,23 +83,27 @@ Shape: {item.kind}. Effort: {item.effort}.{conversation}{notes}
 """
 
 task start(item, project, profiles, prefs, paths, plan, scouts, policy) budget calls 8:
-  if planned_calls(plan) == 0:
-    return { id: item.id, blocked: "Skill selection would need {plan.calls} model calls, over the 8 one dispatch allows: {plan.shortlist} Skills to judge, {len(plan.always)} of them always included ({join(plan.always, ", ")}). Lower policy.skill_shortlist, unpin Skills, or raise the budget." }
+  if plan.always_calls > 8:
+    return { id: item.id, calls: 0, blocked: "Skill selection would need {plan.always_calls} model calls, over the 8 one dispatch allows: {len(plan.always)} Skills to judge, {len(plan.always)} of them always included ({join(plan.always, ", ")}). Lower policy.skill_shortlist, unpin Skills, or raise the budget." }
   p = routing.profile_named(profiles, item.profile)
   effort = item.effort
   if p.effort != none and p.effort != "":
     effort = p.effort
   statement = writer.write "Restate this request as a short, concrete task statement for a coding agent. Keep every requirement; add none." using item.text
+  spent = 1
+  if plan.scout and len([s for s in scouts if s.harness == p.harness]) > 0:
+    spent = 2
   found = skills.shortlist(item, statement, p.harness, plan, scouts, policy)
   if found.blocked != none:
-    return { id: item.id, blocked: found.blocked }
+    return { id: item.id, calls: spent, blocked: found.blocked }
+  calls = spent + found.chunks
+  if calls > 8:
+    return { id: item.id, calls: spent, blocked: "Skill selection would need {calls} model calls, over the 8 one dispatch allows: {found.kept} Skills to judge, {len(found.always)} of them always included ({join(found.always, ", ")}). Lower policy.skill_shortlist, unpin Skills, or raise the budget." }
   choice = skills.select(statement, item.text, item.notes, found.skills, policy.skill_fit, policy.skill_uncertain)
   wt = fleet.worktree(item.id, project.name)
   ensured = fleet.ensure_skills(item.id, wt.path, p.harness, choice.ids, choice.status, choice.uncertain)
   if ensured.blocked != none:
-    return { id: item.id, blocked: ensured.blocked }
-  choice.status = ensured.selection_status
-  choice.uncertain = ensured.uncertain
-  where = fleet.write_brief(item.id, instructions(item, statement, project, prefs, wt, paths, choice, ensured, found))
+    return { id: item.id, calls: calls, blocked: ensured.blocked }
+  where = fleet.write_brief(item.id, instructions(item, statement, project, prefs, wt, paths, ensured, found))
   dev = crew.spawn in wt, prompt "Read {where} and follow it exactly; it is your whole task.", name item.id, harness p.harness, model p.model, effort effort, backend p.backend, command p.command
-  return { id: item.id, blocked: none, handle: dev, worktree: wt.path, branch: wt.branch, base: wt.base, brief: where, harness: p.harness, model: p.model, effort: effort, profile: p.name, backend: p.backend, skills: ensured.selected, skill_selection: choice.status, skill_receipt: ensured.key, skill_search: { scanned: found.scanned, kept: found.kept, filtered_out: found.filtered_out, always: found.always, scouted: found.scouted, fallback: found.fallback, fallback_reason: found.fallback_reason } }
+  return { id: item.id, calls: calls, blocked: none, handle: dev, worktree: wt.path, branch: wt.branch, base: wt.base, brief: where, harness: p.harness, model: p.model, effort: effort, profile: p.name, backend: p.backend, skills: ensured.selected, skill_selection: ensured.selection_status, skill_receipt: ensured.key, skill_search: { scanned: found.scanned, kept: found.kept, filtered_out: found.filtered_out, always: found.always, scouted: found.scouted, fallback: found.fallback, fallback_reason: found.fallback_reason } }

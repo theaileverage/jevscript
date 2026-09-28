@@ -177,6 +177,10 @@ class Home:
         return _merge(DEFAULT_CONFIG, read_json(self.config_path, {}))
 
     def set_config(self, dotted: str, value: Any) -> None:
+        if dotted == "skill_catalog":
+            from ..skills import Skills
+
+            Skills(self).catalog(configured=value)
         raw = read_json(self.config_path, {})
         cursor = raw
         parts = dotted.split(".")

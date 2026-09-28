@@ -27,6 +27,7 @@ MAX_KEYWORDS = 32
 MAX_BYTES = 65536
 MAX_FILES = 128
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
+_FROM_HOME = object()
 
 
 class SkillError(ValueError):
@@ -114,9 +115,10 @@ class Skills:
             raise SkillError(f"skill {entry['id']}: pinned source digest changed")
         return source, actual
 
-    def catalog(self) -> list[dict[str, Any]]:
+    def catalog(self, configured: Any = _FROM_HOME) -> list[dict[str, Any]]:
         """Validate the whole configured catalog and re-read every pinned byte."""
-        configured = self.home.config.get("skill_catalog", [])
+        if configured is _FROM_HOME:
+            configured = self.home.config.get("skill_catalog", [])
         if not isinstance(configured, list):
             raise SkillError("skill_catalog must be a list")
         entries: list[dict[str, Any]] = []
@@ -158,7 +160,8 @@ class Skills:
         if any(dep not in ids for entry in entries for dep in entry["dependencies"]):
             raise SkillError("skill_catalog has a dependency outside the approved catalog")
         self._closure([entry["id"] for entry in entries], entries)
-        self._verified = (json.dumps(configured, sort_keys=True), entries)
+        if self.home.config.get("skill_catalog", []) == configured:
+            self._verified = (json.dumps(configured, sort_keys=True), entries)
         return entries
 
     def _current(self) -> list[dict[str, Any]]:
@@ -208,10 +211,11 @@ class Skills:
         k, _ = self._limits(policy)
         catalog, always, scout = self._scope(item, k)
         judged = len(always) if len(always) >= k else min(len(catalog), k)
-        return {"always": always, "catalog": len(catalog), "shortlist": judged, "scout": scout,
-                "calls": 1 + int(scout) + -(-judged // questions)}
+        return {"always": always, "scout": scout,
+                "calls": 1 + int(scout) + -(-judged // questions),
+                "always_calls": 1 + -(-len(always) // questions)}
 
-    def search(self, item: dict[str, Any], scout_text: str, request: str, k: int, policy: dict[str, Any]) -> dict[str, Any]:
+    def search(self, item: dict[str, Any], scout_text: str, request: str, k: int, policy: dict[str, Any], *, no_model: bool = False) -> dict[str, Any]:
         """Rank the catalog for one item and return the shortlist Jev will judge.
 
         The scout's text is model-written, so it is parsed against a fixed
@@ -223,7 +227,9 @@ class Skills:
             raise SkillError(f"skill search asked for {k} Skills; policy.skill_shortlist is {limit}")
         catalog, always, needed = self._scope(item, limit)
         query, terms, kind, fallback = request, [], None, None
-        if needed and not (scout_text or "").strip():
+        if needed and no_model:
+            fallback = "no scout model for this harness"
+        elif needed and not (scout_text or "").strip():
             fallback = "the scout wrote nothing"
         elif needed:
             try:
@@ -246,7 +252,7 @@ class Skills:
             "scanned": len(catalog),
             "kept": len(ids),
             "filtered_out": len(catalog) - len(ids),
-            "scouted": needed,
+            "scouted": needed and not no_model,
             "kind": kind,
             "terms": terms,
             "fallback": fallback is not None,
@@ -260,24 +266,26 @@ class Skills:
         visited: set[str] = set()
         visiting: set[str] = set()
 
-        def visit(skill_id: str) -> None:
-            if skill_id not in by_id:
-                raise SkillError(f"unknown selected skill id: {skill_id!r}")
-            if skill_id in visiting:
-                raise SkillError(f"skill_catalog dependency cycle at {skill_id}")
-            if skill_id in visited:
-                return
-            visiting.add(skill_id)
-            for dep in by_id[skill_id]["dependencies"]:
-                visit(dep)
-            visiting.remove(skill_id)
-            visited.add(skill_id)
-            ordered.append(by_id[skill_id])
-
         for skill_id in ids:
             if not isinstance(skill_id, str):
                 raise SkillError("selected skill ids must be strings")
-            visit(skill_id)
+            stack = [(skill_id, False)]
+            while stack:
+                current, complete = stack.pop()
+                if complete:
+                    visiting.remove(current)
+                    visited.add(current)
+                    ordered.append(by_id[current])
+                    continue
+                if current not in by_id:
+                    raise SkillError(f"unknown selected skill id: {current!r}")
+                if current in visiting:
+                    raise SkillError(f"skill_catalog dependency cycle at {current}")
+                if current in visited:
+                    continue
+                visiting.add(current)
+                stack.append((current, True))
+                stack.extend((dep, False) for dep in reversed(by_id[current]["dependencies"]))
         return ordered
 
     @staticmethod
@@ -325,6 +333,9 @@ class Skills:
             uncertain = previous["uncertain"]
         catalog = self._current()
         selected = self._closure(ids, catalog)
+        by_id = {entry["id"]: entry for entry in catalog}
+        if any(skill_id not in by_id for skill_id in uncertain):
+            raise SkillError("unknown uncertain skill id")
         if harness not in ("codex", "claude", "claude-code") and selected:
             raise SkillError(f"no project Skill location is approved for harness {harness!r}")
         key_input = [task_id, str(root), harness, "project", status, uncertain, [[e["id"], e["tree_sha256"]] for e in selected]]
@@ -337,6 +348,7 @@ class Skills:
             "harness": harness,
             "selection_status": status,
             "uncertain": uncertain,
+            "uncertain_skills": [{"id": skill_id, "description": by_id[skill_id]["description"]} for skill_id in uncertain],
             "status": "pending",
             "selected": [],
             "owned": list(previous.get("owned", [])) if previous else [],

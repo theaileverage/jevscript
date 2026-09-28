@@ -19,7 +19,7 @@ import pytest
 
 from conftest import git, run_until
 
-from cos.state.home import read_jsonl
+from cos.state.home import read_jsonl, write_json
 from cos.skills import SkillError
 
 
@@ -242,7 +242,8 @@ def test_installed_cos_wheel_selects_and_hands_off_through_cli(tmp_path: Path, p
 
 def test_duplicate_approval_or_unpinned_source_never_reaches_spawn(make_host, tmp_path: Path) -> None:
     catalog = approved_skills(tmp_path, ["docs"])
-    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog + catalog})
+    host = make_host(rules=fits(0), yolo=False, config={"skill_catalog": catalog})
+    write_json(host.home.config_path, {"skill_catalog": catalog + catalog})
     host.submit("Update docs")
     host.tick()
     assert any("duplicate skill id" in decision["question"] for decision in host.decisions.open())
