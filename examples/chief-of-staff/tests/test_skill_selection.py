@@ -399,6 +399,32 @@ def test_overlong_description_is_rejected_at_catalog_validation(make_host, tmp_p
     assert (home / "config.json").read_bytes() == before
 
 
+def test_skill_terms_validation_at_config_acceptance(tmp_path: Path) -> None:
+    src = Path(__file__).resolve().parents[1] / "src"
+    home = tmp_path / "terms-home"
+    env = {**os.environ, "PYTHONPATH": str(src)}
+
+    def cos(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-m", "cos", "--home", str(home), *args], env=env, capture_output=True, text=True, check=False)
+
+    assert cos("init").returncode == 0
+    for value in (1, 64):
+        accepted = cos("config", "set", "policy.skill_terms", json.dumps(value))
+        assert accepted.returncode == 0 and accepted.stderr == ""
+        assert json.loads(cos("config", "show").stdout)["policy"]["skill_terms"] == value
+        before = (home / "config.json").read_bytes()
+        for invalid in (0, -1, 65, True, 1.5, "12", None, [], {}):
+            rejected = cos("config", "set", "policy.skill_terms", json.dumps(invalid))
+            assert rejected.returncode != 0
+            assert "policy.skill_terms must be a whole number from 1 to 64" in rejected.stderr
+            assert (home / "config.json").read_bytes() == before
+
+    rejected_policy = cos("config", "set", "policy", json.dumps({**DEFAULT_CONFIG["policy"], "skill_terms": 0}))
+    assert rejected_policy.returncode != 0
+    assert "policy.skill_terms must be a whole number from 1 to 64" in rejected_policy.stderr
+    assert (home / "config.json").read_bytes() == before
+
+
 def test_pinned_count_warns_at_config_acceptance_without_dispatch_repeat(make_host, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     src = Path(__file__).resolve().parents[1] / "src"
     home = tmp_path / "warning-home"

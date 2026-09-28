@@ -213,7 +213,7 @@ class Home:
         candidate = _merge(DEFAULT_CONFIG, raw)
         _validate_scout_config(candidate)
         warnings: list[str] = []
-        if dotted in {"skill_catalog", "policy", "policy.skill_shortlist"}:
+        if dotted in {"skill_catalog", "policy", "policy.skill_shortlist", "policy.skill_terms"}:
             from ..skills import Skills
 
             skills = Skills(self)
