@@ -101,6 +101,7 @@ the language, and only the implementation lead edits `spec/`.
 | [Language specification](spec/jevscript-language-specification.md) | Read the rules the compiler and runtime follow. |
 | [Conformance evidence](docs/conformance.md) | See which tests prove each acceptance item of spec section 15. |
 | [Package release guide](docs/package-release.md) | Build, verify, and publish the npm and PyPI packages. |
+| [Runbooks](runbooks/README.md) | Run development, packaging, release, publication, and incident steps as named Runme cells. |
 
 The [examples](examples) directory has a coding harness (`fix_issue.jev`), a
 judgment-only program (`inbox_triage.jev`), and a review machine
@@ -120,7 +121,8 @@ attaches the npm tarball, the five platform wheels, and `SHA256SUMS`. PyPI
 serves `jevscript` 0.1.2, so download the 0.1.3 wheels from that release
 page, not from PyPI. The
 [package release guide](docs/package-release.md#where-a-release-appears)
-describes both workflows.
+describes both workflows, and the [release runbooks](runbooks/README.md) run
+their steps as named Runme cells.
 
 ## Build from source
 
@@ -149,6 +151,7 @@ skills/      the coding-agent Skill that `jevscript setup` installs
 examples/    example programs and the Chief of Staff host
 cookbooks/   runnable cookbook translations
 docs/        guides and references
+runbooks/    Runme runbooks for development, release, and publication
 ```
 
 ## License

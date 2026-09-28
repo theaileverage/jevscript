@@ -1,6 +1,6 @@
 # Release package feature map
 
-What a user gets from `npm install jevscript` or `pip install jevscript`, and
+What a user gets from `npm install @theaileverage/jevscript` or `pip install jevscript`, and
 where each part is proven. Drive them with `../scripts/package-smoke.sh`.
 
 | Feature | File | Proven locally | Proven in CI |
