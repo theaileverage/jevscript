@@ -214,7 +214,7 @@ covered by offline tests. Vendor CLI interactions require separate live checks.
 | 12 | Away and quiet modes | Home mode, Jevscript escalation policy and return digest | Implemented |
 | 13 | Preferences and learnings | `Memory`, task ledger, automatic versioned playbooks | Implemented |
 | 14 | Scoped second mates | `Mates`, child home and scoped route | Implemented |
-| 15 | Bearings fleet digest | `bearings.jev`, `Bearings` renderer | Implemented |
+| 15 | Bearings fleet digest | Read-only host formatter in `bearings.py` | Implemented |
 
 Public-mention relay, mail and visual boards are outside this showcase.
 The TypeScript variant and TypeScript agent adapters are separate work.

@@ -139,10 +139,12 @@ class Commands:
         return f"Could not place '{title}': {d.get('reason') or 'it stayed unclear'}"
 
     def status(self) -> Reply:
+        from .bearings import headline
+
         workers = [w for w in _workers(self.home)]
         queued = [i for i in self.backlog.items() if i["status"] == "queued"]
         open_decisions = self.decisions.open()
-        text = f"{len(workers)} under way, {len(queued)} queued, {len(open_decisions)} waiting on you."
+        text = headline(len(workers), len(queued), len(open_decisions))
         return Reply(text, {"workers": [w["id"] for w in workers], "queued": [i["id"] for i in queued], "decisions": [d["key"] for d in open_decisions]})
 
     def bearings(self) -> Reply:

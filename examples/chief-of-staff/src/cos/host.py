@@ -53,7 +53,7 @@ WAITING_EVENTS = {"carry_on", "awaiting_review", "checks_pending", "rering", "st
 
 
 class UnknownProject(ValueError):
-    """Section 6.4a requires a selected project to exist in the trusted registry."""
+    """This example's registry rule requires a selected project to exist."""
 
 
 class Host:
@@ -541,7 +541,9 @@ class Host:
         elif route == "status":
             from .bearings import headline
 
-            self.decisions.notify(headline(self))
+            workers = len(self.workers.all())
+            queued = sum(item["status"] == "queued" for item in self.backlog.items())
+            self.decisions.notify(headline(workers, queued, len(self.decisions.open())))
         elif route == "mate":
             self.mates.forward(d["mate"], {**request, "project": request.get("effective_project") or request.get("project")})
             outcome["mate"] = d["mate"]

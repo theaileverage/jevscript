@@ -5,7 +5,6 @@ program cos
 #
 #   on_wake   a request, a ready backlog, or one worker that needs attention
 #   learn     find repeated work and draft playbooks, or judge a draft's proof
-#   bearings  the fleet digest
 #   reply     a short outcome summary for a command's reply
 #   limits    nothing; the host reads the selected model profile from its recording
 #
@@ -18,7 +17,6 @@ use "./dispatch.jev" as dispatch with crew, writer, scout, fleet
 use "./supervise.jev" as supervise with crew, me, writer, fleet
 use "./escalate.jev" as escalation with me, writer, fleet
 use "./learn.jev" as learn with writer
-use "./bearings.jev" as bearings
 
 in snapshot: record
 out result
@@ -145,9 +143,6 @@ task learn budget calls 24:
   else:
     result = learn.find(snapshot.entries, snapshot.playbooks, snapshot.policy)
   log info "learning pass completed" { phase: snapshot.phase }
-
-task bearings:
-  result = bearings.digest(snapshot.fleet)
 
 task reply budget calls 2:
   result = escalation.summarize(snapshot.facts)

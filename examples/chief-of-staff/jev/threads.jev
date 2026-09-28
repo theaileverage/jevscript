@@ -1,8 +1,8 @@
 program threads
 
-# Section 6.4a: the host supplies only bounded, scoped candidates. Explicit
-# relationships are validated by the host; Jevscript owns their priority and
-# the confidence rule for a semantic continuation.
+# Section 6.4a's `pick among` bounds the candidate list. Scoping and
+# message receipts are this example's host design; Jevscript owns priority
+# and the confidence rule for a semantic continuation.
 def route_message(req, policy):
   if req.relation.kind == "valid":
     return { route: "continue", thread_id: req.relation.thread_id, task_id: req.relation.task_id, reason: req.relation.reason }

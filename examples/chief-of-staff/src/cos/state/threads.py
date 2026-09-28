@@ -21,7 +21,7 @@ RECENT_LIMIT = 8
 
 
 class ReceiptCollision(ValueError):
-    """Section 6.4a rejects a message ID already owned in its selected scope."""
+    """This example rejects a message ID already owned in its selected scope."""
 
 
 def _id(value: str | None, name: str) -> str | None:
@@ -33,7 +33,7 @@ def _id(value: str | None, name: str) -> str | None:
 
 
 class Threads:
-    """Section 6.4a candidates backed by host-owned durable message correlation."""
+    """Host-scoped candidates and durable message correlation for this example."""
 
     def __init__(self, home: Home) -> None:
         self.home = home
