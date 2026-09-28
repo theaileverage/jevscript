@@ -86,7 +86,7 @@ The [GitHub OpenJev server's local setup](https://github.com/razorback16/openjev
 ```sh
 git clone https://github.com/razorback16/openjev.git
 cd openjev
-docker compose up -d
+docker compose up -d openjev
 curl http://127.0.0.1:8080/v1/models
 ```
 
