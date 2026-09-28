@@ -3,8 +3,8 @@
 https://jevscript.sh
 
 Jevscript is a small language for agent control loops. A program asks typed
-questions, and [Jev](https://docs.typesafe.ai), TypeSafe's System One model,
-answers them with probabilities. The program owns the loop, the thresholds,
+questions, and by default [Jev](https://docs.typesafe.ai), TypeSafe's System One
+model, answers them with probabilities. The program owns the loop, the thresholds,
 the budgets, and the policy. The host binds terminal agents, people, text
 models, and tools as capabilities at run time, and every run can be recorded
 and replayed with zero model calls.
@@ -29,8 +29,9 @@ judgment triage(message):
 ```
 
 That is four typed answers from one Jev request, with no output parsing.
-Compiling and checking a program is local. Running a judgment calls Jev and
-needs a `TYPESAFE_API_KEY`.
+Compiling and checking a program is local. Running a judgment calls Jev by
+default. Calls to any model need `TYPESAFE_API_KEY`. To use a compatible local
+decision model, see the [custom decision model example](examples/custom-decision-model/README.md).
 
 ## Install
 

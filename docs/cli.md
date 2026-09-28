@@ -11,16 +11,18 @@ each command.
 | --- | --- |
 | `jevscript compile <file.jev>` | Prints the linked IR as JSON on stdout. |
 | `jevscript check <file.jev> [--tools <manifest.json>]` | Prints warnings and errors without the IR. With `--tools`, compares every referenced tool verb against a tool adapter manifest and reports a missing verb as `verb_missing: <cap>.<verb>`. |
-| `jevscript judge <file.jev> <judgment> --state <json>` | Runs one judgment against the given state and prints the answers. Calls Jev and reads `TYPESAFE_API_KEY`. |
-| `jevscript eval <file.jev> <judgment> --cases <cases.jsonl>` | Runs a judgment over `{ state, expected }` rows and reports accuracy. Calls Jev and reads `TYPESAFE_API_KEY`. |
+| `jevscript judge <file.jev> <judgment> --state <json>` | Runs one judgment against the given state and prints the answers. Calls the selected profile's endpoint and reads `TYPESAFE_API_KEY`. |
+| `jevscript eval <file.jev> <judgment> --cases <cases.jsonl>` | Runs a judgment over `{ state, expected }` rows and reports accuracy. Calls the selected profile's endpoint and reads `TYPESAFE_API_KEY`. |
 | `jevscript run <file.jev>` | Runs the task `main` and answers its pauses on the terminal. Prints each pause as JSON on stdout and each `log` line on stderr. |
 | `jevscript replay <recording.jsonl>` | Replays a recording with no model or adapter calls and prints the recorded pauses and `log` lines. |
 | `jevscript serve` | Runs the JSON-RPC 2.0 server on stdio that the SDKs drive. |
 | `jevscript lsp` | Runs the language server on stdio. See [editor support](editors.md). |
 | `jevscript setup --agent <agent>` | Installs the bundled coding-agent Skill. |
 
-`judge` and `eval` also take `--model <id>`, which selects the Jev model and
-its profile, and `--profiles <file>`.
+`judge` and `eval` also take `--model <id>` to select a model profile and
+`--profiles <file>` to add or override profiles. The selected profile supplies the endpoint.
+See the [custom decision model example](../examples/custom-decision-model/README.md)
+for local servers.
 
 ## Diagnostics and exit codes
 
@@ -89,7 +91,7 @@ not create or that was changed since.
 
 | Variable | What it does |
 | --- | --- |
-| `TYPESAFE_API_KEY` | The bearer token for Jev. Commands and runs that call Jev need it. |
+| `TYPESAFE_API_KEY` | The bearer token sent to the selected model endpoint. Commands and runs that call a model need it. |
 | `JEVSCRIPT_PROFILES` | A JSON file of model profiles, layered over the bundled ones. Token limits, request caps, the tokenizer, and prices live in profiles. |
 | `JEVSCRIPT_PATH` | Colon-separated module search roots for `use` paths that are not relative. |
 | `JEVSCRIPT_BIN` | The runtime binary the SDKs start instead of the packaged one. |
