@@ -123,6 +123,38 @@ def test_replay_serves_the_recorded_shortlist_without_scout_or_search(make_host,
     assert [s["id"] for s in started["skills"]] == [s["id"] for s in worker["skills"]] and set(LARGE_RELEVANT) <= set(recorded["ids"])
 
 
+@pytest.mark.parametrize(("failure", "reason", "attempts"), [
+    ("missing", "the scout for harness 'claude' needs `claude` on PATH", 0),
+    ("timeout", "the claude scout did not answer within 0.5s", 1),
+    ("exit", "the claude scout exited 7: failed on purpose", 1),
+])
+def test_scout_process_failure_uses_recorded_request_fallback(make_host, harness, tmp_path: Path, jevscript_bin: str, failure: str, reason: str, attempts: int) -> None:
+    _, harness_calls = harness
+    if failure == "missing":
+        (tmp_path / "bin" / "claude").unlink()
+    else:
+        rule = {"match": "", "sleep": 1} if failure == "timeout" else {"match": "", "exit": 7, "stderr": "failed on purpose"}
+        Path(os.environ["COS_FAKE_HARNESS_RULES"]).write_text(json.dumps([rule]))
+    catalog = write_catalog(tmp_path / "catalog", {f"docs-{index:03d}": "Use when fixing README documentation." for index in range(40)})
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog, "scout": {"timeout": 0.5}})
+    host.submit("Fix the README documentation")
+    run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
+    [worker] = host.workers.all()
+    events = dispatch_events(worker)
+    [found] = calls(events, "skill_search")
+    assert found["result"]["fallback"] is True and found["result"]["fallback_reason"] == reason
+    assert found["result"]["scouted"] is True and found["result"]["kept"] == 32
+    assert worker["skill_search"]["fallback_reason"] == reason and worker["handle"]
+    assert len(harness_calls()) == attempts
+    host.close()
+    shutil.rmtree(tmp_path / "catalog")
+    replay = subprocess.run([jevscript_bin, "replay", worker["dispatch_recording"]], capture_output=True, text=True, check=False)
+    assert replay.returncode == 0, replay.stderr
+    assert len(harness_calls()) == attempts
+    [started] = json.loads(replay.stdout.strip().splitlines()[-1])["outputs"]["result"]["started"]
+    assert started["skill_search"] == worker["skill_search"] and started["calls"] == 3
+
+
 def test_codex_items_scout_with_luna(make_host, harness, tmp_path: Path) -> None:
     script, harness_calls = harness
     script(("Upgrade tokio", LARGE_SCOUT))
@@ -216,6 +248,34 @@ def test_larger_shortlist_shrinks_the_batch_instead_of_pausing(make_host, harnes
     assert [r["problem"] for r in episodes] == [None, None] and all(r["calls"] <= 48 for r in episodes)
     assert not [d for d in host.decisions.open() if "budget" in d["question"]]
     assert len([w for w in host.workers.all(live_only=False) if w.get("handle")]) == 15
+
+
+@pytest.mark.parametrize(("mixed", "first_count", "first_calls", "second_count"), [
+    (False, 15, 45, 0),
+    (True, 14, 48, 1),
+])
+def test_dispatch_plan_charges_scout_only_for_enabled_item_harness(make_host, harness, tmp_path: Path, mixed: bool, first_count: int, first_calls: int, second_count: int) -> None:
+    script, harness_calls = harness
+    script(("", "kind: docs\nterms: readme, typo\nideal_skill: Use when fixing README typos."))
+    catalog = write_catalog(tmp_path / "catalog", {f"docs-{index:03d}": "Use when fixing README typos in documentation." for index in range(200)})
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog, "scout": {"models": {"claude": None}}, "policy": {**DEFAULT_CONFIG["policy"], "skill_shortlist": 128}})
+    if mixed:
+        host.registry.set_profiles([
+            {"name": "default", "rule": "Claude work", "harness": "claude"},
+            {"name": "codex", "rule": "Codex work", "harness": "codex"},
+        ])
+    for index in range(15):
+        host.backlog.add({"text": f"Fix typo number {index} in the README", "title": f"typo {index}", "project": "proj", "kind": "ship", "effort": "low", "profile": "codex" if mixed and index >= 8 else "default"})
+    host.wakes.push("dispatch", "backlog", ["test"])
+    handled = host.tick()["handled"]
+    assert len(handled[0]["result"]["started"]) == first_count
+    assert handled[0]["result"]["planned_calls"] == first_calls
+    assert handled[0]["result"]["more_ready"] is (second_count > 0)
+    if second_count:
+        assert len(handled[1]["result"]["started"]) == second_count
+    assert len([w for w in host.workers.all(live_only=False) if w.get("handle")]) == 15
+    assert len(harness_calls()) == (7 if mixed else 0)
+    assert not [d for d in host.decisions.open() if "budget" in d["question"]]
 
 
 def test_pinned_and_playbook_skills_bypass_the_filter(make_host, harness, tmp_path: Path) -> None:

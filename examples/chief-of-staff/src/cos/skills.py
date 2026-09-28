@@ -202,7 +202,7 @@ class Skills:
             return [f"{len(pinned)} pinned Skills exceed policy.skill_shortlist ({k}); every dispatch judges all of them"]
         return []
 
-    def plan(self, item: dict[str, Any], policy: dict[str, Any], questions: int) -> dict[str, Any]:
+    def plan(self, item: dict[str, Any], policy: dict[str, Any], questions: int, scout_enabled: bool) -> dict[str, Any]:
         """Nominal model calls for one dispatch: writer, scout if the filter drops anything, Jev chunks.
 
         Static arithmetic under the selected profile's question cap; a retry or
@@ -212,10 +212,10 @@ class Skills:
         catalog, always, scout = self._scope(item, k)
         judged = len(always) if len(always) >= k else min(len(catalog), k)
         return {"always": always, "scout": scout,
-                "calls": 1 + int(scout) + -(-judged // questions),
+                "calls": 1 + int(scout and scout_enabled) + -(-judged // questions),
                 "always_calls": 1 + -(-len(always) // questions)}
 
-    def search(self, item: dict[str, Any], scout_text: str, request: str, k: int, policy: dict[str, Any], *, no_model: bool = False) -> dict[str, Any]:
+    def search(self, item: dict[str, Any], scout_text: str, request: str, k: int, policy: dict[str, Any], *, no_model: bool = False, scout_failure: str | None = None) -> dict[str, Any]:
         """Rank the catalog for one item and return the shortlist Jev will judge.
 
         The scout's text is model-written, so it is parsed against a fixed
@@ -227,7 +227,9 @@ class Skills:
             raise SkillError(f"skill search asked for {k} Skills; policy.skill_shortlist is {limit}")
         catalog, always, needed = self._scope(item, limit)
         query, terms, kind, fallback = request, [], None, None
-        if needed and no_model:
+        if needed and scout_failure is not None:
+            fallback = scout_failure
+        elif needed and no_model:
             fallback = "no scout model for this harness"
         elif needed and not (scout_text or "").strip():
             fallback = "the scout wrote nothing"

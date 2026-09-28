@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 name = Path(sys.argv[0]).name
@@ -17,7 +18,13 @@ prompt = sys.stdin.read()
 with open(os.environ["COS_FAKE_HARNESS_LOG"], "a", encoding="utf-8") as log:
     log.write(json.dumps({"cli": name, "argv": argv, "prompt": prompt}) + "\n")
 rules = json.loads(Path(os.environ["COS_FAKE_HARNESS_RULES"]).read_text())
-text = next((rule["text"] for rule in rules if re.search(rule["match"], prompt)), "")
+rule = next((rule for rule in rules if re.search(rule["match"], prompt)), {})
+if rule.get("sleep"):
+    time.sleep(rule["sleep"])
+if rule.get("exit"):
+    print(rule.get("stderr", ""), file=sys.stderr)
+    sys.exit(rule["exit"])
+text = rule.get("text", "")
 if name == "codex":
     Path(argv[argv.index("-o") + 1]).write_text(text)
 else:

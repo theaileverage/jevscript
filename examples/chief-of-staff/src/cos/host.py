@@ -231,15 +231,22 @@ class Host:
             for warning in self.skills.warnings(policy):
                 self.log(f"skill_catalog: {warning}")
             questions = self.question_cap()
+            lists = self.fleet_lists()
+            profiles = lists["profiles"]
+            plans = {}
+            for item in items:
+                if item["status"] == "queued":
+                    profile = next((p for p in profiles if p["name"] == item["profile"]), profiles[0])
+                    plans[item["id"]] = self.skills.plan(item, policy, questions, profile["harness"] in self.scout.models)
             return {
                 "wake": wake,
                 "backlog": [{**i, "deps": i.get("deps") or [], "notes": i.get("notes") or "", "thread_id": i.get("thread_id")} for i in items if i.get("project") in projects or i["status"] != "queued"],
                 "now": now(),
                 "prefs": self.memory.preferences(),
                 "paths": paths,
-                "skill_plans": {i["id"]: self.skills.plan(i, policy, questions) for i in items if i["status"] == "queued"},
+                "skill_plans": plans,
                 "scouts": [{"harness": harness, "model": model} for harness, model in self.scout.models.items()],
-                **self.fleet_lists(),
+                **lists,
             }
         if kind == "worker":
             worker = self.workers.get(wake["subject"])

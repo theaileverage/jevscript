@@ -26,6 +26,7 @@ from ..state.home import native_scout_models
 from .agent import AdapterError
 
 CONTEXT = ("task", "request", "notes", "max_terms")
+SCOUT_FAILURE = "\x1ecos-scout-failure:"
 
 
 class HarnessScout:
@@ -39,7 +40,7 @@ class HarnessScout:
         binary = "codex" if harness == "codex" else "claude"
         executable = shutil.which(binary)
         if executable is None:
-            raise AdapterError(f"the scout for harness {harness!r} needs `{binary}` on PATH")
+            raise FileNotFoundError(f"the scout for harness {harness!r} needs `{binary}` on PATH")
         if binary == "codex":
             return [executable, "exec", "-m", model, "--ephemeral", "--sandbox", "read-only", "--skip-git-repo-check", "-C", workdir, "-o", str(out), "-"]
         return [executable, "-p", "--model", model, "--output-format", "text", "--no-session-persistence", "--tools", ""]
@@ -59,11 +60,19 @@ class HarnessScout:
         with tempfile.TemporaryDirectory(prefix="cos-scout-") as workdir:
             out = Path(workdir) / "answer.txt"
             try:
+                argv = self._argv(harness, model, workdir, out)
+            except FileNotFoundError as error:
+                return SCOUT_FAILURE + str(error)
+            try:
                 done = subprocess.run(  # noqa: S603 - the person's own signed-in agent CLI
-                    self._argv(harness, model, workdir, out), input=prompt, capture_output=True, text=True, cwd=workdir, env=env, timeout=self.timeout, check=False
+                    argv, input=prompt, capture_output=True, text=True, cwd=workdir, env=env, timeout=self.timeout, check=False
                 )
-            except subprocess.TimeoutExpired as error:
-                raise AdapterError(f"the {harness} scout did not answer within {self.timeout:.0f}s", retryable=True) from error
+            except FileNotFoundError:
+                return SCOUT_FAILURE + f"the {harness} scout executable is unavailable"
+            except subprocess.TimeoutExpired:
+                return SCOUT_FAILURE + f"the {harness} scout did not answer within {self.timeout:g}s"
             if done.returncode != 0:
-                raise AdapterError(f"the {harness} scout exited {done.returncode}: {done.stderr.strip()[-300:]}", retryable=True)
-            return out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout
+                detail = " ".join(done.stderr.split())[-300:]
+                return SCOUT_FAILURE + f"the {harness} scout exited {done.returncode}: {detail}"
+            answer = out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout
+            return "\n" + answer if answer.startswith(SCOUT_FAILURE) else answer
