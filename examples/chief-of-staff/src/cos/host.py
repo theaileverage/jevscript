@@ -227,8 +227,6 @@ class Host:
             projects = {p["name"] for p in self.registry.projects()}
             policy = self.policy()
             self.skills.catalog()  # every pinned byte, once per dispatch wake
-            for warning in self.skills.warnings(policy):
-                self.log(f"skill_catalog: {warning}")
             questions = self.question_cap()
             lists = self.fleet_lists()
             profiles = lists["profiles"]

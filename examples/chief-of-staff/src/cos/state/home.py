@@ -203,19 +203,24 @@ class Home:
         _validate_scout_config(config)
         return config
 
-    def set_config(self, dotted: str, value: Any) -> None:
-        if dotted == "skill_catalog":
-            from ..skills import Skills
-
-            Skills(self).catalog(configured=value)
+    def set_config(self, dotted: str, value: Any) -> list[str]:
         raw = read_json(self.config_path, {})
         cursor = raw
         parts = dotted.split(".")
         for part in parts[:-1]:
             cursor = cursor.setdefault(part, {})
         cursor[parts[-1]] = value
-        _validate_scout_config(_merge(DEFAULT_CONFIG, raw))
+        candidate = _merge(DEFAULT_CONFIG, raw)
+        _validate_scout_config(candidate)
+        warnings: list[str] = []
+        if dotted in {"skill_catalog", "policy", "policy.skill_shortlist"}:
+            from ..skills import Skills
+
+            skills = Skills(self)
+            catalog = skills.catalog(configured=candidate["skill_catalog"])
+            warnings = skills.warnings(candidate["policy"], catalog)
         write_json(self.config_path, raw)
+        return warnings
 
     def task_dir(self, task_id: str) -> Path:
         return self.data / task_id

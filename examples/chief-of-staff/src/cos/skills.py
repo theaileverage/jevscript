@@ -195,9 +195,9 @@ class Skills:
         always = [e["id"] for e in catalog if e["pinned"] or (playbook and playbook in e["playbooks"])]
         return catalog, always, len(catalog) > k and len(always) < k
 
-    def warnings(self, policy: dict[str, Any]) -> list[str]:
+    def warnings(self, policy: dict[str, Any], catalog: list[dict[str, Any]]) -> list[str]:
         k, _ = self._limits(policy)
-        pinned = [e["id"] for e in self._current() if e["pinned"]]
+        pinned = [e["id"] for e in catalog if e["pinned"]]
         if len(pinned) > k:
             return [f"{len(pinned)} pinned Skills exceed policy.skill_shortlist ({k}); every dispatch judges all of them"]
         return []

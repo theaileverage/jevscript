@@ -352,6 +352,40 @@ def test_overlong_description_is_rejected_at_catalog_validation(make_host, tmp_p
     assert (home / "config.json").read_bytes() == before
 
 
+def test_pinned_count_warns_at_config_acceptance_without_dispatch_repeat(make_host, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    src = Path(__file__).resolve().parents[1] / "src"
+    home = tmp_path / "warning-home"
+    env = {**os.environ, "PYTHONPATH": str(src)}
+
+    def cos(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-m", "cos", "--home", str(home), *args], env=env, capture_output=True, text=True, check=False)
+
+    assert cos("init").returncode == 0
+    assert cos("config", "set", "policy.skill_shortlist", "2").stderr == ""
+    catalog = [write_skill(tmp_path / "catalog", f"pinned-{index}", f"Use for task {index}.", pinned=True) for index in range(3)]
+    below = cos("config", "set", "skill_catalog", json.dumps(catalog[:2]))
+    assert below.returncode == 0 and below.stderr == ""
+    above = cos("config", "set", "skill_catalog", json.dumps(catalog))
+    assert above.returncode == 0 and "warning: 3 pinned Skills exceed policy.skill_shortlist (2)" in above.stderr
+    raised = cos("config", "set", "policy.skill_shortlist", "3")
+    assert raised.returncode == 0 and raised.stderr == ""
+    lowered_key = cos("config", "set", "policy.skill_shortlist", "2")
+    assert lowered_key.returncode == 0 and "warning: 3 pinned Skills exceed policy.skill_shortlist (2)" in lowered_key.stderr
+    assert cos("config", "set", "policy.skill_shortlist", "3").stderr == ""
+    lowered = cos("config", "set", "policy", json.dumps({**DEFAULT_CONFIG["policy"], "skill_shortlist": 2}))
+    assert lowered.returncode == 0 and "warning: 3 pinned Skills exceed policy.skill_shortlist (2)" in lowered.stderr
+    unrelated = cos("config", "set", "scout.models.claude", "null")
+    assert unrelated.returncode == 0 and unrelated.stderr == ""
+
+    host = make_host(rules=[], yolo=False, home_dir=home)
+    item = host.backlog.add({"text": "Handle this task", "title": "task", "project": "proj", "kind": "ship", "effort": "low", "profile": "default"})
+    host.wakes.push("dispatch", "backlog", ["test"])
+    capsys.readouterr()
+    run_until(host, lambda: bool(host.workers.get(item["id"])) and bool(host.workers.get(item["id"]).get("handle")))
+    assert "pinned Skills exceed" not in capsys.readouterr().err
+    assert host.workers.get(item["id"])["skill_search"]["always"] == [entry["id"] for entry in catalog]
+
+
 def test_sparse_large_shortlist_uses_recorded_cardinality(make_host, harness, tmp_path: Path) -> None:
     script, _ = harness
     script(("", "kind: needle repair\nterms: needle\nideal_skill: Fix a needle failure."))
