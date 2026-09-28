@@ -109,7 +109,10 @@ fn local_profiles_select_the_server_and_decode_system_one_answers() {
     assert_eq!(profiles.len(), models.len());
     let mut servers = Vec::new();
     for profile in &mut profiles {
-        let model = profile["model"].as_str().expect("profile model").to_string();
+        let model = profile["model"]
+            .as_str()
+            .expect("profile model")
+            .to_string();
         let listener = TcpListener::bind("127.0.0.1:0").expect("loopback server");
         let port = listener.local_addr().expect("server address").port();
         profile["endpoint"] = json!(format!("http://127.0.0.1:{port}/v1/systemone"));
