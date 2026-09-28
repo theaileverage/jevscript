@@ -21,6 +21,8 @@ This guidance applies to `jev-1.13`. The docs mark several limits as likely to i
 6. Combine the answers in code: branches, weights, and confidence gates.
 7. Test against labeled examples. Read `probabilities` on the misses, then revise one or two questions at a time.
 
+In a Jevscript codebase, the `jevscriptify` Skill decides first which decisions belong in Jev and where each one lives. This Skill then shapes each question.
+
 ## Choose the primitive
 
 | Primitive | Use it when | Returns | Code acts on it with |
@@ -188,6 +190,24 @@ Rules for revising:
 - Judge a revision on labeled data. Higher confidence alone does not show a better question, and two wordings of one scale can behave differently on your data.
 - Keep the answer space stable once code depends on it. Adding or removing a level or an option changes what every earlier answer meant.
 - Write general rules in instructions and criteria. Put specific names and values only in `examples`.
+
+## In Jevscript
+
+Every rule above applies to `.jev` programs. The language writes the API's parts this way (spec sections 6 and 7):
+
+| API | Jevscript |
+| --- | --- |
+| Noul | `subject feels "condition"`, which returns a probability that code thresholds |
+| Choice | `subject pick:` with 2 to 8 labels, one of them a bare `other` or `none`; or `list pick among "question"` over a runtime list, labelled `i0`, `i1`, ... |
+| Score | `subject rate:` with 2 to 10 levels; the compiler rejects a level that is only a number or a degree word |
+| `inspect` | the subject, which must be a path such as `ticket.body` |
+| `focus`, `note`, `compare` | detail keys of the same names; `note` only on `feels`, and none of them in a `pick among` block |
+| Choice `what`, `not_for`, `examples` | a label written as a record with those keys |
+| Noul `true` and `false` examples | `yes` and `no` detail keys |
+| One request | one request group: consecutive independent questions, or one `judgment` block; a unit call, capability call, gate or pause starts the next |
+| `state` | exactly the subject and `compare` paths, or every parameter of a `judgment` block |
+| Labeled examples | `jevscript eval file.jev <judgment> --cases cases.jsonl`, which runs only a `judgment` block |
+| Confidence-gated routing | an `if` on `.confidence` or a probability, or `thresholds` on a task or machine gate |
 
 ## Checklist
 

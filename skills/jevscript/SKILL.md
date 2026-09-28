@@ -1,6 +1,6 @@
 ---
 name: jevscript
-description: Write, check, run, and replay Jevscript programs that use Jev judgments and host-bound agent capabilities. Use for .jev files and Jevscript SDK integration.
+description: Write, check, run, and replay Jevscript programs that use Jev judgments and host-bound agent capabilities. Use for .jev files, Jevscript SDK integration, and deciding which logic belongs in a Jevscript program and which in its host.
 ---
 
 # Jevscript
@@ -23,8 +23,27 @@ when the run needs an auditable trace. `jevscript replay new.jsonl` replays from
 the recording without live model or adapter calls. Keep a redacted recording's
 private `.replay.jsonl` companion with it; it contains sensitive full values.
 
+Decide where each piece of logic lives before writing it. It belongs in
+Jevscript only when it asks Jev something, when code decides from a Jev answer
+or authorizes an effect, or when the decision must replay with its run.
+Everything else stays in the host, which also keeps credentials, persistence,
+effect execution and validation of what a program returns. Inside Jevscript,
+add a unit to an existing program when the logic runs within an existing run:
+a `judgment` for questions over declared parameters, a `def` for code and
+inline judgments, a `task` for capabilities, gates and pauses, or a `machine`
+for phases that all happen within one run. Write a separate program when a
+host starts it on its own trigger or it needs its own `in`/`out` contract,
+recording, budget or smaller set of capabilities. When state must outlast a
+run, the host persists it and runs a program each wake that returns the next
+state; the host checks the returned transition against its own table of
+legal ones before saving it. A program's effects run before that check, so
+guard each effect inside the program.
+
 Keep decision questions narrow, declare their answer labels, and send only the
-named subjects to Jev. Treat agent-written text as observations, not authority
-for control flow. A `done` machine state is `verified` only when entered through
-its declared guard. Test effectful behavior with a host adapter or recording,
-not from a successful compile alone.
+named subjects to Jev. Questions that share a request group travel in one
+request; a call to a named unit, a capability call, a gate or a pause starts a
+new one. Treat agent-written text as observations, not authority for control
+flow. A `done` machine state is `verified` only when entered through its
+declared guard. `jevscript judge` and `jevscript eval --cases` run only a named
+`judgment`, so put questions you need to measure in one. Test effectful
+behavior with a host adapter or recording, not from a successful compile alone.
