@@ -27,14 +27,14 @@ from .agent import AdapterError
 
 CONTEXT = ("task", "request", "notes", "max_terms")
 SCOUT_FAILURE = "\x1ecos-scout-failure:"
+SCOUT_TIMEOUT_SECONDS = 120
 
 
 class HarnessScout:
     kind = "llm"
 
-    def __init__(self, models: dict[str, str | None], timeout: float = 120.0) -> None:
+    def __init__(self, models: dict[str, str | None]) -> None:
         self.models = native_scout_models(models)
-        self.timeout = timeout
 
     def _argv(self, harness: str, model: str, workdir: str, out: Path) -> list[str]:
         binary = "codex" if harness == "codex" else "claude"
@@ -65,12 +65,12 @@ class HarnessScout:
                 return SCOUT_FAILURE + str(error)
             try:
                 done = subprocess.run(  # noqa: S603 - the person's own signed-in agent CLI
-                    argv, input=prompt, capture_output=True, text=True, cwd=workdir, env=env, timeout=self.timeout, check=False
+                    argv, input=prompt, capture_output=True, text=True, cwd=workdir, env=env, timeout=SCOUT_TIMEOUT_SECONDS, check=False
                 )
             except FileNotFoundError:
                 return SCOUT_FAILURE + f"the {harness} scout executable is unavailable"
             except subprocess.TimeoutExpired:
-                return SCOUT_FAILURE + f"the {harness} scout did not answer within {self.timeout:g}s"
+                return SCOUT_FAILURE + f"the {harness} scout did not answer within {SCOUT_TIMEOUT_SECONDS:g}s"
             if done.returncode != 0:
                 detail = " ".join(done.stderr.split())[-300:]
                 return SCOUT_FAILURE + f"the {harness} scout exited {done.returncode}: {detail}"

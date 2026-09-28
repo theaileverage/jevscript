@@ -126,11 +126,14 @@ def rank(catalog: list[dict[str, Any]], always: list[str], query: str, terms: li
     so one facet of the task is not crowded out. Leftover places go back to
     the overall ranking.
     """
-    index = Index([entry for entry in catalog if entry["id"] not in set(always)])
+    index = Index(catalog)
+    mandatory = set(always)
     words = set(tokens(query))
     groups: Counter[tuple[tuple[str, int], ...]] = Counter()
     early, deferred = [], []
     for skill_id in index.ranked(query):
+        if skill_id in mandatory:
+            continue
         evidence = index.evidence(skill_id, words)
         (early if groups[evidence] < LOOKALIKES else deferred).append(skill_id)
         groups[evidence] += 1
@@ -141,7 +144,7 @@ def rank(catalog: list[dict[str, Any]], always: list[str], query: str, terms: li
     for term in terms:
         if len(chosen) >= room:
             break
-        best = next((i for i in index.ranked(term) if i not in chosen and placed[index.evidence(i, words)] < LOOKALIKES), None)
+        best = next((i for i in index.ranked(term) if i not in mandatory and i not in chosen and placed[index.evidence(i, words)] < LOOKALIKES), None)
         if best is not None:
             chosen.append(best)
             placed[index.evidence(best, words)] += 1

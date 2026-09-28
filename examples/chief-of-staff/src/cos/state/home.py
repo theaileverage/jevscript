@@ -37,7 +37,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # harness; a harness missing here searches with the request's own words.
     "scout": {
         "models": dict(NATIVE_SCOUT_MODELS),
-        "timeout": 120,
     },
     "poll_seconds": 30,
     "max_wait_seconds": 120,
@@ -159,6 +158,8 @@ def native_scout_models(configured: Any) -> dict[str, str]:
 def _validate_scout_config(config: dict[str, Any]) -> None:
     scout = config.get("scout")
     native_scout_models(scout.get("models") if isinstance(scout, dict) else None)
+    if "timeout" in scout:
+        raise ValueError("scout.timeout is unsupported")
     adapters = config.get("adapters", {})
     if isinstance(adapters, dict) and adapters.get("scout") is not None:
         raise ValueError("adapters.scout is unsupported; native scout models are fixed")

@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from conftest import run_until
+from cos.capabilities import scout as scout_capability
 from cos.state.home import DEFAULT_CONFIG, read_jsonl
 from skill_fixture import LARGE_RELEVANT, LARGE_SCOUT, LARGE_TASK, catalog_texts, distractors, write_catalog, write_skill
 
@@ -128,15 +129,16 @@ def test_replay_serves_the_recorded_shortlist_without_scout_or_search(make_host,
     ("timeout", "the claude scout did not answer within 0.5s", 1),
     ("exit", "the claude scout exited 7: failed on purpose", 1),
 ])
-def test_scout_process_failure_uses_recorded_request_fallback(make_host, harness, tmp_path: Path, jevscript_bin: str, failure: str, reason: str, attempts: int) -> None:
+def test_scout_process_failure_uses_recorded_request_fallback(make_host, harness, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, jevscript_bin: str, failure: str, reason: str, attempts: int) -> None:
     _, harness_calls = harness
+    monkeypatch.setattr(scout_capability, "SCOUT_TIMEOUT_SECONDS", 0.5)
     if failure == "missing":
         (tmp_path / "bin" / "claude").unlink()
     else:
         rule = {"match": "", "sleep": 1} if failure == "timeout" else {"match": "", "exit": 7, "stderr": "failed on purpose"}
         Path(os.environ["COS_FAKE_HARNESS_RULES"]).write_text(json.dumps([rule]))
     catalog = write_catalog(tmp_path / "catalog", {f"docs-{index:03d}": "Use when fixing README documentation." for index in range(40)})
-    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog, "scout": {"timeout": 0.5}})
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog})
     host.submit("Fix the README documentation")
     run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
     [worker] = host.workers.all()
@@ -211,13 +213,14 @@ def test_cli_accepts_only_native_scout_models_and_null(tmp_path: Path) -> None:
     assert cos("init").returncode == 0
     assert cos("config", "set", "scout.models.claude", "null").returncode == 0
     accepted = (home / "config.json").read_bytes()
-    shown = json.loads(cos("config", "show").stdout)["scout"]["models"]
-    assert shown == {"claude": None, "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"}
+    shown = json.loads(cos("config", "show").stdout)["scout"]
+    assert shown == {"models": {"claude": None, "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"}}
     for key, value in (
         ("scout.models.codex", "gpt-6-sol"),
         ("scout.models.claude", "gpt-6-luna"),
         ("scout.models.claude-code", "gpt-6-luna"),
         ("scout.models.other", "gpt-6-luna"),
+        ("scout.timeout", 0.5),
         ("adapters.scout", {"command": ["false"]}),
     ):
         rejected = cos("config", "set", key, json.dumps(value))
@@ -276,6 +279,26 @@ def test_dispatch_plan_charges_scout_only_for_enabled_item_harness(make_host, ha
     assert len([w for w in host.workers.all(live_only=False) if w.get("handle")]) == 15
     assert len(harness_calls()) == (7 if mixed else 0)
     assert not [d for d in host.decisions.open() if "budget" in d["question"]]
+
+
+@pytest.mark.parametrize("mandatory_kind", ["pinned", "playbook"])
+def test_mandatory_skill_stays_in_whole_catalog_bm25_corpus(make_host, tmp_path: Path, mandatory_kind: str) -> None:
+    catalog = [
+        write_skill(tmp_path / "catalog", "p-alpha", "alpha", pinned=mandatory_kind == "pinned"),
+        write_skill(tmp_path / "catalog", "z-alpha", "alpha"),
+        write_skill(tmp_path / "catalog", "a-beta", "beta"),
+        write_skill(tmp_path / "catalog", "b-beta", "beta"),
+    ]
+    if mandatory_kind == "playbook":
+        catalog[0]["playbooks"] = ["pb_alpha"]
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog, "scout": {"models": {"claude": None}}, "policy": {**DEFAULT_CONFIG["policy"], "skill_shortlist": 2}})
+    item = host.backlog.add({"text": "alpha beta", "title": "alpha beta", "project": "proj", "kind": "ship", "effort": "low", "profile": "default", "playbook": "pb_alpha" if mandatory_kind == "playbook" else None})
+    host.wakes.push("dispatch", "backlog", ["test"])
+    run_until(host, lambda: bool(host.workers.get(item["id"])) and bool(host.workers.get(item["id"]).get("handle")))
+    [search] = calls(dispatch_events(host.workers.get(item["id"])), "skill_search")
+    assert search["result"]["always"] == ["p-alpha"]
+    assert search["result"]["ids"] == ["p-alpha", "a-beta"]
+    assert (search["result"]["scanned"], search["result"]["kept"], search["result"]["filtered_out"]) == (4, 2, 2)
 
 
 def test_pinned_and_playbook_skills_bypass_the_filter(make_host, harness, tmp_path: Path) -> None:

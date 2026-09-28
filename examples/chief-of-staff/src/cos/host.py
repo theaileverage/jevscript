@@ -85,7 +85,7 @@ class Host:
         self.session = session or JevSession(self.home)
         self.crew = AgentBinding(crew if crew is not None else self._adapter("crew", "agent"), self.effects)
         self.writer = writer if writer is not None else (self._adapter("writer", "llm") if "writer" in config.get("adapters", {}) else TemplateWriter())
-        self.scout = HarnessScout(config["scout"]["models"], float(config["scout"]["timeout"]))
+        self.scout = HarnessScout(config["scout"]["models"])
         self._questions: int | None = None
         self._terminal = terminal
         self.wakes = WakeQueue(self.home)
@@ -221,8 +221,7 @@ class Host:
                 contexts.append({"project": project, "relation": self.threads.relation(scoped), "candidates": self.threads.candidates(scoped)})
             return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "project": request.get("effective_project") or request.get("project"), "skip_playbooks": bool(request.get("skip_playbooks")), "thread_contexts": contexts}, **lists}
         if kind == "dispatch":
-            scout_config = self.home.config["scout"]
-            self.scout = HarnessScout(scout_config["models"], float(scout_config["timeout"]))
+            self.scout = HarnessScout(self.home.config["scout"]["models"])
             items = self.backlog.snapshot()
             paths = {i["id"]: self.paths(i["id"]) for i in items}
             projects = {p["name"] for p in self.registry.projects()}
