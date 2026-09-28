@@ -367,7 +367,7 @@ def test_an_item_whose_always_list_cannot_fit_is_held_with_the_count_and_ids(mak
 def test_oversize_found_after_snapshot_uses_actual_count_and_ids(make_host, tmp_path: Path) -> None:
     seed = write_skill(tmp_path / "catalog", "seed", "Use for a seed task.")
     host = make_host(rules=[], yolo=False, config={"skill_catalog": [seed]})
-    item = host.backlog.add({"text": "Fix the README typo", "title": "README typo", "project": "proj", "kind": "ship", "effort": "low", "profile": "default"})
+    host.backlog.add({"text": "Fix the README typo", "title": "README typo", "project": "proj", "kind": "ship", "effort": "low", "profile": "default"})
     wake = host.wakes.push("dispatch", "backlog", ["test"])
     snapshot = host.snapshot_for(wake)
     catalog = [write_skill(tmp_path / "catalog", skill_id, text, pinned=True) for skill_id, text in list(distractors().items())[:449]]
