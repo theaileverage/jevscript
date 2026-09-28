@@ -25,7 +25,8 @@ if rule.get("exit"):
     print(rule.get("stderr", ""), file=sys.stderr)
     sys.exit(rule["exit"])
 text = rule.get("text", "")
+output = bytes.fromhex(rule["output_hex"]) if "output_hex" in rule else text.encode()
 if name == "codex":
-    Path(argv[argv.index("-o") + 1]).write_text(text)
+    Path(argv[argv.index("-o") + 1]).write_bytes(output)
 else:
-    print(text)
+    sys.stdout.buffer.write(output + b"\n")

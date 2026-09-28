@@ -185,6 +185,30 @@ def test_scout_process_failure_uses_recorded_request_fallback(make_host, harness
     assert started["skill_search"] == worker["skill_search"] and started["calls"] == 3
 
 
+@pytest.mark.parametrize("harness_name", ["claude", "codex"])
+def test_undecodable_scout_output_uses_recorded_request_fallback(make_host, harness, tmp_path: Path, jevscript_bin: str, harness_name: str) -> None:
+    _, harness_calls = harness
+    Path(os.environ["COS_FAKE_HARNESS_RULES"]).write_text(json.dumps([{"match": "", "output_hex": "ff"}]))
+    catalog = write_catalog(tmp_path / "catalog", {f"docs-{index:03d}": "Use when fixing README documentation." for index in range(40)})
+    host = make_host(rules=[], yolo=False, config={"skill_catalog": catalog})
+    host.registry.set_profiles([{"name": "default", "rule": "any work", "harness": harness_name}])
+    host.submit("Fix the README documentation")
+    run_until(host, lambda: bool(host.workers.all()) and bool(host.workers.all()[0].get("handle")))
+    [worker] = host.workers.all()
+    [search] = calls(dispatch_events(worker), "skill_search")
+    reason = f"the {harness_name} scout output is not UTF-8"
+    assert search["result"]["fallback"] is True and search["result"]["fallback_reason"] == reason
+    assert worker["skill_search"]["fallback_reason"] == reason and worker["handle"]
+    assert len(harness_calls()) == 1
+    host.close()
+    shutil.rmtree(tmp_path / "catalog")
+    replay = subprocess.run([jevscript_bin, "replay", worker["dispatch_recording"]], capture_output=True, text=True, check=False)
+    assert replay.returncode == 0, replay.stderr
+    assert len(harness_calls()) == 1
+    [started] = json.loads(replay.stdout.strip().splitlines()[-1])["outputs"]["result"]["started"]
+    assert started["skill_search"] == worker["skill_search"] and started["calls"] == 3
+
+
 def test_codex_items_scout_with_luna(make_host, harness, tmp_path: Path) -> None:
     script, harness_calls = harness
     script(("Upgrade tokio", LARGE_SCOUT))

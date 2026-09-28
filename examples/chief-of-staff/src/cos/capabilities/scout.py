@@ -71,8 +71,13 @@ class HarnessScout:
                 return SCOUT_FAILURE + f"the {harness} scout executable is unavailable"
             except subprocess.TimeoutExpired:
                 return SCOUT_FAILURE + f"the {harness} scout did not answer within {SCOUT_TIMEOUT_SECONDS:g}s"
+            except UnicodeDecodeError:
+                return SCOUT_FAILURE + f"the {harness} scout output is not UTF-8"
             if done.returncode != 0:
                 detail = " ".join(done.stderr.split())[-300:]
                 return SCOUT_FAILURE + f"the {harness} scout exited {done.returncode}: {detail}"
-            answer = out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout
+            try:
+                answer = out.read_text(encoding="utf-8") if harness == "codex" and out.exists() else done.stdout
+            except UnicodeDecodeError:
+                return SCOUT_FAILURE + f"the {harness} scout output is not UTF-8"
             return "\n" + answer if answer.startswith(SCOUT_FAILURE) else answer
