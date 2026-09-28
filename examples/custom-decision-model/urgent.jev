@@ -1,0 +1,6 @@
+program custom_decision
+
+in message: text
+
+judgment classify(message):
+  urgent = message feels "needs a response within the hour"

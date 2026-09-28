@@ -1,0 +1,46 @@
+[
+  {
+    "model": "english",
+    "endpoint": "http://127.0.0.1:8000/v1/systemone",
+    "total_tokens": 256,
+    "state_plus_question_tokens": 256,
+    "max_questions_per_request": 1,
+    "max_criteria_per_question": 8,
+    "tokenizer": "chars4",
+    "price_per_million_input_usd": 0,
+    "price_per_million_output_usd": 0
+  },
+  {
+    "model": "kev-latest",
+    "endpoint": "http://127.0.0.1:8009/v1/systemone",
+    "total_tokens": 256,
+    "state_plus_question_tokens": 256,
+    "max_questions_per_request": 1,
+    "max_criteria_per_question": 8,
+    "tokenizer": "chars4",
+    "price_per_million_input_usd": 0,
+    "price_per_million_output_usd": 0
+  },
+  {
+    "model": "openjev",
+    "endpoint": "http://127.0.0.1:3000/v1/systemone",
+    "total_tokens": 256,
+    "state_plus_question_tokens": 256,
+    "max_questions_per_request": 1,
+    "max_criteria_per_question": 8,
+    "tokenizer": "chars4",
+    "price_per_million_input_usd": 0,
+    "price_per_million_output_usd": 0
+  },
+  {
+    "model": "openjev-latest",
+    "endpoint": "http://127.0.0.1:8080/v1/systemone",
+    "total_tokens": 256,
+    "state_plus_question_tokens": 256,
+    "max_questions_per_request": 1,
+    "max_criteria_per_question": 8,
+    "tokenizer": "chars4",
+    "price_per_million_input_usd": 0,
+    "price_per_million_output_usd": 0
+  }
+]

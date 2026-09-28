@@ -6,6 +6,8 @@ questions with probabilities, in parallel. It does not generate text and it
 does not count. The program owns the loop, the thresholds, the budgets, and
 the policy. The host binds everything that acts on the world, such as terminal
 agents, people, text models, and tools, as capabilities at run time.
+This page describes the default Jev profile. To use a compatible local model,
+see the [custom decision model example](../examples/custom-decision-model/README.md).
 
 The [language specification](../spec/jevscript-language-specification.md) is
 the authority for everything on this page.
@@ -62,17 +64,17 @@ draw to a JSONL recording. A recording replays with zero model calls and the
 same control flow. It holds the linked program and the resolved model profile,
 so a replay needs no source files and no API key.
 
-## Log lines go to the recording, never to Jev
+## Log lines go to the recording, never to the model endpoint
 
 `log info "routed request" { owner, confidence: c.confidence }` writes a line
 to the recording. `x = log debug classify(message)` logs a value and returns
 it, so a `log` can wrap any expression. The levels are `debug`, `info`, `warn`,
 and `error`.
 
-A `log` never reaches Jev, never counts against a budget, and never changes
-control flow. Every unit may use it. Hosts receive each line through the SDKs'
-log callback. A replay checks the recorded lines and does not emit them a
-second time. `--redact` stores their values as hashes.
+A `log` never reaches the model endpoint, never counts against a budget, and
+never changes control flow. Every unit may use it. Hosts receive each line
+through the SDKs' log callback. A replay checks the recorded lines and does
+not emit them a second time. `--redact` stores their values as hashes.
 
 ## Modules link into one flat program
 
