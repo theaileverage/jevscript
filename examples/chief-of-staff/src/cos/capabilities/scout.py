@@ -3,7 +3,7 @@
 The scout follows the harness the item is dispatched to: Claude Code asks
 Haiku and Codex asks Luna, through the same CLI the person already signed in
 to. ``config.json`` maps each harness to an exact model id under
-``scout.models``; a harness with no entry has no scout, and the program falls
+``scout.models``; a harness with a null entry or no entry has no scout, and the program falls
 back to the request's own words instead of borrowing another family.
 
 ``write`` receives the program's ``using`` record (spec section 9.3)
@@ -22,6 +22,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from ..state.home import native_scout_models
 from .agent import AdapterError
 
 CONTEXT = ("task", "request", "notes", "max_terms")
@@ -30,8 +31,8 @@ CONTEXT = ("task", "request", "notes", "max_terms")
 class HarnessScout:
     kind = "llm"
 
-    def __init__(self, models: dict[str, str], timeout: float = 120.0) -> None:
-        self.models = dict(models)
+    def __init__(self, models: dict[str, str | None], timeout: float = 120.0) -> None:
+        self.models = native_scout_models(models)
         self.timeout = timeout
 
     def _argv(self, harness: str, model: str, workdir: str, out: Path) -> list[str]:
@@ -51,7 +52,7 @@ class HarnessScout:
         if not isinstance(using, dict) or not positional:
             raise AdapterError("the scout needs an instruction and a using record")
         harness, model = using.get("harness"), using.get("model")
-        if not isinstance(harness, str) or self.models.get(harness) != model:
+        if harness not in self.models or self.models[harness] != model:
             raise AdapterError(f"no scout model {model!r} is configured for harness {harness!r}")
         prompt = "\n".join([str(positional[0]), ""] + [f"{key}: {using[key]}" for key in CONTEXT if using.get(key) not in (None, "")])
         env = {key: value for key, value in os.environ.items() if key != "TYPESAFE_API_KEY"}

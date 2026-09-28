@@ -108,14 +108,18 @@ cheaper `scout` model writes three lines about the task: `kind`, up to
 `policy.skill_terms` search `terms` (default `24`) and an `ideal_skill`
 sentence. The scout follows the item's harness: Claude Code items use
 `claude-haiku-4-5-20251001` and Codex items use `gpt-6-luna`, through the CLI
-already signed in (`scout.models` in the config; `adapters.scout` binds any
-JSONL `llm` adapter instead). The host's `fleet.skill_search` then ranks the
-whole catalog with Okapi BM25 over each Skill's id, description and keywords.
-Pinned and playbook Skills always come first; half of the remaining places go
-to the best overall matches and half to the best match of each scout term.
-When more than three Skills match the query with identical evidence (the same
-matched words, the same number of times), the rest of them wait until every
-other match has had a place; they are deferred, not dropped.
+already signed in. `scout.models` accepts only these model IDs or `null` for a
+disabled harness; omitted entries keep their defaults. The host's
+`fleet.skill_search` scores the whole catalog with Okapi BM25 over each
+Skill's id, description and keywords, then diversifies the shortlist.
+Pinned and playbook Skills always come first. Roughly half of the open places
+go to the highest BM25 scores; the remaining places offer one best match to
+each scout term in order, then return unused places to the overall ranking.
+After the first three Skills with identical matched words and counts, further
+lookalikes wait until distinct matches have been considered. These two
+lexical diversification rules can place a lower BM25 score ahead of a higher
+one. The recorded scout comparisons cover 13, 13, 21 and 1 of the 29 labelled
+dispatches, so they do not establish corpus-wide recall of 1.0.
 A scout reply outside the three-line form, or a harness with no scout model,
 searches with the request's own words and records `fallback` with the reason.
 The search result is a recorded tool call, so replay serves the same shortlist

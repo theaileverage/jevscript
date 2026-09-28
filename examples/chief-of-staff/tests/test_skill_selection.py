@@ -168,6 +168,37 @@ def test_scout_fallback_is_recorded_and_dispatch_continues(make_host, harness, t
         assert any(e.get("event") == "log" and "no scout model" in json.dumps(e) for e in events)
 
 
+def test_cli_accepts_only_native_scout_models_and_null(tmp_path: Path) -> None:
+    src = Path(__file__).resolve().parents[1] / "src"
+    home = tmp_path / "cli-home"
+    env = {**os.environ, "PYTHONPATH": str(src)}
+
+    def cos(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-m", "cos", "--home", str(home), *args], env=env, capture_output=True, text=True, check=False)
+
+    assert cos("init").returncode == 0
+    assert cos("config", "set", "scout.models.claude", "null").returncode == 0
+    accepted = (home / "config.json").read_bytes()
+    shown = json.loads(cos("config", "show").stdout)["scout"]["models"]
+    assert shown == {"claude": None, "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"}
+    for key, value in (
+        ("scout.models.codex", "gpt-6-sol"),
+        ("scout.models.claude", "gpt-6-luna"),
+        ("scout.models.claude-code", "gpt-6-luna"),
+        ("scout.models.other", "gpt-6-luna"),
+        ("adapters.scout", {"command": ["false"]}),
+    ):
+        rejected = cos("config", "set", key, json.dumps(value))
+        assert rejected.returncode != 0 and "scout" in rejected.stderr
+        assert (home / "config.json").read_bytes() == accepted
+
+    (home / "config.json").write_text(json.dumps({"scout": {"models": {"codex": "gpt-6-sol"}}}))
+    rejected = cos("tick")
+    assert rejected.returncode != 0 and "scout.models.codex" in rejected.stderr
+    (home / "config.json").write_text(json.dumps({"adapters": {"scout": {"command": ["false"]}}}))
+    assert cos("config", "set", "adapters.scout", "null").returncode == 0
+
+
 def test_larger_shortlist_shrinks_the_batch_instead_of_pausing(make_host, harness, tmp_path: Path) -> None:
     """With k = 128 each item nominally costs writer + scout + 2 Jev chunks,
     so a 15-item wake starts 12 (48 calls) and leaves 3 for the next wake."""

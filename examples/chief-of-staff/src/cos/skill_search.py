@@ -114,7 +114,7 @@ class Index:
 
 
 def rank(catalog: list[dict[str, Any]], always: list[str], query: str, terms: list[str], k: int) -> list[str]:
-    """Always-included ids in full, then up to ``k`` in total by BM25.
+    """Always-included ids in full, then up to ``k`` with BM25 and lexical diversification.
 
     Skills the query matches with identical evidence (say, the same procedure
     written for twenty languages the task never names) cannot be told apart

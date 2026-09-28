@@ -20,7 +20,9 @@ import time
 from pathlib import Path
 from typing import Any, Iterator
 
-#: Defaults for ``config.json``. Every key can be overridden in the file.
+NATIVE_SCOUT_MODELS = {"claude": "claude-haiku-4-5-20251001", "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"}
+
+#: Defaults for ``config.json``.
 DEFAULT_CONFIG: dict[str, Any] = {
     "backend": "auto",
     "jev": {
@@ -34,7 +36,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # The cheaper model that writes Skill search terms follows the dispatch
     # harness; a harness missing here searches with the request's own words.
     "scout": {
-        "models": {"claude": "claude-haiku-4-5-20251001", "claude-code": "claude-haiku-4-5-20251001", "codex": "gpt-6-luna"},
+        "models": dict(NATIVE_SCOUT_MODELS),
         "timeout": 120,
     },
     "poll_seconds": 30,
@@ -140,6 +142,28 @@ def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def native_scout_models(configured: Any) -> dict[str, str]:
+    if not isinstance(configured, dict):
+        raise ValueError("scout.models must be a map of native model IDs or null")
+    enabled = {}
+    for harness, model in configured.items():
+        if harness not in NATIVE_SCOUT_MODELS:
+            raise ValueError(f"scout.models has no native binding for {harness!r}")
+        if model is not None and model != NATIVE_SCOUT_MODELS[harness]:
+            raise ValueError(f"scout.models.{harness} must be {NATIVE_SCOUT_MODELS[harness]!r} or null")
+        if model is not None:
+            enabled[harness] = model
+    return enabled
+
+
+def _validate_scout_config(config: dict[str, Any]) -> None:
+    scout = config.get("scout")
+    native_scout_models(scout.get("models") if isinstance(scout, dict) else None)
+    adapters = config.get("adapters", {})
+    if isinstance(adapters, dict) and adapters.get("scout") is not None:
+        raise ValueError("adapters.scout is unsupported; native scout models are fixed")
+
+
 class LockHeld(RuntimeError):
     """Another live session owns this home."""
 
@@ -174,7 +198,9 @@ class Home:
 
     @property
     def config(self) -> dict[str, Any]:
-        return _merge(DEFAULT_CONFIG, read_json(self.config_path, {}))
+        config = _merge(DEFAULT_CONFIG, read_json(self.config_path, {}))
+        _validate_scout_config(config)
+        return config
 
     def set_config(self, dotted: str, value: Any) -> None:
         if dotted == "skill_catalog":
@@ -187,6 +213,7 @@ class Home:
         for part in parts[:-1]:
             cursor = cursor.setdefault(part, {})
         cursor[parts[-1]] = value
+        _validate_scout_config(_merge(DEFAULT_CONFIG, raw))
         write_json(self.config_path, raw)
 
     def task_dir(self, task_id: str) -> Path:
