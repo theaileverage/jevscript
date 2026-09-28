@@ -43,12 +43,21 @@ registered project; it reaches project work only through the commands:
 ```sh
 uv run cos --home ~/.cos say 'Fix the parser error in project X'
 uv run cos --home ~/.cos say 'Also cover empty input' --project my-project --channel team --message-id msg-42 --reply-to msg-17
+uv run cos --home ~/.cos status
 uv run cos --home ~/.cos bearings
 uv run cos --home ~/.cos decisions
 uv run cos --home ~/.cos answer '<decision-key>' yes
 uv run cos --home ~/.cos steer '<task-id>' 'Add a regression test'
 uv run cos --home ~/.cos playbooks list
 ```
+
+`cos status` prints a one-line count of active workers, queued items, and open
+decisions. `cos bearings` starts with the same headline, then lists owner
+decisions, active work, queued items, and recent outcomes. Queued items show
+their stored holds and dependency statuses, including completed dependencies
+in the archive; the digest does not predict dispatch readiness. Jevscript's
+`routing.ready` decides which items can dispatch. Reading bearings does not
+start a Jevscript run or add a recording or episode row.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
