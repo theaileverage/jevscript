@@ -2,7 +2,7 @@
 
 This example asks one Jevscript judgment through [Laya](https://github.com/NandhaKishorM/laya), [Kev](https://github.com/jaredpalmer/kev), [OpenJev weights on Hugging Face](https://huggingface.co/openjev/openjev), or the separate [OpenJev server on GitHub](https://github.com/razorback16/openjev). Each serves a System One compatible `POST /v1/systemone` endpoint. The same [`urgent.jev`](urgent.jev) program works with each server. Jevscript's `--model` option selects an entry in [`profiles.json`](profiles.json), which supplies the endpoint and request limits.
 
-You need `jevscript` on your path. From a source checkout, build the binary with `cargo build -p jevscript-cli` and use `target/debug/jevscript` in place of `jevscript` below. Run the Jevscript commands from its repository root. Install each model server in a separate directory, then start it before running the judgment command. The two OpenJev projects use different weights, model IDs, and ports; their profiles are not interchangeable.
+You need `jevscript` on your path. From a source checkout, build the binary with `cargo build -p jevscript-cli` and use `target/debug/jevscript` in place of `jevscript` below. Run the Jevscript commands from its repository root. Install each model server in a separate directory, then start it before running the judgment command. The two OpenJev projects use different weights and ports; their profile keys select different endpoints.
 
 ## Laya
 
@@ -71,7 +71,7 @@ READOUT_TARGETED=1 READOUT_INSTR_STYLE=pyrepr SHIM_STAGGER=1 \
 python openjev/helper/shim.py --host 127.0.0.1 --port 3000
 ```
 
-The helper reports the downloaded directory's name, `openjev`, as its model ID. From the Jevscript repository root, run:
+The `openjev` profile key selects the helper at `127.0.0.1:3000`. The helper ignores the request's `model` field and returns a `model` string that identifies the served directory, calibration settings, flags, and helper hash, as described in its [serving guide](https://huggingface.co/openjev/openjev/blob/main/serve/SERVE.md). From the Jevscript repository root, run:
 
 ```sh
 TYPESAFE_API_KEY=local jevscript judge examples/custom-decision-model/urgent.jev classify \
@@ -106,6 +106,6 @@ Jevscript's HTTP client always reads `TYPESAFE_API_KEY` and sends it as a bearer
 
 The profile limits are conservative settings for this one-question example. They are not claims about a model's maximum context or tokenizer. `chars4` is Jevscript's rough size estimator. The zero price records no provider token charge for local inference; it does not account for hardware or electricity. Each provider can return different probabilities for the same question. Measure accuracy and calibrate thresholds on your own labelled cases before using a judgment to make consequential decisions.
 
-Live inference through downloaded OpenJev weights was unavailable during preparation of this example. The CLI fixture checks selected model IDs, HTTP requests, and answer decoding against a disposable server; it does not establish live model inference or decision quality.
+Live inference through downloaded OpenJev weights was unavailable during preparation of this example. The CLI fixture checks selected profile routing, HTTP requests, and answer decoding against disposable servers; it does not establish live model inference or decision quality.
 
 For another local server that speaks the same System One request and response format, add a profile with its documented model ID and full `/v1/systemone` endpoint, then select it with `--model`. A generic OpenAI text-generation endpoint does not implement this format.

@@ -51,31 +51,27 @@ fn answer(question: &Value) -> Value {
     }
 }
 
-fn serve(listener: TcpListener) -> Vec<(String, String, Value)> {
-    let mut requests = Vec::new();
-    for _ in 0..4 {
-        let (mut stream, _) = listener.accept().expect("CLI request");
-        let captured = request(&mut stream);
-        let questions = captured.2["questions"].as_object().expect("questions");
-        let answers: Map<String, Value> = questions
-            .iter()
-            .map(|(id, question)| (id.clone(), answer(question)))
-            .collect();
-        let response = json!({
-            "model": captured.2["model"],
-            "answers": answers,
-            "usage": { "input_tokens": 20, "output_tokens": 0 }
-        })
-        .to_string();
-        write!(
-            stream,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
-            response.len()
-        )
-        .expect("response");
-        requests.push(captured);
-    }
-    requests
+fn serve(listener: TcpListener) -> (String, String, Value) {
+    let (mut stream, _) = listener.accept().expect("CLI request");
+    let captured = request(&mut stream);
+    let questions = captured.2["questions"].as_object().expect("questions");
+    let answers: Map<String, Value> = questions
+        .iter()
+        .map(|(id, question)| (id.clone(), answer(question)))
+        .collect();
+    let response = json!({
+        "model": "fixture served configuration",
+        "answers": answers,
+        "usage": { "input_tokens": 20, "output_tokens": 0 }
+    })
+    .to_string();
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+        response.len()
+    )
+    .expect("response");
+    captured
 }
 
 fn judge(source: &Path, judgment: &str, model: &str, profiles: &Path) -> Value {
@@ -106,16 +102,18 @@ fn judge(source: &Path, judgment: &str, model: &str, profiles: &Path) -> Value {
 
 #[test]
 fn local_profiles_select_the_server_and_decode_system_one_answers() {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("loopback server");
-    let port = listener.local_addr().expect("server address").port();
-    let server = std::thread::spawn(move || serve(listener));
-
     let mut profiles: Vec<Value> =
         serde_json::from_slice(&std::fs::read(example("profiles.json")).expect("example profiles"))
             .expect("valid profiles");
-    assert_eq!(profiles.len(), 4);
+    let models = ["english", "kev-latest", "openjev", "openjev-latest"];
+    assert_eq!(profiles.len(), models.len());
+    let mut servers = Vec::new();
     for profile in &mut profiles {
+        let model = profile["model"].as_str().expect("profile model").to_string();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("loopback server");
+        let port = listener.local_addr().expect("server address").port();
         profile["endpoint"] = json!(format!("http://127.0.0.1:{port}/v1/systemone"));
+        servers.push((model, std::thread::spawn(move || serve(listener))));
     }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("custom-decision-model");
     std::fs::create_dir_all(&dir).expect("test directory");
@@ -124,24 +122,20 @@ fn local_profiles_select_the_server_and_decode_system_one_answers() {
         .expect("local profiles");
 
     let urgent = example("urgent.jev");
-    let models = ["english", "kev-latest", "openjev", "openjev-latest"];
     for model in models {
         let result = judge(&urgent, "classify", model, &local_profiles);
         assert_eq!(result["urgent"], json!({ "$jev": "prob", "value": 0.73 }));
     }
 
-    let requests = server.join().expect("server completed");
-    assert_eq!(requests.len(), models.len());
-    for (index, (line, bearer, body)) in requests.iter().enumerate() {
+    for (model, server) in servers {
+        let (line, bearer, body) = server.join().expect("server completed");
         assert_eq!(line, "POST /v1/systemone HTTP/1.1");
         assert_eq!(bearer, "Bearer local");
-        assert_eq!(body["model"], models[index]);
+        assert_eq!(body["model"], model);
         assert_eq!(
             body["state"],
             json!({ "message": "I need help before my meeting starts in an hour" })
         );
-    }
-    for (_, _, body) in requests {
         assert_eq!(body["questions"].as_object().unwrap().len(), 1);
     }
 }

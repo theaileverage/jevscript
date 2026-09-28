@@ -15,11 +15,11 @@ Confirm `pwd -P` and `git status --short --branch` identify the intended checkou
 
 ## Drive
 
-Run `cargo test -p jevscript-cli --test custom_decision_model_cli`. It invokes the built CLI, selects all four example profiles, sends requests to loopback HTTP, and checks the decoded Noul result. To check an installed CLI, run `cargo install --path crates/jevscript-cli --root <run-owned-dir> --locked --debug`, then set `JEVSCRIPT_BIN=<run-owned-dir>/bin/jevscript` for that same integration test. For a live check, run the README's `jevscript judge` command for the started provider. Record the exit code and typed JSON answer.
+Run `cargo test -p jevscript-cli --test custom_decision_model_cli`. It invokes the built CLI, selects all four example profiles, sends each request to a distinct loopback endpoint, and checks the decoded Noul result. To check an installed CLI, run `cargo install --path crates/jevscript-cli --root <run-owned-dir> --locked --debug`, then set `JEVSCRIPT_BIN=<run-owned-dir>/bin/jevscript` for that same integration test. For a live check, run the README's `jevscript judge` command for the started provider. Record the exit code and typed JSON answer.
 
 ## Evidence
 
-Keep the checkout commit, command and exit code, server kind, endpoint, selected model ID, and redacted response. Label the automated server run **fixture integration**. Label a completed run through downloaded weights **local E2E** and state the exact checkpoint revision. If no weights ran, label live inference **unavailable**. A fixture pass proves Jevscript's HTTP selection and answer parsing, not provider inference or decision quality.
+Keep the checkout commit, command and exit code, server kind, endpoint, selected profile ID, returned model descriptor, and redacted response. Label the automated server run **fixture integration**. Label a completed run through downloaded weights **local E2E** and state the exact checkpoint revision. If no weights ran, label live inference **unavailable**. A fixture pass proves Jevscript's HTTP selection and answer parsing, not provider inference or decision quality.
 
 ## Cleanup
 
