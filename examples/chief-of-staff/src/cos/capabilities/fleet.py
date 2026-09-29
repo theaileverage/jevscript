@@ -2,8 +2,8 @@
 
 A `tool` (spec section 9.4) whose verbs are declared with signatures in the
 `.jev` modules and published here as a manifest, so a mismatch fails before
-any model call. Reads (``landable``, ``landed``, ``pr_state``,
-``authority``) always reach the world; every other verb is an effect and goes
+any model call. Reads (``skill_search``, ``landable``, ``landed``,
+``pr_state``, ``authority``) always reach the world; every other verb is an effect and goes
 through the wake's idempotency keys (``effects.EffectLog``), so a wake that is
 run again after a crash never acts twice.
 """
@@ -17,12 +17,14 @@ from typing import TYPE_CHECKING, Any
 from ..state.home import atomic_write
 from ..state.inbox import Inbox, doorbell
 from ..skills import SkillError
+from .scout import SCOUT_FAILURE
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..host import Host
 
 VERBS: dict[str, tuple[list[str], str]] = {
     "worktree": (["id", "project"], "record"),
+    "skill_search": (["id", "scout", "request", "k"], "record"),
     "ensure_skills": (["id", "worktree", "harness", "selected", "status", "uncertain"], "record"),
     "write_brief": (["id", "text"], "text"),
     "steer": (["id", "text"], "record"),
@@ -40,7 +42,7 @@ VERBS: dict[str, tuple[list[str], str]] = {
     "follow": (["id", "answer", "text"], "record"),
     "track_review": (["id", "handle"], "none"),
 }
-READS = {"landable", "landed", "pr_state", "authority"}
+READS = {"skill_search", "landable", "landed", "pr_state", "authority"}
 
 
 class Fleet:
@@ -106,6 +108,15 @@ class Fleet:
         path = self.host.home.task_dir(task_id) / "brief.md"
         atomic_write(path, text)
         return str(path)
+
+    def v_skill_search(self, task_id: str, scout: str | None, request: str, k: int) -> dict[str, Any]:
+        """The recorded shortlist for one item; its playbook comes from the backlog, not the program."""
+        try:
+            failure = scout[len(SCOUT_FAILURE):] if scout is not None and scout.startswith(SCOUT_FAILURE) else None
+            found = self.host.skills.search(self.host.backlog.get(task_id), scout or "", request, k, self.host.policy(), no_model=scout is None, scout_failure=failure)
+            return {**found, "chunks": -(-found["kept"] // self.host.question_cap()), "blocked": None}
+        except (SkillError, OSError) as error:
+            return {"blocked": str(error)}
 
     def v_ensure_skills(self, task_id: str, worktree: str, harness: str, selected: list[str], status: str, uncertain: list[str]) -> dict[str, Any]:
         if self._worker(task_id).get("worktree") != worktree:

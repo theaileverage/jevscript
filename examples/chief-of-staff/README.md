@@ -93,13 +93,58 @@ catalog). A Skill with supporting files also declares `files`, a mapping of
 every relative file path to its SHA-256 digest, including `SKILL.md`. The host
 requires the manifest to cover the whole directory and rejects symlinks.
 The frontmatter must contain a matching `name` and a `description`.
-The host checks the file and digest when it builds a dispatch snapshot and
-again before it installs anything. The catalog is limited to 64 Skills, and
-each directory to 128 files and 8 MiB.
+The host checks every file and digest when it builds a dispatch snapshot,
+again for each shortlisted Skill, and again before it installs anything.
+The catalog has no size limit. A description is limited to 1024 characters and
+each directory to 128 files and 8 MiB. An entry may also list up to 32
+`keywords` for search, set `pinned: true`, or name `playbooks` whose routed
+items always consider it.
 An empty catalog is valid and selects none. The historical cookbook roster is
 not read by this dispatch path.
 
-[`skills.jev`](jev/skills.jev) judges each approved Skill against the task
+[`skills.jev`](jev/skills.jev) scouts, searches, then asks Jev to judge the
+shortlist. When the catalog holds more than `policy.skill_shortlist` Skills
+(default `32`) and the always-included Skills leave room in it, a
+cheaper `scout` model writes three lines about the task: `kind`, up to
+`policy.skill_terms` search `terms` (default `24`) and an `ideal_skill`
+sentence. The scout follows the item's harness: Claude Code items use
+`claude-haiku-4-5-20251001` and Codex items use `gpt-6-luna`, through the CLI
+already signed in. It receives the task statement, original request, and
+conversation notes. `scout.models` accepts only these model IDs or `null` for a
+disabled harness; omitted entries keep their defaults. Set
+`policy.skill_shortlist` to a positive whole number and `policy.skill_terms`
+to a whole number from 1 to 64. The host's
+`fleet.skill_search` scores the whole catalog with Okapi BM25 over each
+Skill's id, description and keywords. When filtering, it diversifies the
+shortlist.
+Pinned and playbook Skills always come first. Roughly half of the open places
+go to the highest BM25 scores; the remaining places offer one best match to
+each scout term in order, then return unused places to the overall ranking.
+After the first three Skills with identical matched words and counts, further
+lookalikes wait until distinct matches have been considered. These two
+lexical diversification rules can place a lower BM25 score ahead of a higher
+one. The recorded scout comparisons cover 13, 13, 21 and 1 of the 29 labelled
+dispatches, so they do not establish corpus-wide recall of 1.0.
+When the whole catalog fits, search ranks it with BM25 but skips the scout.
+If always-included Skills fill the shortlist, search keeps all of them and
+skips the scout. Config validation warns when pinned Skills exceed the
+shortlist size; dispatch never drops them.
+If the scout CLI is missing, fails, times out, or returns undecodable or
+malformed output, or if the harness has no scout model, search uses the
+request's own words and records `fallback` with the reason.
+The search result is a recorded tool call, so replay serves the same shortlist
+without asking the scout or searching again. The brief says how many Skills
+the search left out.
+
+Each dispatch nominally costs the writer, the scout when it runs, and one Jev
+request per profile question cap of shortlisted Skills. The host reads that
+cap from the selected Jev profile and plans each item's calls; `on_wake`
+starts only as many items as fit its 50 calls, and the rest wait for the next
+wake. An item whose always-included Skills alone would exceed the 8 calls a
+dispatch allows is held with a decision naming the count and the IDs.
+These are nominal counts: a retry can still cost more.
+
+`skills.jev` then judges each shortlisted Skill against the task
 statement, original request and notes independently. It retains every fit
 at or above `policy.skill_fit` (default `0.7`). A fit between
 `policy.skill_uncertain` (default `0.35`) and that threshold stays uncertain;
