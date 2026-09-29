@@ -43,8 +43,8 @@ print('Python sandbox fixture: passed', flush=True)
     if (bytes > 64 * 1024) child.kill('SIGKILL')
     else process.stdout.write(chunk)
   }
-  child.stdout.on('data', output)
-  child.stderr.on('data', output)
+  child.stdout?.on('data', output)
+  child.stderr?.on('data', output)
   const timeout = setTimeout(() => child.kill('SIGKILL'), 10_000)
   try {
     const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve) })

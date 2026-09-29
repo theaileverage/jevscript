@@ -16,6 +16,7 @@ step() {
   echo "$name $code" | tee -a "$evidence/summary.txt"
 }
 step typecheck pnpm run typecheck
+step python-sandbox pnpm run verify:python-sandbox
 step boundary pnpm test
 step browser env JEVS_EVIDENCE="$evidence/screenshots" pnpm test:browser
 git -C "$root" rev-parse HEAD > "$evidence/commit.txt"

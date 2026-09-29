@@ -12,4 +12,9 @@ check "adapters built" '[ -f adapters/codex/dist/index.js ] && [ -f adapters/cla
 check "apps/toolbox/node_modules" '[ -d apps/toolbox/node_modules/playwright-core ]' "(cd apps/toolbox && pnpm install)"
 check "Chrome for the browser pass" '[ -n "${JEVS_BROWSER:-}" ] || [ -d "/Applications/Google Chrome.app" ] || command -v google-chrome' "or set JEVS_BROWSER"
 check "tmux for the pane tail check" 'command -v tmux' "the check is skipped without it"
+check "Python for SDK companions" 'command -v python3' "install Python 3"
+case "$(uname -s)" in
+  Darwin) check "Seatbelt for Python hosts" '[ -x /usr/bin/sandbox-exec ]' ;;
+  Linux) check "bubblewrap for Python hosts" 'command -v bwrap' "install bubblewrap and libseccomp2" ;;
+esac
 exit $fail

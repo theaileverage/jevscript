@@ -85,6 +85,7 @@ fixture's bounded output is printed; generated host output stays private.
 It runs, each into `<evidence-dir>/<step>.log`:
 
 - **typecheck.** Both tsconfigs.
+- **python-sandbox.** The trusted CLI fixture checks Python startup and OS confinement.
 - **boundary.** `pnpm test`. Chat drafting with repairs, the annotator, check
   and local CLI discovery/selection, saved errors, signed-out behavior, input and
   output limits, timeout termination, CLI conversation restart and SQLite upgrade;

@@ -145,6 +145,17 @@ blocks network and child-process execution. TypeScript uses Node's permission
 mode; Python uses macOS Seatbelt or Linux bubblewrap with a seccomp policy (`bwrap` and `libseccomp2` must be installed).
 Python discovery selects the actual installed interpreter, including framework
 interpreters on macOS; it does not install another Python or launch unsandboxed.
+
+On Ubuntu with AppArmor user-namespace restrictions, installing bubblewrap alone
+may still fail before Python starts (`Failed RTM_NEWADDR: Operation not permitted`).
+An administrator can enable Ubuntu's supplied `bwrap-userns-restrict` profile
+from `apparmor-profiles` with
+`sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict`.
+This permits bubblewrap's namespace setup and restricts capabilities in its
+child; see [Ubuntu's AppArmor guidance](https://discourse.ubuntu.com/t/understanding-apparmor-user-namespace-restriction/58007).
+Run `pnpm verify:python-sandbox` from this directory to check SDK imports,
+inherited channels and denied network, process and outside-file access with a
+fixed trusted fixture. Generated-host output is never printed by that probe.
 External effects run through configured adapters in the toolbox process. Child
 hosts receive no provider credentials. Stdout/stderr are bounded and discarded;
 safe host errors appear in the page. Startup is bounded to five seconds, execution
