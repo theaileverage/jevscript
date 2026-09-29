@@ -17,20 +17,14 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
   const [error, setError] = useState('')
   const [pairCheck, setPairCheck] = useState('')
   const hostResult = useStore(s => s.hosts[idea.id])
+  const check = useStore(s => s.checks[idea.id])
   useEffect(() => { setSelection({ from: 0, to: 0 }); setError('') }, [file?.id])
   if (!file) return null
   const change = (source: string) => actions.updateIdea(idea.id, {
     workspace: { ...workspace, files: workspace.files.map(candidate => candidate.id === file.id ? { ...candidate, source } : candidate) },
     ...(file.id === workspace.entryFileId ? { source } : {}),
   })
-  const choose = (id: string) => {
-    const selected = workspace.files.find(file => file.id === id)
-    if (!selected) return
-    actions.updateIdea(idea.id, {
-      workspace: { ...workspace, activeFileId: id, ...(selected.kind === 'jev' ? { entryFileId: id } : {}) },
-      ...(selected.kind === 'jev' ? { source: selected.source, fileName: selected.name } : {}),
-    })
-  }
+  const choose = (id: string) => actions.selectFile(idea.id, id)
   const add = () => {
     if (!name.split('/').every(part => /^[A-Za-z0-9_.-]+$/.test(part) && !['.', '..'].includes(part)) || workspace.files.some(file => file.name === name)) {
       setError('Choose a unique relative file name without parent-directory segments.')
@@ -61,8 +55,7 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
     finally { setBusy(false) }
   }
   return (
-    <details className="idea-files">
-      <summary>Workspace · {workspace.files.length} {workspace.files.length === 1 ? 'file' : 'files'} · Jev programs and host files</summary>
+    <section className="idea-files">
       <div className="file-tabs" role="tablist" aria-label="Idea files">
         {workspace.files.map(candidate => <button key={candidate.id} role="tab" aria-selected={candidate.id === file.id} onClick={() => choose(candidate.id)}>{candidate.name} · {candidate.kind === 'jev' ? 'Jev' : 'Host'}</button>)}
       </div>
@@ -72,7 +65,7 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
         {file.kind === 'jev' ? <><button className="btn" onClick={() => void actions.check(idea.id)}>Check Jev</button><button className="btn" onClick={() => void actions.run(idea.id)}>Run Jev</button></> : <><button className="btn" disabled={busy} onClick={() => void checkPair()}>Check pair</button><button className="btn" disabled={busy} onClick={() => void actions.run(idea.id, file.id)}>Run pair</button></>}
       </div>
       {file.kind === 'jev'
-        ? <JevEditor value={file.source} fileName={file.name} uri={`file:///toolbox/files/${file.id}.jev`} onChange={change} onSelection={setSelection} className="workspace-editor" />
+        ? <JevEditor value={file.source} fileName={file.name} uri={`file:///toolbox/${idea.id}/${file.name}`} fallback={check?.result?.diagnostics ?? []} onDiagnostics={found => actions.setLspDiagnostics(idea.id, found)} onRun={() => void actions.run(idea.id)} onChange={change} onSelection={setSelection} className="workspace-editor" />
         : <textarea className="host-source" aria-label="Host file source" value={file.source} onChange={event => change(event.target.value)} onSelect={event => setSelection({ from: event.currentTarget.selectionStart, to: event.currentTarget.selectionEnd })} />}
       {file.kind === 'host' ? <div className="small muted">Run pair explicitly executes {file.name} locally. Its runIdea() call starts {idea.fileName} with the idea’s inputs, bindings and Jev profile; pauses and recordings use the normal runtime. No host source runs during drafting or checks.</div> : null}
       {pairCheck ? <div role="status" className="pair-check">{pairCheck}</div> : null}
@@ -90,6 +83,6 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
           <div>{note.query}</div><div>{note.reply}</div>
         </article>)}
       </div>
-    </details>
+    </section>
   )
 }

@@ -90,13 +90,20 @@ entirely.
 
 ## Idea files and host execution
 
-Each idea owns a workspace of Jev programs and host files. Open **Workspace** in
-Chat, select a file tab to edit it, or add a relative file such as `lib/helper.jev`.
+Each idea owns a workspace of Jev programs and host files. Open a file from the
+Chat panel’s **Idea files** list to edit it in Playground. Select a file tab or
+add a relative file such as `lib/helper.jev`.
 Selecting a Jev file makes it the entry program for checks and runs; its sibling
 Jev files resolve `use` imports. Select text in either kind of source and use
 **Annotate selection** to ask the current Harness model. The selected text and
 reply remain with the file, including a notice when its source changes later.
 Machine pins also remain attached to their original Jev file.
+
+Every idea row has an actions menu. **Update details** changes its title,
+description, Harness model and Jev profile while preserving files, annotations,
+conversation and runs. **Delete idea…** asks for confirmation and atomically removes
+only that idea’s database records, including resend history. Its recording files
+stay on disk. End an active run before deleting its idea.
 
 New and migrated ideas include a visible, editable `host.ts` alongside their Jev
 source. On its tab, **Check pair** compiles the selected Jev entry and syntax-checks
@@ -195,7 +202,8 @@ Live CLI Chat was verified with Claude Code 2.1.284 using `claude-opus-5-5` and
 Codex CLI 0.159.0 using `gpt-6.1-sol`. Both generated greeting programs through
 `/ws` that compiled on the first attempt. See [CLI Chat verification](verification/harness-chat.md).
 
-Live annotator edits and live Jev answers remain unverified. The tests run the real Anthropic SDK client and the
+Live machine annotator edits and live Jev answers remain unverified. Source selection
+annotations on both Jev and host files reached the selected Codex CLI in the local browser trial. The tests run the real Anthropic SDK client and the
 real runtime against local stand-ins for both services (`demo/services.ts`),
 which prove the toolbox's side of each exchange but nothing about the live
 services. The CLI tests use fake executables and do not prove live service access.

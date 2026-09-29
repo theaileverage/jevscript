@@ -171,6 +171,16 @@ export const actions = {
     set({ currentId: id })
     void actions.loadLastRecording(id)
   },
+  selectFile(id: string, fileId: string, open = false): void {
+    const idea = state.ideas.find(candidate => candidate.id === id)
+    const file = idea?.workspace.files.find(candidate => candidate.id === fileId)
+    if (!idea || !file) return
+    actions.updateIdea(id, {
+      workspace: { ...idea.workspace, activeFileId: fileId, ...(file.kind === 'jev' ? { entryFileId: fileId } : {}) },
+      ...(file.kind === 'jev' ? { source: file.source, fileName: file.name } : {}),
+    })
+    if (open) set({ screen: 'playground' })
+  },
 
   async createIdea(): Promise<void> {
     const idea = newIdea()
@@ -179,11 +189,21 @@ export const actions = {
   },
 
   async deleteIdea(id: string): Promise<void> {
-    await api.request('ideas.delete', { ideaId: id }).catch(fail)
+    await api.request('ideas.delete', { ideaId: id })
+    clearTimeout(saveTimers.get(id))
+    saveTimers.delete(id)
     set((s) => {
       const ideas = s.ideas.filter((idea) => idea.id !== id)
       return { ideas, currentId: s.currentId === id ? (ideas[0]?.id ?? null) : s.currentId }
     })
+  },
+  async updateDetails(id: string, patch: Pick<Idea, 'title' | 'description' | 'chatAgent' | 'model'>): Promise<void> {
+    const idea = state.ideas.find(candidate => candidate.id === id)
+    if (!idea) throw new Error('This idea is no longer available.')
+    clearTimeout(saveTimers.get(id))
+    saveTimers.delete(id)
+    const reply = await api.request('ideas.save', { idea: { ...idea, ...patch } })
+    replaceIdea(reply.idea)
   },
 
   /** Change an idea locally at once and save it shortly after. A source change re-checks. */

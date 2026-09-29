@@ -129,6 +129,7 @@ export interface RunSummary {
 export interface Idea {
   id: string
   title: string
+  description: string
   fileName: string
   source: string
   createdAt: string

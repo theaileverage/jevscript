@@ -60,6 +60,9 @@ export class RunManager {
   get recordingsDir(): string {
     return this.#recordings
   }
+  busy(ideaId: string): boolean {
+    return this.#starting.has(ideaId) || [...this.#live.values()].some(live => live.ideaId === ideaId)
+  }
 
   /** A fresh recording path. The runtime refuses an existing one (spec section 10.3). */
   async newRecordingPath(title: string): Promise<string> {

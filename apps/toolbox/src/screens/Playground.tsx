@@ -9,7 +9,7 @@ import { dialRange, findDials, formatDial, setDial } from '../../shared/dials.ts
 import type { Diagnostic, Idea } from '../../shared/protocol.ts'
 import { formatDiagnostic } from '../../shared/protocol.ts'
 import { outputLines, requests, startInfo, trail, usageSoFar } from '../../shared/recording.ts'
-import { JevEditor } from '../components/JevEditor.tsx'
+import { IdeaFiles } from '../components/IdeaFiles.tsx'
 import { PlayIcon } from '../components/icons.tsx'
 import { PauseStack } from '../components/PauseStack.tsx'
 import { RequestsTab } from '../components/RequestsTab.tsx'
@@ -21,13 +21,17 @@ type Tab = 'output' | 'requests' | 'trail' | 'diagnostics'
 
 export function PlaygroundScreen({ idea }: { idea: Idea }) {
   const run = useStore((s) => latestRun(s, idea.id))
+  const agents = useStore(s => s.status?.agents ?? [])
+  const defaultAgent = agents.find(agent => agent.state === 'available')
+  const selectedAgent = idea.chatAgent ?? { harness: defaultAgent?.harness ?? 'claude-code', model: defaultAgent?.models[0]?.id ?? 'default' }
+  const activeFile = idea.workspace.files.find(file => file.id === idea.workspace.activeFileId)
   const check = useStore((s) => s.checks[idea.id])
   const lsp = useStore((s) => s.lsp)
   const lspDiagnostics = useStore((s) => s.lspDiagnostics[idea.id])
   const [tab, setTab] = useState<Tab>('output')
   const diagnostics: Diagnostic[] = lsp === 'connected' && lspDiagnostics ? lspDiagnostics : (check?.result?.diagnostics ?? [])
   const errors = diagnostics.some((d) => d.severity === 'error') || (check?.result !== null && check?.result !== undefined && !check.result.ir)
-  const runIt = () => void actions.run(idea.id).then((id) => id && setTab('output'))
+  const runIt = () => void actions.run(idea.id, activeFile?.kind === 'host' ? activeFile.id : undefined).then((id) => id && setTab('output'))
 
   return (
     <>
@@ -35,10 +39,10 @@ export function PlaygroundScreen({ idea }: { idea: Idea }) {
         <header className="header">
           <div className="titles">
             <div className="eyebrow">Playground</div>
-            <h2>{idea.fileName}</h2>
+            <h2>{activeFile?.name ?? idea.fileName}</h2>
             <div className="status-line">
               <span className={`dot ${lsp === 'connected' ? 'ok' : lsp === 'connecting' ? '' : 'err'}`} />
-              {lsp === 'connected'
+              {activeFile?.kind === 'host' ? 'Host source · Node syntax check · explicit Run' : lsp === 'connected'
                 ? 'jevscript lsp · diagnostics, hover, completion'
                 : lsp === 'connecting'
                   ? 'jevscript lsp · connecting'
@@ -49,24 +53,16 @@ export function PlaygroundScreen({ idea }: { idea: Idea }) {
             <button className="btn" onClick={() => void actions.replayLast(idea.id).then(() => setTab('output'))} disabled={idea.runs.length === 0}>
               Replay last
             </button>
-            <button className="btn" onClick={() => void actions.check(idea.id).then(() => setTab('diagnostics'))}>
+            {activeFile?.kind !== 'host' ? <button className="btn" onClick={() => void actions.check(idea.id).then(() => setTab('diagnostics'))}>
               Check
-            </button>
+            </button> : null}
             <button className="btn primary" onClick={runIt} disabled={errors || !idea.source.trim() || (run !== null && !run.ended)}>
-              <PlayIcon /> Run <kbd>⌘↵</kbd>
+              <PlayIcon /> {activeFile?.kind === 'host' ? 'Run host' : 'Run'} <kbd>⌘↵</kbd>
             </button>
           </div>
         </header>
         <div className="editor-area">
-          <JevEditor
-            value={idea.source}
-            uri={`file:///toolbox/${idea.id}/${idea.fileName}`}
-            fileName={idea.fileName}
-            fallback={check?.result?.diagnostics ?? []}
-            onChange={(source) => actions.updateIdea(idea.id, { source })}
-            onDiagnostics={(found) => actions.setLspDiagnostics(idea.id, found)}
-            onRun={runIt}
-          />
+          <IdeaFiles idea={idea} agent={selectedAgent} />
         </div>
         <Console idea={idea} run={run} tab={tab} setTab={setTab} diagnostics={diagnostics} />
       </main>

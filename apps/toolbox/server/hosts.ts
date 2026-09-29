@@ -201,4 +201,7 @@ export class HostRunner {
       await live.closed
     }))
   }
+  busy(ideaId: string): boolean {
+    return this.#starting.has(ideaId) || this.#live.has(ideaId)
+  }
 }

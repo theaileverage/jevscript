@@ -137,6 +137,16 @@ describe('resending a recorded request', () => {
     expect(sent.questions.billing.instructions.question).toContain('a customer asking about billing')
     expect(jev.bodies.at(-1)).not.toMatch(/on fire|mentions money/)
   })
+
+  it('keeps a deleted idea’s resend history removed when a late resend tries to save', async () => {
+    const entry = (await entries(triage.recording))[0]!
+    const ideaId = 'deleted-resend-idea'
+    await resend(triage.recording, entry, entry.request, ideaId)
+    await client.request('ideas.delete', { ideaId })
+    await expect(resend(triage.recording, entry, entry.request, ideaId)).rejects.toThrow('deleted')
+    expect((await client.request<{ history: ResendRecord[] }>('resends.list', { ideaId, recording: triage.recording, requestId: entry.requestId })).history).toEqual([])
+    expect((await client.request<ReplayResult>('replay', { recording: triage.recording })).exitCode).toBe(0)
+  })
 })
 
 describe('a malformed endpoint response', () => {

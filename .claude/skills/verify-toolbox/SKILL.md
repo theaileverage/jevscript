@@ -41,16 +41,16 @@ evidence directory:
 Ready when it prints `jevs toolbox demo: http://127.0.0.1:<port>` with the
 database path and fixture endpoints. The demo reads no `.env` and replaces
 provider API variables with the fixtures' values. Chat offers real Claude Code
-and Codex responses using CLI sign-in. Jev and annotation remain visibly labeled
-fixtures. At a pin the fixture proposes the stuck-to-waiting edit when asked to
+and Codex responses using CLI sign-in. Jev and machine annotation remain visibly labeled
+fixtures; source selection annotations use the selected local CLI. At a pin the fixture proposes the stuck-to-waiting edit when asked to
 "ask me instead". Open the URL with
 chrome-devtools-axi.
 
 For a live Chat check, create an idea, choose an agent and a discovered model, and
 ask for a small greeting program without capability calls. Confirm the response
 names the selected CLI and model and its draft compiles. Repeat for the other CLI.
-Open Workspace and its host.ts tab, inspect the source, then Check pair and Run
-pair. Confirm the greeting output and saved recording. Select text in both Jev and
+Open host.ts from the Chat panel’s Idea files list, inspect it in Playground,
+then Check pair and Run pair. Confirm the greeting output and saved recording. Select text in both Jev and
 host source and annotate with the Harness model. Report signed-out, missing CLI or provider failures honestly. Never substitute a
 fixture response. Check that both messages and selection return after a restart.
 
@@ -83,10 +83,13 @@ It runs, each into `<evidence-dir>/<step>.log`:
   source, run, Requests, replay with no live call), Machines (graph, steps,
   pin, apply and revert) and Adapters (binding, the manifest check), then
   restarts the server and finds the ideas, pin, binding and steps again. It
-  also checks the single Harness model selector, reply provenance, selection after reload,
+  also checks the New Idea Harness model list and conversation chip, reply provenance, selection after reload,
   saved errors and unavailable states with fake executables; edits and annotations
   on Jev and host file tabs, checks without executing, explicit Run pair, error
-  visibility and workspace/annotation restoration. It runs `pnpm demo`
+  visibility and workspace/annotation restoration. Update details must preserve
+  source, annotations, conversation and runs; canceled deletion keeps the idea,
+  confirmed deletion stays removed after restart, recordings remain, other ideas
+  keep their IDs, and late saves cannot recreate the deleted idea. It runs `pnpm demo`
   as a process with real-looking keys and a dead Anthropic URL in its environment,
   selects a fake CLI and runs its checked draft, stops it with
   Ctrl-C, restarts it on the same home and finds the state again.

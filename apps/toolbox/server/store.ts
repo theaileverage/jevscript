@@ -79,6 +79,7 @@ const MIGRATIONS = [
   `ALTER TABLE ideas ADD COLUMN chat_agent TEXT;`,
   `ALTER TABLE ideas ADD COLUMN workspace TEXT;
    ALTER TABLE pins ADD COLUMN file_id TEXT;`,
+  `ALTER TABLE ideas ADD COLUMN description TEXT;`,
 ]
 
 type Row = Record<string, SQLInputValue>
@@ -115,6 +116,7 @@ export class ToolboxStore {
   /** Save an idea, keeping every run already recorded for it. */
   async save(idea: Idea): Promise<Idea> {
     return this.#transaction(() => {
+      if (this.#db.prepare('SELECT 1 FROM meta WHERE key = ?').get(`deleted:${idea.id}`)) throw new Error('This idea was deleted. Create a new idea to continue.')
       const saved = normalize({ ...idea, updatedAt: new Date().toISOString() })
       this.#writeIdea(saved)
       this.#db.prepare('DELETE FROM pins WHERE idea_id = ?').run(idea.id)
@@ -137,12 +139,14 @@ export class ToolboxStore {
   /** Remove an idea with its pins, run index and resend history. Its recordings stay on disk. */
   async delete(id: string): Promise<void> {
     this.#transaction(() => {
+      this.#db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(`deleted:${id}`, '1')
       this.#db.prepare('DELETE FROM resends WHERE idea_id = ?').run(id)
       this.#db.prepare('DELETE FROM ideas WHERE id = ?').run(id)
     })
   }
 
   async appendResend(ideaId: string, record: ResendRecord): Promise<void> {
+    if (this.#db.prepare('SELECT 1 FROM meta WHERE key = ?').get(`deleted:${ideaId}`)) throw new Error('This idea was deleted.')
     this.#db
       .prepare('INSERT INTO resends (idea_id, recording, request_id, record) VALUES (?, ?, ?, ?)')
       .run(ideaId, record.recording, record.requestId, JSON.stringify(record))
@@ -214,12 +218,12 @@ export class ToolboxStore {
   #writeIdea(idea: Idea): void {
     this.#db
       .prepare(
-        `INSERT INTO ideas (id, title, file_name, source, model, sample, inputs, bindings, messages, claude_history, created_at, updated_at, chat_agent, workspace)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ideas (id, title, file_name, source, model, sample, inputs, bindings, messages, claude_history, created_at, updated_at, chat_agent, workspace, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
            title = excluded.title, file_name = excluded.file_name, source = excluded.source, model = excluded.model,
            sample = excluded.sample, inputs = excluded.inputs, bindings = excluded.bindings, messages = excluded.messages,
-           claude_history = excluded.claude_history, updated_at = excluded.updated_at, chat_agent = excluded.chat_agent, workspace = excluded.workspace`,
+           claude_history = excluded.claude_history, updated_at = excluded.updated_at, chat_agent = excluded.chat_agent, workspace = excluded.workspace, description = excluded.description`,
       )
       .run(
         idea.id,
@@ -236,6 +240,7 @@ export class ToolboxStore {
         idea.updatedAt,
         idea.chatAgent ? JSON.stringify(idea.chatAgent) : null,
         JSON.stringify(idea.workspace),
+        idea.description,
       )
   }
 
@@ -271,6 +276,7 @@ export class ToolboxStore {
     return normalize({
       id,
       title: row['title'] as string,
+      ...(row['description'] !== null ? { description: row['description'] as string } : {}),
       fileName: row['file_name'] as string,
       source: row['source'] as string,
       model: row['model'] as string,

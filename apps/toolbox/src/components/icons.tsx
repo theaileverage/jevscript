@@ -19,3 +19,6 @@ export const SendIcon = () => (
 export const PlayIcon = () => (
   <svg viewBox="0 0 16 16" width="10" height="10"><path d="M4 2.5v11l9-5.5z" fill="currentColor" /></svg>
 )
+export const TrashIcon = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" {...common}><path d="M2.5 4.5h11M6 2.5h4M4 4.5l.6 9h6.8l.6-9M6.5 7v4M9.5 7v4" /></svg>
+)

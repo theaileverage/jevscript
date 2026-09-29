@@ -185,6 +185,7 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
   let next: Idea = {
     ...idea,
     title: idea.title === 'Untitled idea' && idea.messages.length === 0 ? titleFrom(text) : idea.title,
+    description: idea.description || (idea.messages.length === 0 ? text : ''),
     messages: [...idea.messages, message('user', text)],
   }
 
@@ -213,7 +214,7 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
   }
 
   const context = next.chatAgent
-    ? `\n\nThis idea's workspace (entry Jev file: ${next.fileName}). Companion Jev files are available to use; host files are saved alongside the program and run only on an explicit Run pair action:\n${JSON.stringify(next.workspace.files)}`
+    ? `\n\nIdea details: ${next.title}\n${next.description}\nThis idea's workspace (entry Jev file: ${next.fileName}). Companion Jev files are available to use; host files are saved alongside the program and run only on an explicit Run pair action:\n${JSON.stringify(next.workspace.files)}`
     : next.source.trim() ? `\n\nThe idea's current program (${next.fileName}):\n\`\`\`jev\n${next.source}\`\`\`` : ''
   const prior = next.chatAgent
     ? idea.messages.filter(item => item.origin?.kind !== 'error').map(item => ({ role: item.role, content: item.text + (item.program ? `\n\`\`\`jev\n${item.program.source}\`\`\`` : '') }))

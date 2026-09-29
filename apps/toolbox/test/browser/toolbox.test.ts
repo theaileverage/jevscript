@@ -85,6 +85,11 @@ async function shot(name: string): Promise<void> {
 
 const screen = (name: string) => page.locator('.rail .rail-item', { hasText: new RegExp(`^${name}`) }).click()
 const idea = (title: string) => page.locator('.rail .idea-item', { hasText: title }).click()
+async function selectHarness(value: string): Promise<void> {
+  const choice = page.locator(`.harness-model[data-model="${value}"]`)
+  await choice.waitFor()
+  await choice.click()
+}
 const editorText = () => page.locator('.editor-area .cm-content').innerText()
 
 /** `pnpm start`'s server on the fixtures; its state lives in `<home>/toolbox`, so a restart keeps it. */
@@ -117,7 +122,7 @@ beforeAll(async () => {
   await startServer()
   const executablePath = process.env['JEVS_BROWSER']
   browser = await chromium.launch(executablePath ? { executablePath } : { channel: 'chrome' })
-  page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   page.setDefaultTimeout(20_000)
   await page.goto(url)
   await page.locator('.rail .idea-item', { hasText: 'Review loop for Claude' }).waitFor()
@@ -133,17 +138,18 @@ afterAll(async () => {
 describe('the toolbox in a browser', () => {
   it('Chat: drafts a checked program, runs it, and answers slash commands', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
-    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('claude-code:sonnet')
+    const composer = page.getByPlaceholder('Describe an idea, or ask for a change…')
+    await selectHarness('claude-code:sonnet')
     await composer.fill('Sort my inbox by urgency')
     await composer.press('Enter')
     const block = page.locator('.codeblock').last()
+    await expect.poll(() => page.locator('.msg-user .bubble').last().innerText()).toBe('Sort my inbox by urgency')
     await expect.poll(() => block.locator('.bar-top').innerText()).toContain('jevscript check: 0 errors, 0 warnings')
     await expect.poll(() => page.locator('.msg-jev .text').last().innerText()).toContain('sorts each message into a lane')
     expect(fixtures.claude.requests).toHaveLength(0)
     expect((await agentCalls(home)).at(-1)?.model).toBe('sonnet')
     await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('Claude Code · resolved-sonnet · local CLI response')
-    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-second')
+    await page.getByRole('combobox', { name: 'Harness model', exact: true }).selectOption('codex:codex-second')
     await composer.fill('Keep the urgency lanes')
     await composer.press('Enter')
     await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('Codex · codex-second · local CLI response')
@@ -169,7 +175,7 @@ describe('the toolbox in a browser', () => {
 
   it('Chat and the pause stack: a pasted program asks the person, and the card resumes it', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
+    const composer = page.getByPlaceholder('Describe an idea, or ask for a change…')
     const drafts = fixtures.claude.requests.length
     await composer.fill(ASK)
     await composer.press('Enter')
@@ -187,8 +193,8 @@ describe('the toolbox in a browser', () => {
 
   it('Chat: saves CLI errors and unavailable states without substituting an API fixture response', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
-    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-first')
+    const composer = page.getByPlaceholder('Describe an idea, or ask for a change…')
+    await selectHarness('codex:codex-first')
     await writeFile(join(home, 'fake-agents/failure'), '')
     const apiCalls = fixtures.claude.requests.length
     await composer.fill('A failed CLI idea')
@@ -215,8 +221,8 @@ describe('the toolbox in a browser', () => {
 
   it('Workspace: edits and annotates Jev/host files, checks and explicitly runs the pair, and restores it', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
-    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-second')
+    const composer = page.getByPlaceholder('Describe an idea, or ask for a change…')
+    await selectHarness('codex:codex-second')
     await composer.fill(`program workspace_pair
 in name: text
 out greeting
@@ -225,7 +231,7 @@ task main:
 `)
     await composer.press('Enter')
     const files = page.locator('.idea-files')
-    await files.locator('summary').click()
+    await page.locator('.idea-file-group').getByRole('button', { name: /workspace_pair.jev/ }).click()
     await page.getByRole('textbox', { name: 'New file name' }).fill('lib/message.jev')
     await files.getByRole('button', { name: 'Add file' }).click()
     const editor = files.locator('.cm-content')
@@ -260,23 +266,66 @@ if (result.outputs.greeting !== 'Hello, Browser!') throw new Error('unexpected o
     expect(await page.locator('.result-card').count()).toBe(0)
     await files.getByRole('button', { name: 'Run pair' }).click()
     await expect.poll(() => files.innerText()).toContain('Host finished')
-    await expect.poll(() => page.locator('.result-card').innerText()).toContain('Hello, Browser!')
+    await expect.poll(() => page.locator('.console-body').innerText()).toContain('Hello, Browser!')
     await host.fill('throw new Error("private host stderr")')
     await files.getByRole('button', { name: 'Run pair' }).click()
     await expect.poll(() => page.locator('.toast').innerText()).toContain('host exited unsuccessfully')
     await page.reload()
-    await expect.poll(() => page.locator('.rail .idea-item.active').innerText()).toBe('program workspace_pair')
-    await page.locator('.idea-files summary').click()
+    await page.locator('.rail .idea-item', { hasText: 'program workspace_pair' }).click()
+    await screen('Playground')
     await expect.poll(() => page.getByRole('textbox', { name: 'Host file source' }).inputValue()).toContain('private host stderr')
     expect(await page.locator('.idea-files .file-note').count()).toBe(1)
     await page.getByRole('tab', { name: /workspace_pair.jev/ }).click()
     expect(await page.locator('.idea-files .file-note').count()).toBe(1)
     await shot('workspace-pair')
+    await page.getByRole('button', { name: 'program workspace_pair: idea actions' }).click()
+    await page.getByRole('button', { name: /Update details/ }).click()
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Updated workspace')
+    await page.getByRole('textbox', { name: 'Description', exact: true }).fill('An updated idea prompt that keeps its files and conversation.')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect.poll(() => page.getByRole('dialog').count()).toBe(0)
+    await page.reload()
+    await page.locator('.rail .idea-item', { hasText: 'Updated workspace' }).click()
+    await page.getByRole('button', { name: 'Updated workspace: idea actions' }).click()
+    await page.getByRole('button', { name: /Update details/ }).click()
+    expect(await page.getByRole('textbox', { name: 'Description', exact: true }).inputValue()).toContain('updated idea prompt')
+    await shot('update-details')
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    const observer = await connect({ url })
+    const before = (await observer.request<{ ideas: Idea[] }>('ideas.list')).ideas
+    const updated = before.find(item => item.title === 'Updated workspace')!
+    expect(updated.workspace.files).toHaveLength(3)
+    expect(updated.workspace.annotations).toHaveLength(2)
+    expect(updated.messages).toHaveLength(2)
+    expect(updated.runs).toHaveLength(1)
+    await page.getByRole('button', { name: 'Updated workspace: idea actions' }).click()
+    await page.getByRole('button', { name: /Delete idea…/ }).click()
+    await shot('delete-confirmation')
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    expect(await page.locator('.rail .idea-item', { hasText: 'Updated workspace' }).count()).toBe(1)
+    await page.getByRole('button', { name: 'Updated workspace: idea actions' }).click()
+    await page.getByRole('button', { name: /Delete idea…/ }).click()
+    await page.getByRole('button', { name: 'Delete idea', exact: true }).click()
+    await expect.poll(() => page.locator('.rail .idea-item', { hasText: 'Updated workspace' }).count()).toBe(0)
+    server.kill()
+    await new Promise<void>(resolve => server.once('exit', () => resolve()))
+    await startServer()
+    await page.reload()
+    await page.locator('.rail .idea-item', { hasText: 'Review loop for Claude' }).waitFor()
+    expect(await page.locator('.rail .idea-item', { hasText: 'Updated workspace' }).count()).toBe(0)
+    const afterClient = await connect({ url })
+    const after = (await afterClient.request<{ ideas: Idea[] }>('ideas.list')).ideas
+    expect(after.map(item => item.id).sort()).toEqual(before.filter(item => item.id !== updated.id).map(item => item.id).sort())
+    expect(after.some(item => item.workspace.annotations.some(note => updated.workspace.annotations.some(old => old.id === note.id)))).toBe(false)
+    await expect(afterClient.request('ideas.save', { idea: updated })).rejects.toThrow('deleted')
+    expect(await readFile(updated.runs[0]!.recording, 'utf8')).toContain('"event":"end"')
+    observer.close()
+    afterClient.close()
   })
 
   it('the pause stack: cards stack one per run, oldest first, and each resumes its run', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
+    const composer = page.getByPlaceholder('Describe an idea, or ask for a change…')
     await composer.fill(TUNED)
     await composer.press('Enter')
     await expect.poll(() => page.locator('.codeblock').last().locator('.bar-top').innerText()).toContain('0 errors')

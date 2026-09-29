@@ -103,6 +103,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     'ideas.list': async () => ({ ideas: await ideas.list() }),
     'ideas.save': async (request) => ({ idea: await ideas.save(request.idea) }),
     'ideas.delete': async (request) => {
+      if (runs.busy(request.ideaId) || hosts.busy(request.ideaId)) throw new Error('End this idea’s active run before deleting it.')
       await ideas.delete(request.ideaId)
       return { ok: true }
     },

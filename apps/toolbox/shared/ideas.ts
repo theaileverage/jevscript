@@ -27,6 +27,7 @@ export function normalize(idea: Partial<Idea>): Idea {
   return {
     id,
     title: idea.title ?? 'Untitled idea',
+    description: idea.description ?? idea.messages?.find(message => message.role === 'user')?.text ?? '',
     fileName,
     source,
     createdAt: idea.createdAt ?? now,

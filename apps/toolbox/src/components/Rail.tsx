@@ -1,5 +1,7 @@
+import { useState } from 'react'
+import { IdeaDialog } from './IdeaDialog.tsx'
 import { actions, type Screen, useStore } from '../store.ts'
-import { ChatIcon, CodeIcon, MachineIcon, PlugIcon } from './icons.tsx'
+import { ChatIcon, CodeIcon, MachineIcon, PlugIcon, TrashIcon } from './icons.tsx'
 
 const TOOLS: { screen: Screen; label: string; icon: () => React.JSX.Element }[] = [
   { screen: 'chat', label: 'Chat', icon: ChatIcon },
@@ -9,6 +11,8 @@ const TOOLS: { screen: Screen; label: string; icon: () => React.JSX.Element }[] 
 ]
 
 export function Rail() {
+  const [menu, setMenu] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<{ id: string; kind: 'update' | 'delete' } | null>(null)
   const screen = useStore((s) => s.screen)
   const ideas = useStore((s) => s.ideas)
   const currentId = useStore((s) => s.currentId)
@@ -24,7 +28,6 @@ export function Rail() {
       <div className="wordmark">
         <b>jevs</b> <span>toolbox</span>
       </div>
-      {services === 'demo' ? <div className="service-note">Demo. Jev and annotation use fixtures. Chat uses local CLIs.</div> : null}
       <button className="new-idea" onClick={() => void actions.createIdea()}>
         New idea <kbd>⌘ N</kbd>
       </button>
@@ -46,13 +49,16 @@ export function Rail() {
           const paused = pausedIdeas.has(idea.id)
           const tone = !idea.source.trim() ? '' : errors ? 'err' : paused ? 'warn' : check?.result ? 'ok' : ''
           return (
-            <button key={idea.id} className={`idea-item ${idea.id === currentId ? 'active' : ''}`} onClick={() => actions.selectIdea(idea.id)} title={idea.title}>
-              <span className={`dot ${tone}`} />
-              <span className="name">{idea.title}</span>
-            </button>
+            <div key={idea.id} className={`idea-row ${idea.id === currentId ? 'selected' : ''} ${dialog?.id === idea.id && dialog.kind === 'delete' ? 'deleting' : ''}`}>
+              <button className={`idea-item ${idea.id === currentId ? 'active' : ''}`} onClick={() => actions.selectIdea(idea.id)} title={idea.title}><span className={`dot ${tone}`} /><span className="name">{idea.title}</span></button>
+              <button className="idea-more" aria-label={`${idea.title}: idea actions`} aria-expanded={menu === idea.id} onClick={() => { actions.selectIdea(idea.id); setMenu(menu === idea.id ? null : idea.id) }}>⋯</button>
+              {menu === idea.id ? <div className="idea-menu"><button onClick={() => { setMenu(null); setDialog({ id: idea.id, kind: 'update' }) }}>✎ Update details</button><button className="delete-option" onClick={() => { setMenu(null); setDialog({ id: idea.id, kind: 'delete' }) }}><TrashIcon /> Delete idea…</button></div> : null}
+            </div>
           )
         })}
       </div>
+      {services === 'demo' ? <div className="service-note">Demo. Jev and machine annotation use fixtures. Chat and source annotation use local CLIs.</div> : null}
+      {dialog && ideas.find(idea => idea.id === dialog.id) ? <IdeaDialog key={`${dialog.id}:${dialog.kind}`} idea={ideas.find(idea => idea.id === dialog.id)!} kind={dialog.kind} close={() => setDialog(null)} /> : null}
     </nav>
   )
 }

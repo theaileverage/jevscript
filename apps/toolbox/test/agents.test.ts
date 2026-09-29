@@ -114,7 +114,7 @@ describe('local agent drafting through executable CLIs', () => {
     await session!.close()
     session = null
     const db = new DatabaseSync(join(home, 'toolbox.sqlite'))
-    db.exec('ALTER TABLE ideas DROP COLUMN chat_agent; ALTER TABLE ideas DROP COLUMN workspace; ALTER TABLE pins DROP COLUMN file_id; PRAGMA user_version = 1;')
+    db.exec('ALTER TABLE ideas DROP COLUMN chat_agent; ALTER TABLE ideas DROP COLUMN workspace; ALTER TABLE ideas DROP COLUMN description; ALTER TABLE pins DROP COLUMN file_id; PRAGMA user_version = 1;')
     db.close()
     session = await open({ home, env })
     expect((await session.client.request<{ ideas: Idea[] }>('ideas.list')).ideas.find(item => item.id === idea.id)).toMatchObject({ chatAgent: null, source: idea.source, workspace: { files: [{ kind: 'jev', source: idea.source }, { kind: 'host' }], annotations: [] }, pins: idea.pins, messages: idea.messages, title: 'Earlier idea' })

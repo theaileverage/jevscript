@@ -25,7 +25,7 @@ export function App() {
   }, [])
 
   return (
-    <div className="app">
+    <div className={`app screen-${screen}`}>
       <Rail />
       {!idea ? (
         <main className="main">

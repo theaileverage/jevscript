@@ -12,7 +12,6 @@ import { endOf, type JevAnswer, requests, startInfo, usageSoFar } from '../../sh
 import { requestEntries } from '../../shared/requests.ts'
 import { api } from '../api.ts'
 import { agentLabel } from '../agent-label.ts'
-import { IdeaFiles } from '../components/IdeaFiles.tsx'
 import { JevEditor } from '../components/JevEditor.tsx'
 import { PlayIcon, SendIcon } from '../components/icons.tsx'
 import { PauseStack } from '../components/PauseStack.tsx'
@@ -29,6 +28,7 @@ export function ChatScreen({ idea }: { idea: Idea }) {
   const defaultAgent = agents.find(agent => agent.state === 'available') ?? agents[0]
   const selected: ChatAgent = idea.chatAgent ?? { harness: defaultAgent?.harness ?? 'claude-code', model: defaultAgent?.models[0]?.id ?? 'default' }
   const agentStatus = agents.find(agent => agent.harness === selected.harness)
+  const selectedModel = agentStatus?.models.find(model => model.id === selected.model)
   const label = selected.harness === 'codex' ? 'Codex' : 'Claude Code'
   const check = useStore((s) => s.checks[idea.id])
   const lastProgram = [...idea.messages].reverse().find((message) => message.program)
@@ -60,118 +60,58 @@ export function ChatScreen({ idea }: { idea: Idea }) {
     }
   }
 
+  const fresh = idea.messages.length === 0 && !idea.source.trim()
   const usage = run ? usageSoFar(run.events) : null
   const limit = check?.result?.ir?.tasks.find((task) => task.name === 'main')?.budget.calls
+  const choose = (value: string) => {
+    const [harness, ...model] = value.split(':')
+    actions.updateIdea(idea.id, { chatAgent: { harness: harness === 'codex' ? 'codex' : 'claude-code', model: model.join(':') } })
+  }
+  const modelSelect = () => (
+    <select aria-label="Harness model" role="combobox" value={`${selected.harness}:${selected.model}`} disabled={sending} onChange={event => choose(event.target.value)}>
+      <optgroup label="Harness">
+        {!agentStatus?.models.some(model => model.id === selected.model) ? <option value={`${selected.harness}:${selected.model}`}>{label} · {selected.model} · unavailable</option> : null}
+        {agents.filter(agent => agent.state === 'unavailable' && agent.harness !== selected.harness).map(agent => <option key={agent.harness} disabled>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · unavailable</option>)}
+        {agents.flatMap(agent => agent.models.map(model => <option key={`${agent.harness}:${model.id}`} value={`${agent.harness}:${model.id}`}>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · {model.id === 'default' ? `Default · ${model.resolved}` : model.resolved}</option>))}
+      </optgroup>
+    </select>
+  )
+  const composerText = (
+    <textarea rows={fresh ? 6 : 1} wrap={fresh ? 'soft' : 'off'} value={draft} placeholder="Describe an idea, or ask for a change…" onChange={event => setDraft(event.target.value)} onKeyDown={event => {
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() }
+    }} />
+  )
+  const sendButton = <button className="send" disabled={!draft.trim() || sending} onClick={() => void send()} aria-label="Send"><SendIcon /></button>
+  const agentState = agentStatus?.state === 'available'
+    ? `${label} · ${selected.model} · signed-in CLI`
+    : `${label} unavailable. ${agentStatus?.state === 'unavailable' ? agentStatus.reason : 'Discovering local CLI models…'}`
   return (
     <>
-      <main className="main">
+      <main className={`main chat-main ${fresh ? 'new-idea-main' : ''}`}>
         <header className="header">
-          <div className="titles">
-            <div className="eyebrow">Idea · {idea.fileName}</div>
-            <h1>{idea.title === 'Untitled idea' ? 'New idea' : idea.title}</h1>
-          </div>
-          <div className="meta">
-            {idea.model}
-            {usage && limit ? ` · ${usage.calls} of ${limit} calls` : ''}
-          </div>
+          <div className="titles"><div className="eyebrow">{fresh ? 'New idea · no files yet' : `Idea · ${idea.fileName}`}</div><h1>{idea.title}</h1></div>
+          <div className="meta">{idea.model}{usage && limit ? ` · ${usage.calls} of ${limit} calls` : ''}{!fresh ? <button className="refresh-agents" aria-label="Refresh agents" disabled={sending} onClick={() => void actions.refreshAgents()}>↻</button> : null}</div>
         </header>
-        <div className="scroll">
-          <div className="chat">
-            {status?.services === 'demo' ? <div className="service-note">Demo services. Jev runs and machine annotation use fixtures. Chat uses the selected local CLI and can reach its real service.</div> : null}
-            {idea.messages.length === 0 && !idea.source.trim() ? (
-              <div className="empty" style={{ padding: 0 }}>
-                Describe an idea for {label}, or paste a Jevscript program to check it. Every draft is compiled
-                with <code>jevscript check</code> before you see it.
-              </div>
-            ) : null}
-            {idea.messages.map((message) =>
-              message.role === 'user' ? (
-                <div key={message.id} className="msg-user">
-                  <div className="who">You</div>
-                  <div className="bubble">{message.text}</div>
-                </div>
-              ) : (
-                <div key={message.id} className="msg-jev">
-                  <div className="who">
-                    <i /> {agentLabel(message.origin)}
-                  </div>
-                  {message.text ? <div className="text">{message.text}</div> : null}
-                  {message.program ? (
-                    <ProgramBlock idea={idea} message={message} run={message.id === lastProgram?.id ? run : null} />
-                  ) : null}
-                </div>
-              ),
-            )}
-            {!lastProgram && idea.source.trim() ? (
-              <div className="msg-jev">
-                <div className="who">
-                  <i /> Jev
-                </div>
-                <div className="text">This idea’s program, as it stands.</div>
-                <ProgramBlock
-                  idea={idea}
-                  message={{
-                    id: `current-${idea.id}`,
-                    role: 'assistant',
-                    text: '',
-                    at: idea.updatedAt,
-                    program: {
-                      source: idea.source,
-                      diagnostics: settled?.result?.diagnostics ?? [],
-                      clean: Boolean(settled?.result?.ir) && !settled?.result?.diagnostics.some((d) => d.severity === 'error'),
-                      attempts: 0,
-                    },
-                  }}
-                  pending={settled?.result ? null : settled?.error ? `check failed: ${settled.error}` : 'checking…'}
-                  run={run}
-                />
-              </div>
-            ) : null}
-            <IdeaFiles idea={idea} agent={selected} />
-            {sending ? <div className="muted small">Waiting for {label} · {selected.model}…</div> : null}
-            <div ref={bottom} />
+        {fresh ? <div className="new-idea-area">
+          <div className="new-idea-form">
+            <div className="new-idea-composer">{composerText}<div className="new-idea-footer"><span>Drafts a .jev program and its host file</span>{sendButton}</div></div>
+            <div className="harness-list"><div className="harness-catalog" role="listbox" aria-label="Harness model">{agents.map(agent => <div key={agent.harness} className="harness-group"><div className="harness-heading"><span>Harness · {agent.harness === 'codex' ? 'Codex' : 'Claude Code'}</span><span>{agent.state === 'available' ? 'live' : 'unavailable'}</span></div><div className="harness-models">{agent.models.map(model => <button key={model.id} role="option" aria-selected={selected.harness === agent.harness && selected.model === model.id} data-model={`${agent.harness}:${model.id}`} className="harness-model" title={model.name} disabled={sending} onClick={() => choose(`${agent.harness}:${model.id}`)}><span>{model.id === 'default' ? `Default · ${model.resolved}` : model.resolved}</span>{selected.harness === agent.harness && selected.model === model.id ? <span>✓</span> : null}</button>)}</div>{agent.state === 'unavailable' ? <div className="model-help">{agent.reason}</div> : null}</div>)}</div><div className="model-help">Models are listed from each harness CLI. The harness drafts and answers; Jev judgments use the idea’s Jev profile.</div><button className="refresh-models" disabled={sending} onClick={() => void actions.refreshAgents()}>Refresh agents</button></div>
           </div>
-        </div>
-        <div className="composer">
-          <div className="composer-controls">
-            <label>Model
-              <select aria-label="Harness model" value={`${selected.harness}:${selected.model}`} disabled={sending} onChange={event => {
-                const [harness, ...model] = event.target.value.split(':')
-                actions.updateIdea(idea.id, { chatAgent: { harness: harness === 'codex' ? 'codex' : 'claude-code', model: model.join(':') } })
-              }}>
-                <optgroup label="Harness">
-                  {!agentStatus?.models.some(model => model.id === selected.model) ? <option value={`${selected.harness}:${selected.model}`}>{label} · {selected.model} · unavailable</option> : null}
-                  {agents.filter(agent => agent.state === 'unavailable' && agent.harness !== selected.harness).map(agent => <option key={agent.harness} disabled>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · unavailable</option>)}
-                  {agents.flatMap(agent => agent.models.map(model => <option key={`${agent.harness}:${model.id}`} value={`${agent.harness}:${model.id}`}>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · {model.name}</option>))}
-                </optgroup>
-              </select>
-            </label>
-            <button className="btn" disabled={sending} onClick={() => void actions.refreshAgents()}>Refresh agents</button>
-            <div className="agent-state" role="status">
-              {agentStatus?.state === 'available' ? `${label} · ${selected.model} · signed-in CLI. Shell commands and project writes are disabled.` : `${label} unavailable. ${agentStatus?.state === 'unavailable' ? agentStatus.reason : 'Discovering local CLI models…'}`}
-            </div>
-          </div>
-          <textarea
-            rows={1}
-            value={draft}
-            placeholder="Describe an idea, or ask the agent to change the program…"
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void send()
-              }
-            }}
-          />
-          <span className="hint">/judge /run /replay</span>
-          <button className="send" disabled={!draft.trim() || sending} onClick={() => void send()} aria-label="Send">
-            <SendIcon />
-          </button>
-        </div>
+          <div className="agent-state" role="status">{agentState}</div>
+        </div> : <>
+          <div className="scroll"><div className="chat">
+            {idea.messages.map(message => message.role === 'user' ? <div key={message.id} className="msg-user"><div className="who">You</div><div className="bubble">{message.text}</div></div> : <div key={message.id} className="msg-jev"><div className="who"><i /> <b>Jev</b><span className="reply-provenance">{agentLabel(message.origin)}</span></div>{message.text ? <div className="text">{message.text}</div> : null}{message.program ? <ProgramBlock idea={idea} message={message} run={message.id === lastProgram?.id ? run : null} /> : null}</div>)}
+            {!lastProgram && idea.source.trim() ? <div className="msg-jev"><div className="who"><i /> Jev</div><div className="text">This idea’s program, as it stands.</div><ProgramBlock idea={idea} message={{ id: `current-${idea.id}`, role: 'assistant', text: '', at: idea.updatedAt, program: { source: idea.source, diagnostics: settled?.result?.diagnostics ?? [], clean: Boolean(settled?.result?.ir) && !settled?.result?.diagnostics.some(d => d.severity === 'error'), attempts: 0 } }} pending={settled?.result ? null : settled?.error ? `check failed: ${settled.error}` : 'checking…'} run={run} /></div> : null}
+            {sending ? <div className="muted small">Waiting for {label} · {selected.model}…</div> : null}<div ref={bottom} />
+          </div></div>
+          <div className="composer">{composerText}<div className="model-chip"><span>{label}</span><b>{selectedModel?.resolved ?? selected.model}</b><span aria-hidden="true">⌄</span>{modelSelect()}</div><span className="hint">/judge /run /replay</span>{sendButton}</div>
+          {agentStatus?.state !== 'available' ? <div className="composer-status"><span className="agent-state" role="status">{agentState}</span></div> : null}
+        </>}
       </main>
-      <ChatPanel idea={idea} run={run} />
+      {fresh ? <aside className="panel idea-panel"><section><h5>Idea files</h5><h2>Nothing drafted yet</h2><div className="muted">An idea owns its files. Each file opens in the Playground with its annotations.</div></section><section><h5>Jev programs</h5><div className="file-placeholder">.jev programs appear here, one or more</div></section><section><h5>Host files</h5><div className="file-placeholder">Host scripts that bind and run them</div></section></aside> : <ChatPanel idea={idea} run={run} />}
     </>
   )
+
 }
 
 /** `/run`, `/replay`, `/check`, `/judge <name> <state json>`. */
@@ -347,9 +287,14 @@ function ChatPanel({ idea, run }: { idea: Idea; run: RunView | null }) {
           ))}
         </section>
       ) : null}
+      <section className="idea-panel"><h5>Idea files</h5><IdeaFileList idea={idea} /></section>
       <PauseStack />
     </aside>
   )
+}
+
+function IdeaFileList({ idea }: { idea: Idea }) {
+  return <>{(['jev', 'host'] as const).map(kind => <div key={kind} className="idea-file-group"><div className="eyebrow">{kind === 'jev' ? 'Jev programs' : 'Host files'}</div>{idea.workspace.files.filter(file => file.kind === kind).map(file => <button key={file.id} onClick={() => actions.selectFile(idea.id, file.id, true)}>{file.name}<span>{idea.workspace.annotations.filter(note => note.fileId === file.id).length || ''}</span></button>)}</div>)}</>
 }
 
 export function AnswerRow({ answer, threshold }: { answer: JevAnswer; threshold: { value: number; owner: string } | null }) {
