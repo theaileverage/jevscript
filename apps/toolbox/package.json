@@ -1,0 +1,45 @@
+{
+  "name": "@jevscrypt/toolbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "jevs toolbox: a local chat, playground, machine viewer and adapter bench for Jevscrypt",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "node server/main.ts",
+    "start": "NODE_ENV=production node server/main.ts",
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.129.0",
+    "@codemirror/autocomplete": "6.20.3",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/lint": "6.9.7",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.13",
+    "@fontsource/geist-mono": "5.3.0",
+    "@fontsource/geist-sans": "5.3.0",
+    "@jevscrypt/adapter-claude-code": "link:../../adapters/claude-code",
+    "@jevscrypt/sdk": "link:../../sdk/js",
+    "@lezer/highlight": "1.2.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.2",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.1"
+  }
+}
