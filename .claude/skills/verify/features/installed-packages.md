@@ -18,8 +18,8 @@ user would.
 
 ## How to get to it (user POV)
 
-`npm install jevscript` or `pip install jevscript`, then `jevscript ...` or
-`import { load } from 'jevscript'` / `import jevscript`.
+`npm install @theaileverage/jevscript` or `pip install jevscript`, then `jevscript ...` or
+`import { load } from '@theaileverage/jevscript'` / `import jevscript`.
 
 ## Driving it with package-smoke.sh
 

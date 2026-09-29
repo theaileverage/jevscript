@@ -5,7 +5,7 @@ description: Prove the Jevscript release packages work the way a user installs t
 
 # Verify the Jevscript release packages
 
-The user-facing surface here is what `npm install jevscript` and
+The user-facing surface here is what `npm install @theaileverage/jevscript` and
 `pip install jevscript` put on a machine: a `jevscript` command, the JS and
 Python SDKs that spawn `jevscript serve`, and the bundled examples and Skill.
 Everything below drives that surface through the repo's own release scripts,

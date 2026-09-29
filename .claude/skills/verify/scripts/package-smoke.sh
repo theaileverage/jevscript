@@ -9,7 +9,7 @@ echo "evidence: $evidence"
 target=$(python3 -c 'import sys; sys.path.insert(0, "scripts"); from build_release_cli import host_target; print(host_target())')
 tag=$(python3 -c "import sys; sys.path.insert(0, 'scripts'); from stage_release import PLATFORMS; print(PLATFORMS['$target'])")
 version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
-tgz=".release-tmp/jevscript-$version.tgz"
+tgz=".release-tmp/theaileverage-jevscript-$version.tgz"
 whl=".release-tmp/wheelhouse/jevscript-$version-py3-none-$tag.whl"
 
 step() {
