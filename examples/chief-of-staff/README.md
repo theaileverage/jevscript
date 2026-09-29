@@ -43,12 +43,23 @@ registered project; it reaches project work only through the commands:
 ```sh
 uv run cos --home ~/.cos say 'Fix the parser error in project X'
 uv run cos --home ~/.cos say 'Also cover empty input' --project my-project --channel team --message-id msg-42 --reply-to msg-17
+uv run cos --home ~/.cos status
 uv run cos --home ~/.cos bearings
 uv run cos --home ~/.cos decisions
 uv run cos --home ~/.cos answer '<decision-key>' yes
 uv run cos --home ~/.cos steer '<task-id>' 'Add a regression test'
 uv run cos --home ~/.cos playbooks list
 ```
+
+`cos status` prints a one-line headline with counts of active workers, queued
+items, and open decisions, or an all-quiet message when each count is zero.
+`cos bearings` starts with the same headline, then lists owner decisions,
+active work, queued items, recent outcomes, second mates, and learned
+playbooks. Queued items show stored holds and dependency statuses, including
+completed dependencies in the archive. The digest does not predict dispatch
+readiness; Jevscript's `routing.ready` decides which items can dispatch.
+Reading bearings does not start a Jevscript run or add a recording or episode
+row.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
@@ -214,7 +225,7 @@ covered by offline tests. Vendor CLI interactions require separate live checks.
 | 12 | Away and quiet modes | Home mode, Jevscript escalation policy and return digest | Implemented |
 | 13 | Preferences and learnings | `Memory`, task ledger, automatic versioned playbooks | Implemented |
 | 14 | Scoped second mates | `Mates`, child home and scoped route | Implemented |
-| 15 | Bearings fleet digest | `bearings.jev`, `Bearings` renderer | Implemented |
+| 15 | Bearings fleet digest | Read-only host formatter in `bearings.py` | Implemented |
 
 Public-mention relay, mail and visual boards are outside this showcase.
 The TypeScript variant and TypeScript agent adapters are separate work.

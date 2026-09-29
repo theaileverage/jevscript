@@ -1,4 +1,4 @@
-"""Section 6.4a conversation routing with durable, scoped host correlation."""
+"""Conversation routing with this example's durable, scoped host correlation."""
 
 from __future__ import annotations
 
