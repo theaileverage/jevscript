@@ -47,8 +47,10 @@ def cmd_config(args: argparse.Namespace) -> None:
         value: Any = json.loads(args.value)
     except json.JSONDecodeError:
         value = args.value
-    home.set_config(args.key, value)
+    warnings = home.set_config(args.key, value)
     print(f"{args.key} = {json.dumps(value)}")
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
 
 
 def cmd_project(args: argparse.Namespace) -> None:

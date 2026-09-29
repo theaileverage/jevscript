@@ -14,9 +14,12 @@ restart) and the wake is acknowledged when it finishes.
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import time
 import secrets
+from pathlib import Path
 from typing import Any
 
 from . import backends
@@ -25,6 +28,7 @@ from .capabilities.effects import EffectLog
 from .capabilities.fleet import Fleet
 from .capabilities.llm import TemplateWriter
 from .capabilities.person import Person
+from .capabilities.scout import HarnessScout
 from .delivery import Delivery
 from .episode import Episode, Episodes, JevSession
 from .jevbin import SetupError, jev_dir
@@ -81,6 +85,8 @@ class Host:
         self.session = session or JevSession(self.home)
         self.crew = AgentBinding(crew if crew is not None else self._adapter("crew", "agent"), self.effects)
         self.writer = writer if writer is not None else (self._adapter("writer", "llm") if "writer" in config.get("adapters", {}) else TemplateWriter())
+        self.scout = HarnessScout(config["scout"]["models"])
+        self._questions: int | None = None
         self._terminal = terminal
         self.wakes = WakeQueue(self.home)
         self.watcher = Watcher(self)
@@ -118,10 +124,26 @@ class Host:
         return backends.make("orca") if self.home.config.get("worktrees") == "orca" else None
 
     def bind(self) -> dict[str, Any]:
-        return {"crew": self.crew, "me": self.person, "writer": self.writer, "fleet": self.fleet}
+        return {"crew": self.crew, "me": self.person, "writer": self.writer, "scout": self.scout, "fleet": self.fleet}
 
     def policy(self) -> dict[str, Any]:
         return {**self.home.config["policy"], "mode": self.home.mode}
+
+    def question_cap(self) -> int:
+        """The selected Jev profile's ``max_questions_per_request`` (spec 10.6).
+
+        The host states no limit of its own: once per session it starts the
+        empty ``limits`` task and reads the profile its recording embeds (10.3).
+        """
+        if self._questions is None:
+            with tempfile.TemporaryDirectory(prefix="cos-limits-") as scratch:
+                path = Path(scratch) / "limits.jsonl"
+                run = self.program.task("limits").start(inputs={"snapshot": {}}, bind=self.bind(), record=str(path), model=self.session.model, profiles=self.session.profiles)
+                for _ in run:
+                    pass
+                start = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+                self._questions = int(start["profile"]["max_questions_per_request"])
+        return self._questions
 
     def log(self, message: str) -> None:
         print(f"[{iso()}] {message}", file=sys.stderr)
@@ -141,7 +163,7 @@ class Host:
         return str(episode.result or " ".join(lines))
 
     def close(self) -> None:
-        for closer in (self.crew.close, getattr(self.writer, "close", None), self.program.close, self.session.close):
+        for closer in (self.crew.close, getattr(self.writer, "close", None), getattr(self.scout, "close", None), self.program.close, self.session.close):
             if closer is not None:
                 try:
                     closer()
@@ -199,17 +221,29 @@ class Host:
                 contexts.append({"project": project, "relation": self.threads.relation(scoped), "candidates": self.threads.candidates(scoped)})
             return {"wake": wake, "request": {"id": request["id"], "text": request["text"], "project": request.get("effective_project") or request.get("project"), "skip_playbooks": bool(request.get("skip_playbooks")), "thread_contexts": contexts}, **lists}
         if kind == "dispatch":
+            self.scout = HarnessScout(self.home.config["scout"]["models"])
             items = self.backlog.snapshot()
             paths = {i["id"]: self.paths(i["id"]) for i in items}
             projects = {p["name"] for p in self.registry.projects()}
+            policy = self.policy()
+            self.skills.catalog()  # every pinned byte, once per dispatch wake
+            questions = self.question_cap()
+            lists = self.fleet_lists()
+            profiles = lists["profiles"]
+            plans = {}
+            for item in items:
+                if item["status"] == "queued":
+                    profile = next((p for p in profiles if p["name"] == item["profile"]), profiles[0])
+                    plans[item["id"]] = self.skills.plan(item, policy, questions, profile["harness"] in self.scout.models)
             return {
                 "wake": wake,
                 "backlog": [{**i, "deps": i.get("deps") or [], "notes": i.get("notes") or "", "thread_id": i.get("thread_id")} for i in items if i.get("project") in projects or i["status"] != "queued"],
                 "now": now(),
                 "prefs": self.memory.preferences(),
                 "paths": paths,
-                "skill_catalog": self.skills.snapshot(),
-                **self.fleet_lists(),
+                "skill_plans": plans,
+                "scouts": [{"harness": harness, "model": model} for harness, model in self.scout.models.items()],
+                **lists,
             }
         if kind == "worker":
             worker = self.workers.get(wake["subject"])
@@ -566,6 +600,7 @@ class Host:
                 skills=s.get("skills", []),
                 skill_selection=s.get("skill_selection"),
                 skill_receipt=s.get("skill_receipt"),
+                skill_search=s.get("skill_search"),
             )
             started.append(s["id"])
         return started
