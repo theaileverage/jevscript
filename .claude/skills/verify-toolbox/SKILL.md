@@ -71,6 +71,11 @@ missing CLI, unsupported OS sandbox or provider failures honestly; no fixture
 fallback. Linux Python requires bubblewrap and libseccomp2 and must be reported separately from
 a macOS-only local pass.
 
+Run `pnpm --dir apps/toolbox verify:python-sandbox` to exercise the same Python
+sandbox command with a fixed trusted fixture. It checks SDK imports, inherited
+stdio channels, and denied network, process and outside-file access. Only this
+fixture's bounded output is printed; generated host output stays private.
+
 ## Drive
 
 ```sh

@@ -121,6 +121,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm run typecheck
+          pnpm run verify:python-sandbox
           pnpm test
           JEVS_BROWSER="$(command -v google-chrome)" pnpm test:browser
 

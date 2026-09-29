@@ -46,8 +46,8 @@ finally:
     policy.seccomp_release(context)
 `
 
-/** Python needs an OS sandbox; it has no equivalent of Node's permission mode. */
-async function pythonCommand(dir: string, host: string): Promise<{ bin: string; args: string[] }> {
+/** Confines Python SDK hosts at the host boundary (spec section 11.5). */
+export async function pythonCommand(dir: string, host: string): Promise<{ bin: string; args: string[] }> {
   const discovered = await new Promise<{ executable: string; framework: string | null; prefix: string }>((resolve, reject) => execFile('python3', ['-c', "import json,sys,sysconfig,os;name=sysconfig.get_config_var('PYTHONFRAMEWORK');app=os.path.join(sys.prefix,'Resources',str(name)+'.app','Contents','MacOS',str(name));print(json.dumps({'executable':sys.executable,'framework':app if name and os.path.isfile(app) else None,'prefix':sys.base_prefix}))"], { env: { PATH: process.env['PATH'] }, timeout: 5000 }, (error, stdout) => {
     if (error) reject(new Error('Python 3 is unavailable. Install it to run Python hosts.'))
     else { try { resolve(JSON.parse(stdout)) } catch { reject(new Error('Python executable discovery failed.')) } }

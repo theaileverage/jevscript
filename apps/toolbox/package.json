@@ -13,6 +13,7 @@
     "demo": "vite build && node demo/main.ts",
     "build": "vite build",
     "test": "vitest run",
+    "verify:python-sandbox": "node verification/python-sandbox.ts",
     "test:browser": "vite build && vitest run -c vitest.browser.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json"
   },
