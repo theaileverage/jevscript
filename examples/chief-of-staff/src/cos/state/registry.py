@@ -115,8 +115,7 @@ class Registry:
         record = {"name": name, "scope": scope, "home": str(child.root)}
         write_json(self.mates_path, [m for m in mates if m["name"] != name] + [record])
         charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
-        if not (child.data / "charter.md").exists():
-            atomic_write(child.data / "charter.md", charter)
+        atomic_write(child.data / "charter.md", charter)
         # A minister copies the parent's projects, profiles and preferences at creation.
         sources = [self.home.data / name for name in ("projects.json", "profiles.json", self.home.preferences_path.name)]
         legacy, current = self.home.legacy_preferences_path, self.home.preferences_path

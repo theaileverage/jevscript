@@ -465,12 +465,14 @@ def test_readding_minister_preserves_child_preferences_without_late_captain_copy
     child = home / "mates" / "ops"
     child_principal = child / "data" / "principal.md"
     child_principal.write_bytes(b"# Preferences\n\n- Child preference\n")
-    before = {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file()}
+    before = {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file() and path.relative_to(child) != Path("data/charter.md")}
 
     captain.write_bytes(b"# Preferences\n\n- Parent legacy preference\n")
     cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "updated operations")
+    assert read_json(home / "data" / "mates.json", [])[0]["scope"] == "updated operations"
     assert "ops (portfolio: updated operations):" in cos(home, jevscript_bin, "minister", "list").stdout
-    assert {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file()} == before
+    assert (child / "data" / "charter.md").read_text() == f"# Charter\n\nMinister `ops` of {home}.\nPortfolio: updated operations\n"
+    assert {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file() and path.relative_to(child) != Path("data/charter.md")} == before
     assert not (child / "data" / "captain.md").exists()
     assert child_principal.read_bytes() == b"# Preferences\n\n- Child preference\n"
 
@@ -486,15 +488,18 @@ def test_readding_minister_preserves_child_preferences_without_late_captain_copy
     assert "Parent legacy preference" not in preferences
 
 
-def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str) -> None:
+def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str, tmp_path: Path) -> None:
     host = make_host(
-        rules=[{"match": {"id": "^verdict$"}, "answer": {"choice": "approve"}}],
         scripts=[{"match": "^review: ", "steps": ["work", "idle"]}, {"match": ".", "steps": ["work", "commit", "done", "idle"]}],
         config={"review_profile": "lead", "identity": {"name": "Abigail", "principal": "Ankeeth"}},
     )
     host.registry.set_profiles(host.registry.profiles() + [{"name": "lead", "rule": "reviews other workers' changes", "harness": "codex"}])
-    host.submit("Add input validation")
-    run_until(host, lambda: any((host.home.data).glob("*-review/brief.md")))
+    cli_rules(host, tmp_path, [{"match": {"id": "^verdict$"}, "answer": {"choice": "approve"}}])
+    cos(host.home.root, jevscript_bin, "say", "Add input validation", "--project", "proj")
+    for _ in range(12):
+        if any(host.home.data.glob("*-review/brief.md")):
+            break
+        cos(host.home.root, jevscript_bin, "tick")
     [review] = (host.home.data).glob("*-review/brief.md")
     assert review.read_text().startswith("# Review\nYou are working for Abigail on behalf of Ankeeth.\n")
 
