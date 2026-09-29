@@ -143,6 +143,6 @@ describe('questions and pins', () => {
     const second = await open({ home })
     const { ideas } = await second.client.request<{ ideas: Idea[] }>('ideas.list')
     await second.close()
-    expect(ideas.find((saved) => saved.id === idea.id)?.pins).toEqual([pin])
+    expect(ideas.find((saved) => saved.id === idea.id)?.pins).toEqual([{ ...pin, fileId: idea.workspace.entryFileId }])
   })
 })

@@ -6,11 +6,13 @@
  */
 import { useEffect, useRef, useState } from 'react'
 
-import type { ChatMessage, Idea } from '../../shared/protocol.ts'
+import type { ChatAgent, ChatMessage, Idea } from '../../shared/protocol.ts'
 import { formatDiagnostic } from '../../shared/protocol.ts'
 import { endOf, type JevAnswer, requests, startInfo, usageSoFar } from '../../shared/recording.ts'
 import { requestEntries } from '../../shared/requests.ts'
 import { api } from '../api.ts'
+import { agentLabel } from '../agent-label.ts'
+import { IdeaFiles } from '../components/IdeaFiles.tsx'
 import { JevEditor } from '../components/JevEditor.tsx'
 import { PlayIcon, SendIcon } from '../components/icons.tsx'
 import { PauseStack } from '../components/PauseStack.tsx'
@@ -22,7 +24,12 @@ export function ChatScreen({ idea }: { idea: Idea }) {
   const [sending, setSending] = useState(false)
   const bottom = useRef<HTMLDivElement>(null)
   const run = useStore((s) => latestRun(s, idea.id))
-  const claude = useStore((s) => s.status?.claude)
+  const status = useStore((s) => s.status)
+  const agents = status?.agents ?? []
+  const defaultAgent = agents.find(agent => agent.state === 'available') ?? agents[0]
+  const selected: ChatAgent = idea.chatAgent ?? { harness: defaultAgent?.harness ?? 'claude-code', model: defaultAgent?.models[0]?.id ?? 'default' }
+  const agentStatus = agents.find(agent => agent.harness === selected.harness)
+  const label = selected.harness === 'codex' ? 'Codex' : 'Claude Code'
   const check = useStore((s) => s.checks[idea.id])
   const lastProgram = [...idea.messages].reverse().find((message) => message.program)
   // The saved source counts as checked only once a result for exactly this source is in.
@@ -44,7 +51,10 @@ export function ChatScreen({ idea }: { idea: Idea }) {
     setSending(true)
     try {
       if (text.startsWith('/')) await command(idea, text)
-      else await actions.chat(idea.id, text)
+      else {
+        actions.updateIdea(idea.id, { chatAgent: selected })
+        await actions.chat(idea.id, text)
+      }
     } finally {
       setSending(false)
     }
@@ -58,7 +68,7 @@ export function ChatScreen({ idea }: { idea: Idea }) {
         <header className="header">
           <div className="titles">
             <div className="eyebrow">Idea · {idea.fileName}</div>
-            <h1>{idea.title}</h1>
+            <h1>{idea.title === 'Untitled idea' ? 'New idea' : idea.title}</h1>
           </div>
           <div className="meta">
             {idea.model}
@@ -67,11 +77,11 @@ export function ChatScreen({ idea }: { idea: Idea }) {
         </header>
         <div className="scroll">
           <div className="chat">
+            {status?.services === 'demo' ? <div className="service-note">Demo services. Jev runs and machine annotation use fixtures. Chat uses the selected local CLI and can reach its real service.</div> : null}
             {idea.messages.length === 0 && !idea.source.trim() ? (
               <div className="empty" style={{ padding: 0 }}>
-                Describe an idea and {claude?.available ? `${claude.model} drafts` : 'paste'} a Jevscript program for it. Every draft is compiled
+                Describe an idea for {label}, or paste a Jevscript program to check it. Every draft is compiled
                 with <code>jevscript check</code> before you see it.
-                {claude?.available ? null : ' Drafting needs ANTHROPIC_API_KEY on the server; pasted programs are checked either way.'}
               </div>
             ) : null}
             {idea.messages.map((message) =>
@@ -83,7 +93,7 @@ export function ChatScreen({ idea }: { idea: Idea }) {
               ) : (
                 <div key={message.id} className="msg-jev">
                   <div className="who">
-                    <i /> Jev
+                    <i /> {agentLabel(message.origin)}
                   </div>
                   {message.text ? <div className="text">{message.text}</div> : null}
                   {message.program ? (
@@ -117,15 +127,34 @@ export function ChatScreen({ idea }: { idea: Idea }) {
                 />
               </div>
             ) : null}
-            {sending ? <div className="muted small">Working…</div> : null}
+            <IdeaFiles idea={idea} agent={selected} />
+            {sending ? <div className="muted small">Waiting for {label} · {selected.model}…</div> : null}
             <div ref={bottom} />
           </div>
         </div>
         <div className="composer">
+          <div className="composer-controls">
+            <label>Model
+              <select aria-label="Harness model" value={`${selected.harness}:${selected.model}`} disabled={sending} onChange={event => {
+                const [harness, ...model] = event.target.value.split(':')
+                actions.updateIdea(idea.id, { chatAgent: { harness: harness === 'codex' ? 'codex' : 'claude-code', model: model.join(':') } })
+              }}>
+                <optgroup label="Harness">
+                  {!agentStatus?.models.some(model => model.id === selected.model) ? <option value={`${selected.harness}:${selected.model}`}>{label} · {selected.model} · unavailable</option> : null}
+                  {agents.filter(agent => agent.state === 'unavailable' && agent.harness !== selected.harness).map(agent => <option key={agent.harness} disabled>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · unavailable</option>)}
+                  {agents.flatMap(agent => agent.models.map(model => <option key={`${agent.harness}:${model.id}`} value={`${agent.harness}:${model.id}`}>{agent.harness === 'codex' ? 'Codex' : 'Claude Code'} · {model.name}</option>))}
+                </optgroup>
+              </select>
+            </label>
+            <button className="btn" disabled={sending} onClick={() => void actions.refreshAgents()}>Refresh agents</button>
+            <div className="agent-state" role="status">
+              {agentStatus?.state === 'available' ? `${label} · ${selected.model} · signed-in CLI. Shell commands and project writes are disabled.` : `${label} unavailable. ${agentStatus?.state === 'unavailable' ? agentStatus.reason : 'Discovering local CLI models…'}`}
+            </div>
+          </div>
           <textarea
             rows={1}
             value={draft}
-            placeholder="Describe an idea, or ask Jev to change the program…"
+            placeholder="Describe an idea, or ask the agent to change the program…"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {

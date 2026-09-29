@@ -76,6 +76,9 @@ const MIGRATIONS = [
      key   TEXT PRIMARY KEY,
      value TEXT NOT NULL
    );`,
+  `ALTER TABLE ideas ADD COLUMN chat_agent TEXT;`,
+  `ALTER TABLE ideas ADD COLUMN workspace TEXT;
+   ALTER TABLE pins ADD COLUMN file_id TEXT;`,
 ]
 
 type Row = Record<string, SQLInputValue>
@@ -112,7 +115,7 @@ export class ToolboxStore {
   /** Save an idea, keeping every run already recorded for it. */
   async save(idea: Idea): Promise<Idea> {
     return this.#transaction(() => {
-      const saved = { ...idea, updatedAt: new Date().toISOString() }
+      const saved = normalize({ ...idea, updatedAt: new Date().toISOString() })
       this.#writeIdea(saved)
       this.#db.prepare('DELETE FROM pins WHERE idea_id = ?').run(idea.id)
       saved.pins.forEach((pin, position) => this.#writePin(idea.id, pin, position))
@@ -211,12 +214,12 @@ export class ToolboxStore {
   #writeIdea(idea: Idea): void {
     this.#db
       .prepare(
-        `INSERT INTO ideas (id, title, file_name, source, model, sample, inputs, bindings, messages, claude_history, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO ideas (id, title, file_name, source, model, sample, inputs, bindings, messages, claude_history, created_at, updated_at, chat_agent, workspace)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
            title = excluded.title, file_name = excluded.file_name, source = excluded.source, model = excluded.model,
            sample = excluded.sample, inputs = excluded.inputs, bindings = excluded.bindings, messages = excluded.messages,
-           claude_history = excluded.claude_history, updated_at = excluded.updated_at`,
+           claude_history = excluded.claude_history, updated_at = excluded.updated_at, chat_agent = excluded.chat_agent, workspace = excluded.workspace`,
       )
       .run(
         idea.id,
@@ -231,13 +234,15 @@ export class ToolboxStore {
         JSON.stringify(idea.claudeHistory),
         idea.createdAt,
         idea.updatedAt,
+        idea.chatAgent ? JSON.stringify(idea.chatAgent) : null,
+        JSON.stringify(idea.workspace),
       )
   }
 
   #writePin(ideaId: string, pin: Pin, position: number): void {
     this.#db
-      .prepare('INSERT INTO pins (idea_id, id, position, number, target, query, reply, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(ideaId, pin.id, position, pin.number, JSON.stringify(pin.target), pin.query, pin.reply ? JSON.stringify(pin.reply) : null, pin.status, pin.createdAt)
+      .prepare('INSERT INTO pins (idea_id, id, position, number, target, query, reply, status, created_at, file_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(ideaId, pin.id, position, pin.number, JSON.stringify(pin.target), pin.query, pin.reply ? JSON.stringify(pin.reply) : null, pin.status, pin.createdAt, pin.fileId ?? null)
   }
 
   #writeRun(ideaId: string, run: RunSummary): void {
@@ -263,7 +268,7 @@ export class ToolboxStore {
     const id = row['id'] as string
     const pins = this.#db.prepare('SELECT * FROM pins WHERE idea_id = ? ORDER BY position').all(id) as Row[]
     const runs = this.#db.prepare('SELECT * FROM runs WHERE idea_id = ? ORDER BY started_at, run_id').all(id) as Row[]
-    return {
+    return normalize({
       id,
       title: row['title'] as string,
       fileName: row['file_name'] as string,
@@ -274,10 +279,13 @@ export class ToolboxStore {
       bindings: JSON.parse(row['bindings'] as string) as Idea['bindings'],
       messages: JSON.parse(row['messages'] as string) as Idea['messages'],
       claudeHistory: JSON.parse(row['claude_history'] as string) as unknown[],
+      chatAgent: row['chat_agent'] ? JSON.parse(row['chat_agent'] as string) as Idea['chatAgent'] : null,
+      ...(row['workspace'] ? { workspace: JSON.parse(row['workspace'] as string) as Idea['workspace'] } : {}),
       createdAt: row['created_at'] as string,
       updatedAt: row['updated_at'] as string,
       pins: pins.map((pin) => ({
         id: pin['id'] as string,
+        ...(pin['file_id'] ? { fileId: pin['file_id'] as string } : {}),
         number: pin['number'] as number | null,
         target: JSON.parse(pin['target'] as string) as Pin['target'],
         query: pin['query'] as string,
@@ -295,7 +303,7 @@ export class ToolboxStore {
         outputs: JSON.parse(run['outputs'] as string) as Record<string, unknown>,
         usage: run['usage'] === null ? null : (JSON.parse(run['usage'] as string) as RunSummary['usage']),
       })),
-    }
+    })
   }
 
   #transaction<T>(work: () => T): T {

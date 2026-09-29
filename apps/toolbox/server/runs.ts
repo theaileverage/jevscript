@@ -34,6 +34,7 @@ interface Live {
   pauses: Pause[]
   /** Settles when the drive loop has finished and the run is closed and reported. */
   settled: Promise<void>
+  onEnded?: (summary: RunSummary) => void
 }
 
 /** Called once per run after it ends, before `run.ended` is broadcast. */
@@ -67,25 +68,25 @@ export class RunManager {
     return join(this.#recordings, `${stamp}-${slug}-${randomUUID().slice(0, 8)}.jsonl`)
   }
 
-  async start(request: StartRun): Promise<{ runId: string; recording: string }> {
+  async start(request: StartRun, onEnded?: (summary: RunSummary) => void): Promise<{ runId: string; recording: string }> {
     if (this.#starting.has(request.ideaId) || [...this.#live.values()].some((live) => live.ideaId === request.ideaId)) {
       throw new Error('This idea already has a run in progress. Answer or end it first.')
     }
     this.#starting.add(request.ideaId)
     try {
-      return await this.#start(request)
+      return await this.#start(request, onEnded)
     } finally {
       this.#starting.delete(request.ideaId)
     }
   }
 
-  async #start(request: StartRun): Promise<{ runId: string; recording: string }> {
-    const compiled = await this.#jev.compile(request.fileName, request.source)
+  async #start(request: StartRun, onEnded?: (summary: RunSummary) => void): Promise<{ runId: string; recording: string }> {
+    const compiled = await this.#jev.compile(request.fileName, request.source, request.files)
     if (!compiled.ir) {
       const first = compiled.diagnostics.find((diagnostic) => diagnostic.severity === 'error')
       throw new Error(`the program does not compile: ${first ? formatDiagnostic(first) : 'unknown error'}`)
     }
-    const path = await this.#jev.materialize(request.fileName, request.source)
+    const path = await this.#jev.materialize(request.fileName, request.source, request.files)
     const recording = await this.newRecordingPath(request.title)
     const program = await load(path, { bin: this.#jev.bin })
     const adapters: BoundAdapter[] = []
@@ -99,7 +100,7 @@ export class RunManager {
         adapters.push(bound)
         bind[need.name] = bound.adapter
       }
-      const run = program.task('main').start({
+      const run = program.task(request.task ?? 'main').start({
         inputs: request.inputs,
         bind,
         record: recording,
@@ -120,6 +121,7 @@ export class RunManager {
         events: [],
         pauses: [],
         settled: Promise.resolve(),
+        ...(onEnded ? { onEnded } : {}),
       }
       this.#live.set(runId, live)
       void this.#forwardEvents(live)
@@ -235,6 +237,7 @@ export class RunManager {
       await this.#close(live)
       const summary = await this.#summary(live)
       await this.#onEnded(live.ideaId, summary).catch(() => undefined)
+      live.onEnded?.(summary)
       this.#send({ type: 'run.ended', runId: live.runId, ideaId: live.ideaId, summary })
     }
   }

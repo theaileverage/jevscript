@@ -28,7 +28,8 @@ const toolbox = await startToolbox({ port, model, modelName, serveStatic })
 console.log(`jevs toolbox on ${toolbox.url}`)
 console.log(`  state: ${toolbox.database}`)
 console.log(`  keys loaded from .env: ${loaded.length > 0 ? loaded.join(', ') : 'none'}`)
-console.log(`  chat drafting: ${model ? modelName : 'off (no ANTHROPIC_API_KEY); pasted programs still work'}`)
+console.log('  chat drafting: signed-in Claude Code or Codex, selected in Chat; pasted programs still work')
+console.log(`  annotator: ${model ? modelName : 'off (no ANTHROPIC_API_KEY)'}`)
 console.log(`  Jev: ${process.env['TYPESAFE_API_KEY'] ? 'TYPESAFE_API_KEY set' : 'no TYPESAFE_API_KEY; runs that ask Jev will pause with an error'}`)
 
 const shutdown = async () => {

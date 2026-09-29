@@ -60,7 +60,7 @@ export function MachinesScreen({ idea }: { idea: Idea }) {
   const step = position > 0 ? steps[position - 1] : undefined
   const usage = usageSoFar(events)
   const limit = callsLimit(recordedIr ?? ir, events)
-  const pins = idea.pins.filter((pin) => pin.target.machine === machine.name)
+  const pins = idea.pins.filter((pin) => pin.target.machine === machine.name && (!pin.fileId || pin.fileId === idea.workspace.entryFileId))
   const machinePins = pins.filter((pin) => pin.target.kind === 'machine')
   const drawn = pins.filter((pin) => pin.target.kind !== 'machine' && pin.status !== 'discarded')
 

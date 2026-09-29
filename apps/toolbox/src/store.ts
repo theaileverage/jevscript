@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react'
 
 import type { Pin } from '../shared/annotator.ts'
-import { newIdea } from '../shared/ideas.ts'
+import { newIdea, normalize } from '../shared/ideas.ts'
 import { emptyStack, type Pause, type PauseStack, pauseReducer, type Resume } from '../shared/pauses.ts'
 import type { CheckResult, Diagnostic, Idea, ProfileInfo, ReplayResult, ServerStatus } from '../shared/protocol.ts'
 import type { RecordingEvent } from '../shared/recording.ts'
@@ -51,6 +51,7 @@ export interface State {
   /** The language server's diagnostics for the Playground document, by idea. */
   lspDiagnostics: Record<string, Diagnostic[]>
   toast: string | null
+  hosts: Record<string, { ok: boolean; message: string }>
 }
 
 let state: State = {
@@ -67,6 +68,7 @@ let state: State = {
   lsp: 'connecting',
   lspDiagnostics: {},
   toast: null,
+  hosts: {},
 }
 const listeners = new Set<() => void>()
 
@@ -188,7 +190,7 @@ export const actions = {
   updateIdea(id: string, patch: Partial<Idea>): void {
     const idea = state.ideas.find((candidate) => candidate.id === id)
     if (!idea) return
-    const next = { ...idea, ...patch }
+    const next = normalize({ ...idea, ...patch })
     replaceIdea(next)
     clearTimeout(saveTimers.get(id))
     saveTimers.set(
@@ -220,7 +222,7 @@ export const actions = {
     const source = idea.source
     set((s) => ({ checks: { ...s.checks, [id]: { source, result: s.checks[id]?.result ?? null, error: null, checking: true } } }))
     try {
-      const result = await api.request('check', { fileName: idea.fileName, source })
+      const result = await api.request('check', { fileName: idea.fileName, source, files: idea.workspace.files })
       set((s) => (s.checks[id]?.source === source ? { checks: { ...s.checks, [id]: { source, result, error: null, checking: false } } } : {}))
       return result
     } catch (error) {
@@ -245,12 +247,19 @@ export const actions = {
     }
   },
 
+  async refreshAgents(): Promise<void> {
+    try {
+      const { agents } = await api.request('agents.refresh', {})
+      set(s => ({ status: s.status ? { ...s.status, agents } : null }))
+    } catch (error) { fail(error) }
+  },
+
   /**
    * Start `main` with the idea's source, inputs, bindings, profile and sample
    * option. One run per idea at a time: a held Enter on a focused Run button
    * repeats its click, and every start is a live, paid run.
    */
-  async run(id: string): Promise<string | null> {
+  async run(id: string, hostFileId?: string): Promise<string | null> {
     const idea = state.ideas.find((candidate) => candidate.id === id)
     if (!idea) return null
     if (starting.has(id) || Object.values(state.runs).some((run) => run.ideaId === id && !run.ended && !run.replay)) {
@@ -259,7 +268,7 @@ export const actions = {
     }
     starting.add(id)
     try {
-      return await startRun(idea)
+      return await startRun(idea, hostFileId)
     } finally {
       starting.delete(id)
     }
@@ -318,7 +327,7 @@ export const actions = {
 
 const starting = new Set<string>()
 
-async function startRun(idea: Idea): Promise<string | null> {
+async function startRun(idea: Idea, hostFileId?: string): Promise<string | null> {
   const id = idea.id
   let inputs: Record<string, unknown>
   try {
@@ -328,7 +337,7 @@ async function startRun(idea: Idea): Promise<string | null> {
     return null
   }
   try {
-    const started = await api.request('run.start', {
+    const started = hostFileId ? await api.request('pair.run', { idea, hostFileId }) : await api.request('run.start', {
       run: {
         ideaId: id,
         title: idea.title,
@@ -338,6 +347,7 @@ async function startRun(idea: Idea): Promise<string | null> {
         bindings: idea.bindings,
         model: idea.model,
         sample: idea.sample,
+        files: idea.workspace.files,
       },
     })
     set((s) => ({
@@ -412,6 +422,9 @@ function onPush(push: Parameters<Parameters<typeof api.onPush>[0]>[0]): void {
       return { runs: { ...s.runs, [runId]: { ...run, ...change(run) } } }
     })
   switch (push.type) {
+    case 'host.ended':
+      set(s => ({ hosts: { ...s.hosts, [push.ideaId]: { ok: push.ok, message: push.message } } }))
+      break
     case 'run.event':
       update(push.runId, state.runs[push.runId]?.ideaId ?? '', (run) => ({ events: [...run.events, push.event] }))
       break

@@ -6,9 +6,9 @@
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
-import type { CheckResult, Diagnostic, ReplayResult } from '../shared/protocol.ts'
+import type { CheckResult, Diagnostic, IdeaFile, ReplayResult } from '../shared/protocol.ts'
 import { parseDiagnostics } from '../shared/protocol.ts'
 import { readIr } from '../shared/ir.ts'
 import type { Pause } from '../shared/pauses.ts'
@@ -35,6 +35,7 @@ export function exec(bin: string, args: string[], env: NodeJS.ProcessEnv = proce
 
 /** A safe file name for a program, so diagnostics read `inbox_triage.jev:3:1`. */
 export function programFileName(fileName: string): string {
+  if (fileName.endsWith('.jev') && fileName.split('/').every(segment => /^[A-Za-z0-9_.-]+$/.test(segment) && !['.', '..'].includes(segment))) return fileName
   const base = fileName.replace(/[^A-Za-z0-9_.-]/g, '_')
   return base.endsWith('.jev') ? base : `${base || 'program'}.jev`
 }
@@ -49,17 +50,25 @@ export class Jevscript {
   }
 
   /** Write the source where the CLI can read it. Each call gets its own directory. */
-  async materialize(fileName: string, source: string): Promise<string> {
+  async materialize(fileName: string, source: string, files: IdeaFile[] = []): Promise<string> {
     await mkdir(this.workDir, { recursive: true })
     const dir = await mkdtemp(join(this.workDir, 'src-'))
+    for (const file of files) {
+      if (file.kind !== 'jev') continue
+      if (!file.name.split('/').every(segment => /^[A-Za-z0-9_.-]+$/.test(segment) && !['.', '..'].includes(segment)) || !file.name.endsWith('.jev')) throw new Error('Jev workspace files need safe relative .jev names.')
+      const sibling = join(dir, file.name)
+      await mkdir(dirname(sibling), { recursive: true })
+      await writeFile(sibling, file.source)
+    }
     const path = join(dir, programFileName(fileName))
+    await mkdir(dirname(path), { recursive: true })
     await writeFile(path, source)
     return path
   }
 
   /** `jevscript compile`: the IR when it compiles, and every diagnostic, warnings included. */
-  async compile(fileName: string, source: string): Promise<CheckResult> {
-    const path = await this.materialize(fileName, source)
+  async compile(fileName: string, source: string, files: IdeaFile[] = []): Promise<CheckResult> {
+    const path = await this.materialize(fileName, source, files)
     const result = await exec(this.bin, ['compile', path])
     const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
     if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
@@ -74,8 +83,9 @@ export class Jevscript {
     fileName: string,
     source: string,
     manifests: Record<string, unknown>,
+    files: IdeaFile[] = [],
   ): Promise<{ missing: string[]; diagnostics: Diagnostic[] }> {
-    const path = await this.materialize(fileName, source)
+    const path = await this.materialize(fileName, source, files)
     const manifestPath = join(await mkdtemp(join(tmpdir(), 'jevs-tools-')), 'manifests.json')
     await writeFile(manifestPath, JSON.stringify(manifests))
     const result = await exec(this.bin, ['check', path, '--tools', manifestPath])

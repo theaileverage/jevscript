@@ -4,6 +4,7 @@
  * built files in production). Every request the page makes is dispatched here.
  */
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -12,16 +13,18 @@ import { join, resolve, sep } from 'node:path'
 import { load } from 'jevscript'
 import { WebSocket, WebSocketServer } from 'ws'
 
-import type { ClientMessage, Idea, Replies, Request, ServerMessage } from '../shared/protocol.ts'
+import type { ChatOrigin, ClientMessage, FileAnnotation, Idea, Replies, Request, ServerMessage } from '../shared/protocol.ts'
 import { parseRecording } from '../shared/recording.ts'
 import { annotate, chatTurn, type Model } from './claude.ts'
+import { LocalAgents } from './agents.ts'
 import { paths as defaultPaths, REPO_ROOT } from './env.ts'
-import { newIdea, ToolboxStore } from './store.ts'
+import { newIdea, normalize, ToolboxStore } from './store.ts'
 import { bridgeLsp, lspAvailable, lspCommand, readErrorReference } from './lsp.ts'
 import { resend } from './resend.ts'
 import { Jevscript } from './jevscript.ts'
 import { readProfiles } from './profiles.ts'
 import { RunManager } from './runs.ts'
+import { HostRunner } from './hosts.ts'
 
 export interface ToolboxOptions {
   env?: NodeJS.ProcessEnv
@@ -29,6 +32,8 @@ export interface ToolboxOptions {
   home?: string
   model?: Model | null
   modelName?: string
+  services?: 'standard' | 'demo'
+  agentTimeoutMs?: number
   port?: number
   host?: string
   serveStatic?: (request: IncomingMessage, response: ServerResponse) => void
@@ -50,6 +55,8 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
   const jev = new Jevscript(bin, join(home, 'work'))
   const ideas = new ToolboxStore(home)
   const model = options.model ?? null
+  const agents = new LocalAgents({ env, home, ...(options.agentTimeoutMs ? { timeoutMs: options.agentTimeoutMs } : {}) })
+  let agentStatuses = await agents.discover()
   const spec = await readFile(join(REPO_ROOT, 'spec/jevscript-language-specification.md'), 'utf8')
   const sockets = new Set<WebSocket>()
   const broadcast = (message: ServerMessage) => {
@@ -60,6 +67,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     const idea = await ideas.appendRun(ideaId, summary)
     if (idea) broadcast({ type: 'idea.updated', idea })
   })
+  const hosts = new HostRunner(jev, runs, home, broadcast)
   await seedIdeas(ideas, defaults.examples)
   const lsp = lspCommand(env, bin)
   const errorReference = await readErrorReference(join(REPO_ROOT, 'docs/error-reference.md'))
@@ -78,12 +86,14 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       home,
       database: ideas.path,
       claude: { available: model !== null, model: model?.name ?? options.modelName ?? 'claude-opus-5-5' },
+      agents: agentStatuses,
+      services: options.services ?? 'standard',
       typesafeKey: Boolean(env['TYPESAFE_API_KEY']),
       profilesOverlay: env['JEVSCRIPT_PROFILES'] ?? null,
       lsp: { command: lsp, available: lspAvailable(lsp) },
     }),
-    check: (request) => jev.compile(request.fileName, request.source),
-    'tools.check': (request) => jev.checkTools(request.fileName, request.source, request.manifests),
+    check: (request) => jev.compile(request.fileName, request.source, request.files),
+    'tools.check': (request) => jev.checkTools(request.fileName, request.source, request.manifests, request.files),
     profiles: () => readProfiles(defaults.bundledProfiles, env['JEVSCRIPT_PROFILES']),
     'ideas.list': async () => ({ ideas: await ideas.list() }),
     'ideas.save': async (request) => ({ idea: await ideas.save(request.idea) }),
@@ -92,18 +102,63 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       return { ok: true }
     },
     'chat.send': async (request) => {
-      const idea = await chatTurn(request.idea, request.text, { model, compile: (f, s) => jev.compile(f, s), spec })
+      const selected = request.idea.chatAgent
+      let chatModel = model
+      let unavailable: string | undefined
+      if (selected) {
+        try { chatModel = agents.model(selected) }
+        catch (error) { chatModel = null; unavailable = error instanceof Error ? error.message : 'The local agent is unavailable.' }
+      }
+      const idea = await chatTurn(request.idea, request.text, {
+        model: chatModel, compile: (f, s) => jev.compile(f, s, request.idea.workspace?.files), spec,
+        origin: selected
+          ? unavailable ? { kind: 'error', ...selected } : { kind: 'agent', ...selected, requestedModel: selected.model }
+          : { kind: options.services === 'demo' ? 'fixture' : 'api', model: model?.name ?? '' },
+        ...(unavailable ? { unavailable } : {}),
+      })
       return { idea: await ideas.save(idea) }
     },
+    'agents.refresh': async () => {
+      agentStatuses = await agents.discover()
+      return { agents: agentStatuses }
+    },
     annotate: async (request) => {
-      const current = await jev.compile(request.idea.fileName, request.idea.source)
+      const current = await jev.compile(request.idea.fileName, request.idea.source, request.idea.workspace?.files)
       const pin = await annotate(request.idea, request.target, request.query, {
         model,
-        compile: (f, s) => jev.compile(f, s),
+        compile: (f, s) => jev.compile(f, s, request.idea.workspace?.files),
         spec,
         current,
       })
-      return { pin }
+      return { pin: { ...pin, fileId: request.idea.workspace?.entryFileId } }
+    },
+    'file.annotate': async request => {
+      const idea = normalize(request.idea)
+      const file = idea.workspace.files.find(file => file.id === request.fileId)
+      if (!file) throw new Error('The selected file no longer belongs to this idea.')
+      if (!Number.isInteger(request.from) || !Number.isInteger(request.to) || request.from < 0 || request.to <= request.from || request.to > file.source.length) throw new Error('Select text from the current file before annotating.')
+      const selection = idea.chatAgent
+      if (!selection) throw new Error('Choose a Harness model before annotating.')
+      const selected = file.source.slice(request.from, request.to)
+      let reply: string
+      let origin: ChatOrigin = { kind: 'error', ...selection }
+      try {
+        const model = agents.model(selection)
+        const completion = await model.complete(
+          file.kind === 'jev' ? `Answer questions about Jevscript from this language specification.\n${spec}` : 'Answer questions about this idea’s host source file. The toolbox provides runIdea({inputs?, task?}) from .toolbox/host.ts, backed by the Jevscript SDK with selected bindings, profile, pauses and recordings. Do not claim that the source has been executed or checked.',
+          [{ role: 'user', content: `File ${file.name}:\n${file.source}\n\nSelected text:\n${selected}\n\nQuestion:\n${request.query}\n\nReply with a concise annotation. Do not change files or invoke tools.` }],
+        )
+        reply = completion.text
+        origin = { kind: 'agent', ...selection, model: completion.model ?? selection.model, requestedModel: selection.model }
+      } catch (error) { reply = error instanceof Error ? error.message : 'The local agent failed.' }
+      const annotation: FileAnnotation = { id: randomUUID(), fileId: file.id, from: request.from, to: request.to, selected, query: request.query, reply, origin, at: new Date().toISOString() }
+      const saved = await ideas.save({ ...idea, workspace: { ...idea.workspace, annotations: [...idea.workspace.annotations, annotation] } })
+      return { idea: saved, annotation }
+    },
+    'pair.check': request => hosts.check(normalize(request.idea), request.hostFileId),
+    'pair.run': async request => {
+      const idea = await ideas.save(request.idea)
+      return hosts.start(idea, request.hostFileId)
     },
     'run.start': (request) => runs.start(request.run),
     'run.resume': async (request) => {
@@ -182,6 +237,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     port,
     database: ideas.path,
     async close() {
+      await hosts.close()
       await runs.closeAll()
       for (const socket of sockets) socket.terminate()
       wss.close()

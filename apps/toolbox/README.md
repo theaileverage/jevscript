@@ -34,11 +34,25 @@ answers a question or proposes an edit (ask it to "ask me instead" on the
 `stuck` edge); the stand-in Jev prefers `finished`, `approved` and `week`. Every
 screen works: Chat, Playground, Machines and Adapters.
 
-The demo never reads a real provider key. It loads no `.env` file, and it
+New Idea offers one **Harness** model list by the composer, with Claude Code and
+Codex choices discovered from the installed CLIs. Select a model, then describe
+your idea. These choices invoke your
+signed-in local CLI and return a real response. The demo labels Jev and machine
+annotation as fixtures on every screen. A selected local agent never falls back
+to a fixture.
+
+The demo loads no `.env` file, and it
 replaces `TYPESAFE_API_KEY`, `JEVSCRIPT_PROFILES` and the `ANTHROPIC_*`
 variables in its own environment with the stand-ins' values before anything
-starts. The one thing on its screens that can reach outside is binding an agent
-to Claude Code on the Adapters screen, which starts your real `claude` in tmux.
+starts. Chat can reach Claude or OpenAI through CLI sign-in. Binding an agent
+to Claude Code on the Adapters screen also starts your real `claude` in tmux.
+
+Install and sign in to the CLIs you want to use. Run `claude auth login` or
+`codex login`, then click **Refresh agents**. No Anthropic or OpenAI API key is
+required for CLI Chat. The selector only offers the CLI's discovered model menu;
+provider access or usage-limit failures appear as errors saved with the idea.
+Claude Code aliases show their resolved model on a successful reply when the CLI
+reports it. Codex uses the concrete model ID returned by `model/list`.
 
 Its state is kept apart from a real toolbox home: `~/.jevs-toolbox-demo`
 (`JEVS_TOOLBOX_HOME` and `JEVS_TOOLBOX_PORT` override the home and port). It
@@ -48,9 +62,9 @@ entirely.
 
 ## Screens
 
-- **Chat.** Describe an idea; Claude drafts a program with the spec as its
+- **Chat.** Choose Claude Code or Codex and a model, then describe an idea. The CLI drafts a program with the spec as its
   system prompt. Every draft is compiled with `jevscript compile`; errors go
-  back to Claude for up to two repairs, and a draft that still fails is shown
+  back to the selected CLI for up to two repairs, and a draft that still fails is shown
   with its diagnostics and is not adopted. A pasted program (fenced or bare) is
   checked without any model. Commands: `/run`, `/replay`, `/check`,
   `/judge <judgment> {"param": "value"}`. The right panel shows the inputs,
@@ -74,12 +88,48 @@ entirely.
   manifests runs the section 9.4 comparison. An agent bound to Claude Code shows
   a live tail of its pane, labelled as agent-written and never acted on.
 
+## Idea files and host execution
+
+Each idea owns a workspace of Jev programs and host files. Open **Workspace** in
+Chat, select a file tab to edit it, or add a relative file such as `lib/helper.jev`.
+Selecting a Jev file makes it the entry program for checks and runs; its sibling
+Jev files resolve `use` imports. Select text in either kind of source and use
+**Annotate selection** to ask the current Harness model. The selected text and
+reply remain with the file, including a notice when its source changes later.
+Machine pins also remain attached to their original Jev file.
+
+New and migrated ideas include a visible, editable `host.ts` alongside their Jev
+source. On its tab, **Check pair** compiles the selected Jev entry and syntax-checks
+the host with Node; it executes no host code. **Run pair** explicitly executes the
+selected host. Its `runIdea()` helper uses the current SDK's `Program.task().start()`
+with the idea's bindings, inputs, Jev profile and sample option. It returns the
+terminal summary, outputs and recording path after any page-owned pauses settle:
+
+```ts
+import { runIdea } from './.toolbox/host.ts'
+const result = await runIdea({ task: 'main', inputs: { name: 'Ada' } })
+console.log(result.outputs)
+```
+
+Omit the options to use `main` and the idea's Inputs JSON. Bind capabilities on
+Adapters as for a direct Jev run. Each host launch supports one `runIdea` call;
+Jev can call its linked tasks and modules normally. Host errors appear in the page.
+Host stdout/stderr are bounded and discarded, so printing environment values does
+not put them in the UI or logs. Node's permission mode permits filesystem access
+only inside the materialized workspace and disables network, subprocesses and
+native addons. External effects go through the selected runtime bindings. The
+child inherits PATH, without provider credentials. Host startup is bounded to
+five seconds, execution to ten minutes, source/output to 1 MiB, and the helper
+request to 64 KiB. The reserved `.toolbox/host.ts` helper is provided at execution
+time; local workspace imports work, while external package imports are not bundled.
+Run/replay recordings retain the ordinary Jev runtime format.
+
 ## Where state lives
 
 Everything lives under the toolbox home (`~/.jevs-toolbox`), never in the
 repository:
 
-- `toolbox.sqlite` holds the toolbox's own state: ideas with their chat,
+- `toolbox.sqlite` holds the toolbox's own state: ideas with their chat, files, annotations,
   bindings and inputs, pins, the index of runs per idea, and resend history.
   The server prints its path at start-up and reports it in `status`.
 - `recordings/` holds one JSONL recording per run, as the runtime writes it
@@ -92,13 +142,19 @@ records that it did, and leaves the files in place as a backup; it never
 imports them again. A database written by a newer toolbox is refused rather
 than read.
 
+SQLite upgrades add the model choice and workspace without replacing earlier
+source, chat, pins or run rows. An earlier single-file idea becomes its first Jev
+file plus the default host; its pins remain attached to that Jev file.
+
 ## Environment
 
 | Variable | Default | Used for |
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | from `.env` | Jev calls in runs, `/judge` and resend |
-| `ANTHROPIC_API_KEY` | from `.env` | Chat drafting and the annotator; without it both say so, and pasted programs still work |
-| `JEVS_TOOLBOX_MODEL` | `claude-opus-5-5` | The Claude model for drafting and annotating |
+| `ANTHROPIC_API_KEY` | from `.env` | The annotator and legacy API Chat requests; local CLI Chat does not use it |
+| `JEVS_TOOLBOX_MODEL` | `claude-opus-5-5` | The API model for the annotator and legacy API Chat requests |
+| `JEVS_TOOLBOX_CLAUDE_BIN` | `claude` on PATH | Local Claude Code executable; a path, never a shell command |
+| `JEVS_TOOLBOX_CODEX_BIN` | `codex` on PATH | Local Codex executable; a path, never a shell command |
 | `JEVSCRIPT_PROFILES` | none | A profiles overlay, shown in the profile switcher and used by runs |
 | `JEVSCRIPT_BIN` | `<repo>/target/debug/jevscript` | The runtime binary |
 | `JEVSCRIPT_PATH` | none | Module roots for `use` (spec section 3.9) |
@@ -120,11 +176,25 @@ Stubbed: the Stub binding is a demonstration adapter. It follows the CLI's
 `--stub` except that typed tool verbs return a value of their declared type;
 see `SPEC-GAPS.md` item 1.
 
-Not verified end to end in this build: live Claude drafting and live annotator
-edits, and live Jev answers. The tests run the real Anthropic SDK client and the
+CLI Chat starts in an empty temporary directory under `<home>/agent-work`, sends
+the spec and conversation through stdin, and removes the directory afterward.
+Claude Code uses print mode with tools, customizations, MCP and session persistence
+disabled. Codex uses ephemeral exec with a read-only sandbox, no approvals, no user
+config or exec rules, and shell execution, code execution, hooks, plugins, apps,
+browser tools and delegation disabled. Each response has a 90-second deadline,
+512 KiB input limit and 2 MiB combined output limit. Compiler repairs can make at
+most two additional responses. Failed requests save a safe error and never expose
+raw CLI stderr, credential values or full environment data.
+
+Live CLI Chat was verified with Claude Code 2.1.284 using `claude-opus-5-5` and
+Codex CLI 0.159.0 using `gpt-6.1-sol`. Both generated greeting programs through
+`/ws` that compiled on the first attempt. See [CLI Chat verification](verification/harness-chat.md).
+
+Live annotator edits and live Jev answers remain unverified. The tests run the real Anthropic SDK client and the
 real runtime against local stand-ins for both services (`demo/services.ts`),
 which prove the toolbox's side of each exchange but nothing about the live
-services. A live Claude Code pane is not driven either; the adapter has its own
+services. The CLI tests use fake executables and do not prove live service access.
+A live Claude Code pane is not driven either; the adapter has its own
 tmux tests, and the toolbox's pane tail is checked against a real tmux pane.
 
 ## Tests

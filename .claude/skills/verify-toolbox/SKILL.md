@@ -12,8 +12,9 @@ The only things replaced are the two paid services, TypeSafe and Anthropic,
 which `apps/toolbox/demo/services.ts` stands in for locally. The toolbox's own
 state is in `<home>/toolbox.sqlite`; recordings are JSONL files beside it.
 
-Nothing here calls a live service. The drive script unsets both keys, and the
-fixtures set their own, so a key in `.env` is never read by a test.
+The deterministic drive suite uses fake Claude Code and Codex executables as well
+as the two fixture API endpoints. It calls no live model. Manual Launch enables
+real Chat through signed-in local CLIs. No provider API key is needed for that path.
 
 ## Doctor
 
@@ -38,11 +39,20 @@ evidence directory:
 ```
 
 Ready when it prints `jevs toolbox demo: http://127.0.0.1:<port>` with the
-database path and both fixture endpoints. The demo reads no `.env` and replaces
-every provider variable with the fixtures' values. The fixture Claude drafts the
-inbox triage program for any request, and at a pin it proposes the
-stuck-to-waiting edit when asked to "ask me instead". Open the URL with
+database path and fixture endpoints. The demo reads no `.env` and replaces
+provider API variables with the fixtures' values. Chat offers real Claude Code
+and Codex responses using CLI sign-in. Jev and annotation remain visibly labeled
+fixtures. At a pin the fixture proposes the stuck-to-waiting edit when asked to
+"ask me instead". Open the URL with
 chrome-devtools-axi.
+
+For a live Chat check, create an idea, choose an agent and a discovered model, and
+ask for a small greeting program without capability calls. Confirm the response
+names the selected CLI and model and its draft compiles. Repeat for the other CLI.
+Open Workspace and its host.ts tab, inspect the source, then Check pair and Run
+pair. Confirm the greeting output and saved recording. Select text in both Jev and
+host source and annotate with the Harness model. Report signed-out, missing CLI or provider failures honestly. Never substitute a
+fixture response. Check that both messages and selection return after a restart.
 
 ## Drive
 
@@ -54,6 +64,11 @@ It runs, each into `<evidence-dir>/<step>.log`:
 
 - **typecheck.** Both tsconfigs.
 - **boundary.** `pnpm test`. Chat drafting with repairs, the annotator, check
+  and local CLI discovery/selection, saved errors, signed-out behavior, input and
+  output limits, timeout termination, CLI conversation restart and SQLite upgrade;
+  idea-owned Jev/host source and selection annotations across restart, linked-file
+  compilation, side-effect-free pair checks, explicit host task/inputs, permission
+  refusal outside its workspace, safe errors, page-owned pauses and recording replay;
   and `check --tools`, profiles, `/judge`, runs with a JSONL subprocess adapter
   (retry, a dead adapter, a manifest refusal), run lifecycle, resend parity
   with the runtime's own request bodies and error messages, `jevscript lsp`
@@ -68,8 +83,12 @@ It runs, each into `<evidence-dir>/<step>.log`:
   source, run, Requests, replay with no live call), Machines (graph, steps,
   pin, apply and revert) and Adapters (binding, the manifest check), then
   restarts the server and finds the ideas, pin, binding and steps again. It
-  also runs `pnpm demo` as a process with real-looking keys and a dead
-  Anthropic URL in its environment, drafts and runs through it, stops it with
+  also checks the single Harness model selector, reply provenance, selection after reload,
+  saved errors and unavailable states with fake executables; edits and annotations
+  on Jev and host file tabs, checks without executing, explicit Run pair, error
+  visibility and workspace/annotation restoration. It runs `pnpm demo`
+  as a process with real-looking keys and a dead Anthropic URL in its environment,
+  selects a fake CLI and runs its checked draft, stops it with
   Ctrl-C, restarts it on the same home and finds the state again.
 
 It exits non-zero if any step failed.
@@ -83,9 +102,9 @@ browser pass's screenshots. Label what it proves honestly:
 - Everything here is **fixture integration** or **local E2E** against fixture
   endpoints. It proves the toolbox's side of each exchange, not the live
   services.
-- A live Claude draft, live Jev answers and a live Claude Code pane are not
-  covered. Report them as not verified unless you ran them with real keys and
-  said so.
+- Live CLI Chat is a separate manual check. The fixture suite never proves it.
+  Live API annotation, Jev answers and Claude Code panes are not covered. Report
+  them as not verified unless you actually drove them.
 - The tmux check is skipped without tmux, and a skipped step is not a pass.
 
 ## Cleanup

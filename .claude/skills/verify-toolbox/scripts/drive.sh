@@ -5,6 +5,7 @@ set -uo pipefail
 root=$(git rev-parse --show-toplevel)
 evidence=${1:-${TMPDIR:-/tmp}/jevs-toolbox-verify/$(date +%s)}
 mkdir -p "$evidence"
+evidence=$(cd "$evidence" && pwd -P)
 cd "$root/apps/toolbox"
 : > "$evidence/summary.txt"
 step() {

@@ -44,7 +44,7 @@ export async function connect(toolbox: Pick<Toolbox, 'url'>): Promise<Client> {
 
 /** Start a toolbox and connect one page to it. */
 export async function open(options: ToolboxOptions): Promise<{ toolbox: Toolbox; client: Client; close(): Promise<void> }> {
-  const toolbox = await startToolbox(options)
+  const toolbox = await startToolbox({ ...options, env: { ...process.env, JEVS_TOOLBOX_CLAUDE_BIN: '/nonexistent/claude-fixture', JEVS_TOOLBOX_CODEX_BIN: '/nonexistent/codex-fixture', ...options.env } })
   const client = await connect(toolbox)
   return {
     toolbox,

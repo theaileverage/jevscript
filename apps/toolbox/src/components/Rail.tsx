@@ -16,6 +16,7 @@ export function Rail() {
   const needs = useStore((s) => (s.currentId ? (s.checks[s.currentId]?.result?.ir?.needs.length ?? 0) : 0))
   const cards = useStore((s) => s.stack.cards)
   const runs = useStore((s) => s.runs)
+  const services = useStore((s) => s.status?.services)
   const pausedIdeas = new Set(cards.map((card) => runs[card.runId]?.ideaId))
 
   return (
@@ -23,6 +24,7 @@ export function Rail() {
       <div className="wordmark">
         <b>jevs</b> <span>toolbox</span>
       </div>
+      {services === 'demo' ? <div className="service-note">Demo. Jev and annotation use fixtures. Chat uses local CLIs.</div> : null}
       <button className="new-idea" onClick={() => void actions.createIdea()}>
         New idea <kbd>⌘ N</kbd>
       </button>

@@ -48,6 +48,8 @@ export type PinStatus = 'open' | 'applied' | 'discarded'
 
 export interface Pin {
   id: string
+  /** Jev file in the idea workspace; older pins retain the original entry file. */
+  fileId?: string
   /** Shown on the graph; whole-machine questions have none. */
   number: number | null
   target: PinTarget

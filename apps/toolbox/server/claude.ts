@@ -25,13 +25,14 @@ import {
 import { machineGraph } from '../shared/graph.ts'
 import type { Ir, IrMachine } from '../shared/ir.ts'
 import { printExpr, textLiteral } from '../shared/ir.ts'
-import type { ChatMessage, CheckResult, DraftProgram, Idea } from '../shared/protocol.ts'
+import type { ChatMessage, ChatOrigin, CheckResult, DraftProgram, Idea } from '../shared/protocol.ts'
 import { formatDiagnostic } from '../shared/protocol.ts'
 
 /** One model turn: the raw content to keep in history, and its text. */
 export interface Completion {
   content: unknown[]
   text: string
+  model?: string
 }
 
 /** The model, behind an interface so tests can stand in for the API. */
@@ -154,10 +155,12 @@ export interface ChatDeps {
   model: Model | null
   compile: Compile
   spec: string
+  origin?: ChatOrigin
+  unavailable?: string
 }
 
-function message(role: ChatMessage['role'], text: string, program?: DraftProgram): ChatMessage {
-  return { id: randomUUID(), role, text, at: new Date().toISOString(), ...(program ? { program } : {}) }
+function message(role: ChatMessage['role'], text: string, program?: DraftProgram, origin?: ChatOrigin): ChatMessage {
+  return { id: randomUUID(), role, text, at: new Date().toISOString(), ...(program ? { program } : {}), ...(origin ? { origin } : {}) }
 }
 
 function adopt(idea: Idea, program: DraftProgram): Idea {
@@ -191,7 +194,7 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
     const reply = program.clean
       ? 'Checked. It compiles, so it is now this idea’s program.'
       : 'Checked. It does not compile yet; the diagnostics are below.'
-    return adopt({ ...next, messages: [...next.messages, message('assistant', reply, program)] }, program)
+    return adopt({ ...next, messages: [...next.messages, message('assistant', reply, program, { kind: 'check' })] }, program)
   }
 
   if (!deps.model) {
@@ -201,43 +204,56 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
         ...next.messages,
         message(
           'assistant',
-          'Drafting needs ANTHROPIC_API_KEY, which this server does not have. Paste a program, in a ```jev block or bare, and I will check it and make it this idea’s program.',
+          deps.unavailable ?? 'Drafting needs a signed-in local agent. Choose Claude Code or Codex, or paste a program to check it. Legacy API drafting needs ANTHROPIC_API_KEY.',
+          undefined,
+          deps.origin,
         ),
       ],
     }
   }
 
-  const context = next.source.trim() ? `\n\nThe idea's current program (${next.fileName}):\n\`\`\`jev\n${next.source}\`\`\`` : ''
-  let history = [...next.claudeHistory, { role: 'user', content: text + context }]
+  const context = next.chatAgent
+    ? `\n\nThis idea's workspace (entry Jev file: ${next.fileName}). Companion Jev files are available to use; host files are saved alongside the program and run only on an explicit Run pair action:\n${JSON.stringify(next.workspace.files)}`
+    : next.source.trim() ? `\n\nThe idea's current program (${next.fileName}):\n\`\`\`jev\n${next.source}\`\`\`` : ''
+  const prior = next.chatAgent
+    ? idea.messages.filter(item => item.origin?.kind !== 'error').map(item => ({ role: item.role, content: item.text + (item.program ? `\n\`\`\`jev\n${item.program.source}\`\`\`` : '') }))
+    : next.claudeHistory
+  let history = [...prior, { role: 'user', content: text + context }]
   const system = systemPrompt(deps.spec)
-  let completion = await deps.model.complete(system, history)
-  history = [...history, { role: 'assistant', content: completion.content }]
-  const { prose, extra } = extractProgram(completion.text)
-  let program: DraftProgram | undefined
-  for (let attempt = 1; ; attempt++) {
-    const draft = extractProgram(completion.text).program
-    if (draft === null) break
-    program = await checked(deps.compile, programName(draft) ? `${programName(draft)}.jev` : next.fileName, draft, attempt)
-    if (program.clean || attempt > MAX_REPAIRS) break
-    const report = program.diagnostics.filter((d) => d.severity === 'error').map(formatDiagnostic).join('\n')
-    history = [
-      ...history,
-      {
-        role: 'user',
-        content: `jevscript check reported:\n${report}\n\nFix the program and reply with the complete corrected program in one \`\`\`jev block.`,
-      },
-    ]
-    completion = await deps.model.complete(system, history)
+  try {
+    let completion = await deps.model.complete(system, history)
     history = [...history, { role: 'assistant', content: completion.content }]
-  }
+    const { prose, extra } = extractProgram(completion.text)
+    let program: DraftProgram | undefined
+    for (let attempt = 1; ; attempt++) {
+      const draft = extractProgram(completion.text).program
+      if (draft === null) break
+      program = await checked(deps.compile, programName(draft) ? `${programName(draft)}.jev` : next.fileName, draft, attempt)
+      if (program.clean || attempt > MAX_REPAIRS) break
+      const report = program.diagnostics.filter((d) => d.severity === 'error').map(formatDiagnostic).join('\n')
+      history = [
+        ...history,
+        {
+          role: 'user',
+          content: `jevscript check reported:\n${report}\n\nFix the program and reply with the complete corrected program in one \`\`\`jev block.`,
+        },
+      ]
+      completion = await deps.model.complete(system, history)
+      history = [...history, { role: 'assistant', content: completion.content }]
+    }
 
-  next = { ...next, claudeHistory: history }
-  const repaired = program && program.attempts > 1 ? ` (${program.attempts - 1} repair${program.attempts > 2 ? 's' : ''} after check)` : ''
-  const hidden = extra > 0 ? `\n\n(${extra === 1 ? 'Another code block' : `${extra} other code blocks`} in the reply went unchecked and ${extra === 1 ? 'is' : 'are'} not shown.)` : ''
-  const reply = program
-    ? `${prose || 'Here is a draft.'}${program.clean ? repaired : `\n\nIt still does not compile after ${MAX_REPAIRS} repairs; the diagnostics are below.`}${hidden}`
-    : `${prose}${hidden}`.trim()
-  return adopt({ ...next, messages: [...next.messages, message('assistant', reply, program)] }, program ?? { source: '', diagnostics: [], clean: false, attempts: 0 })
+    next = { ...next, claudeHistory: next.chatAgent ? next.claudeHistory : history }
+    const repaired = program && program.attempts > 1 ? ` (${program.attempts - 1} repair${program.attempts > 2 ? 's' : ''} after check)` : ''
+    const hidden = extra > 0 ? `\n\n(${extra === 1 ? 'Another code block' : `${extra} other code blocks`} in the reply went unchecked and ${extra === 1 ? 'is' : 'are'} not shown.)` : ''
+    const reply = program
+      ? `${prose || 'Here is a draft.'}${program.clean ? repaired : `\n\nIt still does not compile after ${MAX_REPAIRS} repairs; the diagnostics are below.`}${hidden}`
+      : `${prose}${hidden}`.trim()
+    const origin = deps.origin?.kind === 'agent' ? { ...deps.origin, model: completion.model ?? deps.origin.model } : deps.origin
+    return adopt({ ...next, messages: [...next.messages, message('assistant', reply, program, origin)] }, program ?? { source: '', diagnostics: [], clean: false, attempts: 0 })
+  } catch (error) {
+    if (!next.chatAgent) throw error
+    return { ...next, messages: [...next.messages, message('assistant', error instanceof Error ? error.message : 'The local agent failed.', undefined, { kind: 'error', ...next.chatAgent })] }
+  }
 }
 
 function titleFrom(text: string): string {

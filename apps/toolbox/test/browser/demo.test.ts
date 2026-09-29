@@ -17,12 +17,14 @@ import { newIdea } from '../../shared/ideas.ts'
 import type { Idea, RunSummary, ServerStatus } from '../../shared/protocol.ts'
 import { APP_ROOT } from '../../server/env.ts'
 import { connect, pushed, until } from '../harness.ts'
+import { fakeAgents } from '../agent-fixture.ts'
 
 let home: string
 let url: string
 let port: number
 let demo: ChildProcess | null = null
 let log = ''
+let agentEnv: NodeJS.ProcessEnv
 
 async function freePort(): Promise<number> {
   const probe = createServer()
@@ -39,6 +41,7 @@ async function start(): Promise<void> {
     cwd: APP_ROOT,
     env: {
       ...process.env,
+      ...agentEnv,
       JEVS_TOOLBOX_HOME: home,
       JEVS_TOOLBOX_PORT: String(port),
       TYPESAFE_API_KEY: 'real-looking-key',
@@ -65,6 +68,8 @@ async function stop(): Promise<number | null> {
 beforeAll(async () => {
   // A home that does not exist yet, as `~/.jevs-toolbox-demo` on a first run.
   home = join(await mkdtemp(join(tmpdir(), 'jevs-demo-')), 'home')
+  const { readFile } = await import('node:fs/promises')
+  agentEnv = await fakeAgents(home, await readFile(join(APP_ROOT, 'fixtures/inbox_triage.jev'), 'utf8'))
   port = await freePort()
   url = `http://127.0.0.1:${port}`
 })
@@ -86,8 +91,10 @@ describe('pnpm demo', () => {
     const status = await client.request<ServerStatus>('status')
     expect(status).toMatchObject({ home, database: join(home, 'toolbox.sqlite'), typesafeKey: true, claude: { available: true } })
 
-    const { idea: drafted } = await client.request<{ idea: Idea }>('chat.send', { idea: newIdea(), text: 'Sort my inbox by urgency' })
+    const { idea: drafted } = await client.request<{ idea: Idea }>('chat.send', { idea: newIdea({ chatAgent: { harness: 'codex', model: 'codex-second' } }), text: 'Sort my inbox by urgency' })
     expect(drafted.messages.at(-1)?.program).toMatchObject({ clean: true })
+    expect(drafted.messages.at(-1)?.origin).toMatchObject({ kind: 'agent', harness: 'codex', model: 'codex-second' })
+    expect(drafted.messages.at(-1)?.text).toContain('Executable codex codex-second')
     await client.request('ideas.save', { idea: drafted })
 
     const triage = (await client.request<{ ideas: Idea[] }>('ideas.list')).ideas.find((idea) => idea.title === 'Inbox triage by urgency')!

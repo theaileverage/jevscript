@@ -53,7 +53,64 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   program?: DraftProgram
+  /** Toolbox host provenance; independent of runtime recordings in section 10.3. */
+  origin?: ChatOrigin
   at: string
+}
+
+/** Toolbox drafting selection, separate from the Jev profile in section 10.6. */
+export interface ChatAgent {
+  harness: 'claude-code' | 'codex'
+  model: string
+}
+
+/** Only the local CLI's discovered choices are offered as models. */
+export interface AgentModel {
+  id: string
+  name: string
+  resolved: string
+}
+
+/** Discovery does not prove that a later provider request will succeed. */
+export type AgentStatus = {
+  harness: ChatAgent['harness']
+  models: AgentModel[]
+} & ({ state: 'available' } | { state: 'unavailable'; reason: string })
+
+/** A check or a failed invocation cannot be mistaken for an agent response. */
+export type ChatOrigin =
+  | { kind: 'agent'; harness: ChatAgent['harness']; model: string; requestedModel: string }
+  | { kind: 'error'; harness: ChatAgent['harness']; model: string }
+  | { kind: 'api' | 'fixture'; model: string }
+  | { kind: 'check' }
+
+/** Idea-owned source files; only Jev files enter the compiler of section 11.1. */
+export interface IdeaFile {
+  id: string
+  name: string
+  kind: 'jev' | 'host'
+  source: string
+}
+
+/** A saved selection and reply, independent from machine pins and runtime events. */
+export interface FileAnnotation {
+  id: string
+  fileId: string
+  from: number
+  to: number
+  selected: string
+  query: string
+  reply: string
+  origin: ChatOrigin
+  at: string
+}
+
+/** Jev programs and their host files share one idea and one SQLite save. */
+export interface IdeaWorkspace {
+  files: IdeaFile[]
+  activeFileId: string
+  entryFileId: string
+  annotations: FileAnnotation[]
 }
 
 /** A finished (or abandoned) run, kept with its idea. */
@@ -79,6 +136,9 @@ export interface Idea {
   messages: ChatMessage[]
   /** The Anthropic message history, kept append-only and unedited so it can be resent as is. */
   claudeHistory: unknown[]
+  /** Saved Chat CLI choice. Null retains compatibility with older API conversations. */
+  chatAgent: ChatAgent | null
+  workspace: IdeaWorkspace
   /** JSON text of the inputs record. */
   inputs: string
   bindings: Record<string, BindingSpec>
@@ -98,6 +158,8 @@ export interface ServerStatus {
   /** The SQLite database holding ideas, pins, the run index and resend history. */
   database: string
   claude: { available: boolean; model: string }
+  agents: AgentStatus[]
+  services: 'standard' | 'demo'
   typesafeKey: boolean
   profilesOverlay: string | null
   /** The language server command, and whether its program exists. */
@@ -120,18 +182,31 @@ export interface StartRun {
   bindings: Record<string, BindingSpec>
   model: string
   sample: boolean
+  files?: IdeaFile[]
+  /** Host-selected task; defaults to main (spec section 11.2). */
+  task?: string
+}
+
+/** Jev compile and Node syntax check; neither executes the host file. */
+export interface PairCheck {
+  jev: CheckResult
+  host: { ok: boolean; message: string }
 }
 
 export type Request =
   | { type: 'status' }
-  | { type: 'check'; fileName: string; source: string }
-  | { type: 'tools.check'; fileName: string; source: string; manifests: Record<string, unknown> }
+  | { type: 'agents.refresh' }
+  | { type: 'check'; fileName: string; source: string; files?: IdeaFile[] }
+  | { type: 'tools.check'; fileName: string; source: string; manifests: Record<string, unknown>; files?: IdeaFile[] }
   | { type: 'profiles' }
   | { type: 'ideas.list' }
   | { type: 'ideas.save'; idea: Idea }
   | { type: 'ideas.delete'; ideaId: string }
   | { type: 'chat.send'; idea: Idea; text: string }
   | { type: 'annotate'; idea: Idea; target: PinTarget; query: string }
+  | { type: 'file.annotate'; idea: Idea; fileId: string; from: number; to: number; query: string }
+  | { type: 'pair.check'; idea: Idea; hostFileId: string }
+  | { type: 'pair.run'; idea: Idea; hostFileId: string }
   | { type: 'run.start'; run: StartRun }
   | { type: 'run.resume'; runId: string; payload: Resume }
   | { type: 'run.abort'; runId: string }
@@ -153,6 +228,7 @@ export type Request =
 
 export interface Replies {
   status: ServerStatus
+  'agents.refresh': { agents: AgentStatus[] }
   check: CheckResult
   'tools.check': { missing: string[]; diagnostics: Diagnostic[] }
   profiles: { profiles: ProfileInfo[]; overlay: string | null }
@@ -161,6 +237,9 @@ export interface Replies {
   'ideas.delete': { ok: true }
   'chat.send': { idea: Idea }
   annotate: { pin: Pin }
+  'file.annotate': { idea: Idea; annotation: FileAnnotation }
+  'pair.check': PairCheck
+  'pair.run': { runId: string; recording: string }
   'run.start': { runId: string; recording: string }
   'run.resume': { ok: true }
   'run.abort': { ok: true }
@@ -199,6 +278,7 @@ export type ServerMessage =
   | { type: 'run.failed'; runId: string; ideaId: string; message: string }
   | { type: 'notify'; runId: string; capability: string; message: string }
   | { type: 'idea.updated'; idea: Idea }
+  | { type: 'host.ended'; ideaId: string; ok: boolean; message: string }
 
 /** Parse `jevscript check`/`compile` stderr lines: `file:line:col: [warning: ]code: message`. */
 export function parseDiagnostics(stderr: string): Diagnostic[] {

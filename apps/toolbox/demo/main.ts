@@ -1,12 +1,10 @@
 /**
- * `pnpm demo`: the built toolbox on 127.0.0.1 only, with both paid services
- * replaced by the local stand-ins in `services.ts`, so it can be tried with no
- * keys at all.
+ * `pnpm demo`: Jev and annotation fixtures, with real signed-in CLI Chat.
  *
- * It never reads a real provider key. Unlike `pnpm start` it does not load a
+ * Unlike `pnpm start` it does not load a
  * `.env` file, and before anything starts it removes every provider variable
- * from its own environment and sets the stand-ins' values, which is also the
- * environment each `jevscript serve` it spawns inherits.
+ * from its runtime environment. Chat's CLI environment keeps sign-in and excludes
+ * provider API keys and fixture endpoints.
  *
  * State lives in its own home (`~/.jevs-toolbox-demo` unless
  * `JEVS_TOOLBOX_HOME` says otherwise), apart from a real toolbox home and from
@@ -53,6 +51,7 @@ const toolbox = await startToolbox({
   port,
   model: new AnthropicModel(modelName, fixtures.env['ANTHROPIC_API_KEY']),
   modelName,
+  services: 'demo',
   serveStatic: serveBuilt(dist),
 })
 
@@ -62,8 +61,9 @@ console.log(
     `  state:      ${toolbox.database} (ideas, pins, run index, resend history)`,
     `  recordings: ${join(home, 'recordings')} (JSONL, one per run)`,
     `  Jev:        fixture endpoint ${fixtures.jev.endpoint}`,
-    `  Claude:     fixture endpoint ${fixtures.claude.baseUrl}`,
-    '  No real provider key is read. Ctrl-C stops the demo and its fixtures; `pnpm demo -- --reset` starts it clean.',
+    `  Annotator:  Claude fixture endpoint ${fixtures.claude.baseUrl}`,
+    '  Chat:       choose Claude Code or Codex; uses your signed-in local CLI for real replies.',
+    '  No .env or provider API key is read. CLI sign-in is used for Chat. Ctrl-C stops the demo and its fixtures; `pnpm demo -- --reset` starts it clean.',
   ].join('\n'),
 )
 

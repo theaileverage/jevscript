@@ -8,7 +8,7 @@
  * `JEVS_BROWSER` to a Chrome or Chromium executable to use another one.
  */
 import { type ChildProcess, spawn } from 'node:child_process'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +20,7 @@ import { APP_ROOT } from '../../server/env.ts'
 import type { Idea } from '../../shared/protocol.ts'
 import { type Fixtures, startFixtures } from '../../demo/services.ts'
 import { connect } from '../harness.ts'
+import { agentCalls, fakeAgents } from '../agent-fixture.ts'
 
 /** Pauses on a person and makes no Jev call. */
 const ASK = `program ask_me
@@ -62,6 +63,7 @@ let page: Page
 let home: string
 let url: string
 let port: number
+let agentEnv: NodeJS.ProcessEnv
 const shots: string[] = []
 
 async function freePort(): Promise<number> {
@@ -89,7 +91,7 @@ const editorText = () => page.locator('.editor-area .cm-content').innerText()
 async function startServer(): Promise<void> {
   server = spawn(process.execPath, ['server/main.ts'], {
     cwd: APP_ROOT,
-    env: { ...process.env, ...fixtures.env, NODE_ENV: 'production', JEVS_TOOLBOX_HOME: join(home, 'toolbox'), JEVS_TOOLBOX_PORT: String(port) },
+    env: { ...process.env, ...fixtures.env, ...agentEnv, NODE_ENV: 'production', JEVS_TOOLBOX_HOME: join(home, 'toolbox'), JEVS_TOOLBOX_PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''
@@ -101,13 +103,14 @@ async function startServer(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   expect(log).toContain(`state: ${join(home, 'toolbox', 'toolbox.sqlite')}`)
-  expect(log).toContain('chat drafting: claude-opus-5-5')
+  expect(log).toContain('chat drafting: signed-in Claude Code or Codex')
   expect(log).toContain('Jev: TYPESAFE_API_KEY set')
 }
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'jevs-browser-'))
   fixtures = await startFixtures(home)
+  agentEnv = await fakeAgents(home, await readFile(join(APP_ROOT, 'fixtures/inbox_triage.jev'), 'utf8'))
   await writeFile(join(home, 'flaky.sh'), FLAKY)
   port = await freePort()
   url = `http://127.0.0.1:${port}`
@@ -130,13 +133,23 @@ afterAll(async () => {
 describe('the toolbox in a browser', () => {
   it('Chat: drafts a checked program, runs it, and answers slash commands', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask Jev to change the program…')
+    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
+    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('claude-code:sonnet')
     await composer.fill('Sort my inbox by urgency')
     await composer.press('Enter')
     const block = page.locator('.codeblock').last()
     await expect.poll(() => block.locator('.bar-top').innerText()).toContain('jevscript check: 0 errors, 0 warnings')
     await expect.poll(() => page.locator('.msg-jev .text').last().innerText()).toContain('sorts each message into a lane')
-    expect(fixtures.claude.requests.at(-1)?.model).toBe('claude-opus-5-5')
+    expect(fixtures.claude.requests).toHaveLength(0)
+    expect((await agentCalls(home)).at(-1)?.model).toBe('sonnet')
+    await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('Claude Code · resolved-sonnet · local CLI response')
+    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-second')
+    await composer.fill('Keep the urgency lanes')
+    await composer.press('Enter')
+    await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('Codex · codex-second · local CLI response')
+    await page.reload()
+    await expect.poll(() => page.getByRole('combobox', { name: 'Harness model' }).inputValue()).toBe('codex:codex-second')
+    expect(await page.getByRole('combobox', { name: 'Harness model' }).inputValue()).toBe('codex:codex-second')
     await expect.poll(() => page.locator('.rail .idea-item.active').innerText()).toBe('Sort my inbox by urgency')
 
     await page.locator('.panel textarea.inputs').fill('{ "message": "Quick one on our March invoice" }')
@@ -156,7 +169,7 @@ describe('the toolbox in a browser', () => {
 
   it('Chat and the pause stack: a pasted program asks the person, and the card resumes it', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask Jev to change the program…')
+    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
     const drafts = fixtures.claude.requests.length
     await composer.fill(ASK)
     await composer.press('Enter')
@@ -172,9 +185,98 @@ describe('the toolbox in a browser', () => {
     await expect.poll(() => stack.count()).toBe(0)
   })
 
+  it('Chat: saves CLI errors and unavailable states without substituting an API fixture response', async () => {
+    await page.getByRole('button', { name: /New idea/ }).click()
+    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
+    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-first')
+    await writeFile(join(home, 'fake-agents/failure'), '')
+    const apiCalls = fixtures.claude.requests.length
+    await composer.fill('A failed CLI idea')
+    await composer.press('Enter')
+    await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('Codex · codex-first · error')
+    expect(await page.locator('.chat').innerText()).not.toContain('PRIVATE_PROVIDER_SECRET')
+    expect(await page.locator('.codeblock').count()).toBe(0)
+    expect(fixtures.claude.requests).toHaveLength(apiCalls)
+    await page.reload()
+    await page.locator('.rail .idea-item', { hasText: 'A failed CLI idea' }).click()
+    await expect.poll(() => page.locator('.msg-jev .who').last().innerText()).toContain('error')
+    await rm(join(home, 'fake-agents/failure'))
+    await writeFile(join(home, 'fake-agents/signed-out'), '')
+    await page.getByRole('button', { name: 'Refresh agents' }).click()
+    await expect.poll(() => page.locator('.agent-state').innerText()).toContain('Codex unavailable')
+    expect(await page.getByRole('combobox', { name: 'Harness model' }).locator('option').allTextContents()).toEqual(['Codex · codex-first · unavailable', 'Claude Code · unavailable'])
+    await composer.fill('Still here after sign-out')
+    await composer.press('Enter')
+    await expect.poll(() => page.locator('.msg-jev .text').last().innerText()).toContain('unavailable')
+    await rm(join(home, 'fake-agents/signed-out'))
+    await page.getByRole('button', { name: 'Refresh agents' }).click()
+    await expect.poll(() => page.getByRole('combobox', { name: 'Harness model' }).locator('option').count()).toBeGreaterThan(1)
+  })
+
+  it('Workspace: edits and annotates Jev/host files, checks and explicitly runs the pair, and restores it', async () => {
+    await page.getByRole('button', { name: /New idea/ }).click()
+    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
+    await page.getByRole('combobox', { name: 'Harness model' }).selectOption('codex:codex-second')
+    await composer.fill(`program workspace_pair
+in name: text
+out greeting
+task main:
+  greeting = "Hello, {name}!"
+`)
+    await composer.press('Enter')
+    const files = page.locator('.idea-files')
+    await files.locator('summary').click()
+    await page.getByRole('textbox', { name: 'New file name' }).fill('lib/message.jev')
+    await files.getByRole('button', { name: 'Add file' }).click()
+    const editor = files.locator('.cm-content')
+    await editor.click()
+    await page.keyboard.insertText('program helper\ndef greet(name):\n  return "Hello, {name}!"\n')
+    await files.getByRole('tab', { name: /workspace_pair.jev/ }).click()
+    await editor.click()
+    await editor.press('ControlOrMeta+A')
+    await page.keyboard.insertText(`program workspace_pair
+use "./lib/message.jev" as helper
+in name: text
+out greeting
+task main:
+  greeting = helper.greet(name)
+`)
+    await editor.press('ControlOrMeta+A')
+    await page.getByRole('textbox', { name: 'File annotation question' }).fill('Explain this Jev source')
+    await files.getByRole('button', { name: 'Annotate selection' }).click()
+    await expect.poll(() => files.locator('.file-note').count()).toBe(1)
+    await files.getByRole('tab', { name: 'host.ts · Host' }).click()
+    const host = page.getByRole('textbox', { name: 'Host file source' })
+    await host.fill(`import { runIdea } from './.toolbox/host.ts'
+const result = await runIdea({ inputs: { name: 'Browser' } })
+if (result.outputs.greeting !== 'Hello, Browser!') throw new Error('unexpected output')
+`)
+    await host.press('ControlOrMeta+A')
+    await page.getByRole('textbox', { name: 'File annotation question' }).fill('Explain this host source')
+    await files.getByRole('button', { name: 'Annotate selection' }).click()
+    await expect.poll(() => files.locator('.file-note').count()).toBe(1)
+    await files.getByRole('button', { name: 'Check pair' }).click()
+    await expect.poll(() => files.locator('.pair-check').innerText()).toContain('Jev compile passed. Node syntax check passed')
+    expect(await page.locator('.result-card').count()).toBe(0)
+    await files.getByRole('button', { name: 'Run pair' }).click()
+    await expect.poll(() => files.innerText()).toContain('Host finished')
+    await expect.poll(() => page.locator('.result-card').innerText()).toContain('Hello, Browser!')
+    await host.fill('throw new Error("private host stderr")')
+    await files.getByRole('button', { name: 'Run pair' }).click()
+    await expect.poll(() => page.locator('.toast').innerText()).toContain('host exited unsuccessfully')
+    await page.reload()
+    await expect.poll(() => page.locator('.rail .idea-item.active').innerText()).toBe('program workspace_pair')
+    await page.locator('.idea-files summary').click()
+    await expect.poll(() => page.getByRole('textbox', { name: 'Host file source' }).inputValue()).toContain('private host stderr')
+    expect(await page.locator('.idea-files .file-note').count()).toBe(1)
+    await page.getByRole('tab', { name: /workspace_pair.jev/ }).click()
+    expect(await page.locator('.idea-files .file-note').count()).toBe(1)
+    await shot('workspace-pair')
+  })
+
   it('the pause stack: cards stack one per run, oldest first, and each resumes its run', async () => {
     await page.getByRole('button', { name: /New idea/ }).click()
-    const composer = page.getByPlaceholder('Describe an idea, or ask Jev to change the program…')
+    const composer = page.getByPlaceholder('Describe an idea, or ask the agent to change the program…')
     await composer.fill(TUNED)
     await composer.press('Enter')
     await expect.poll(() => page.locator('.codeblock').last().locator('.bar-top').innerText()).toContain('0 errors')

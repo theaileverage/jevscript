@@ -19,6 +19,7 @@ export interface JevEditorProps {
   uri: string
   fileName: string
   onChange?: (value: string) => void
+  onSelection?: (selection: { from: number; to: number }) => void
   readOnly?: boolean
   /** `jevscript check` diagnostics, used when the language server is unavailable. */
   fallback?: readonly Diagnostic[]
@@ -59,6 +60,10 @@ export function JevEditor(props: JevEditorProps) {
           language.current.of([]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latest.current.onChange?.(update.state.doc.toString())
+            if (update.selectionSet) {
+              const selection = update.state.selection.main
+              latest.current.onSelection?.({ from: selection.from, to: selection.to })
+            }
           }),
         ],
       }),
