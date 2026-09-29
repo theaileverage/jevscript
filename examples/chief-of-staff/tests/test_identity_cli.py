@@ -229,10 +229,13 @@ def test_new_minister_inherits_the_named_parent_in_its_worker_brief(make_host, j
 def test_existing_minister_acquires_missing_identity_once(make_host, jevscript_bin: str) -> None:
     host = make_host()
     home = host.home.root
+    configure_identity(home, jevscript_bin)
     cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
     child = home / "mates" / "ops"
+    child_config = read_json(child / "config.json", {})
+    child_config.pop("identity")
+    (child / "config.json").write_text(json.dumps(child_config))
     assert "identity" not in read_json(child / "config.json", {})
-    configure_identity(home, jevscript_bin)
     cos(child, jevscript_bin, "status")
     assert read_json(child / "config.json", {})["identity"] == {"name": "Abigail", "principal": "Ankeeth"}
     migrated = fingerprint(child / "config.json")
@@ -243,10 +246,12 @@ def test_existing_minister_acquires_missing_identity_once(make_host, jevscript_b
 def test_minister_explicit_identity_survives_migration_and_parent_renames(make_host, jevscript_bin: str) -> None:
     host = make_host()
     home = host.home.root
+    configure_identity(home, jevscript_bin)
     cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
     child = home / "mates" / "ops"
-    cos(child, jevscript_bin, "config", "set", "identity.name", "Beatrice")
-    configure_identity(home, jevscript_bin)
+    child_config = read_json(child / "config.json", {})
+    child_config["identity"] = {"name": "Beatrice"}
+    (child / "config.json").write_text(json.dumps(child_config))
     cos(child, jevscript_bin, "status")
     assert read_json(child / "config.json", {})["identity"] == {"name": "Beatrice", "principal": "Ankeeth"}
     cos(home, jevscript_bin, "config", "set", "identity.name", "Charlotte")
@@ -256,6 +261,29 @@ def test_minister_explicit_identity_survives_migration_and_parent_renames(make_h
     cos(child, jevscript_bin, "config", "set", "identity.name", "Diana")
     cos(child, jevscript_bin, "status")
     assert read_json(child / "config.json", {})["identity"] == {"name": "Diana", "principal": "Ankeeth"}
+
+
+def test_minister_keeps_parent_defaults_after_parent_changes(make_host, jevscript_bin: str, tmp_path: Path) -> None:
+    host = make_host()
+    home = host.home.root
+    assert "identity" not in read_json(home / "config.json", {})
+    cli_rules(host, tmp_path, [])
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    expected = {"name": "Chief of Staff", "principal": "the principal"}
+    assert read_json(child / "config.json", {})["identity"] == expected
+    cos(home, jevscript_bin, "config", "set", "identity.name", "Abigail")
+    parent_config = read_json(home / "config.json", {})
+    for key, value in (("jev.mode", "fake"), ("jev.fake_rules", parent_config["jev"]["fake_rules"]), ("adapters.staff", parent_config["adapters"]["staff"])):
+        cos(child, jevscript_bin, "config", "set", key, json.dumps(value))
+    cos(child, jevscript_bin, "say", "Update the guide", "--project", "proj")
+    cos(child, jevscript_bin, "tick")
+    [brief] = (child / "data").glob("*/brief.md")
+    assert "You are working for Chief of Staff on behalf of the principal." in brief.read_text()
+    child_config = fingerprint(child / "config.json")
+    (home / "config.json").write_text("{invalid json")
+    cos(child, jevscript_bin, "status")
+    assert fingerprint(child / "config.json") == child_config
 
 
 def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str) -> None:
