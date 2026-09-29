@@ -54,7 +54,7 @@ uv run cos --home ~/.cos playbooks list
 `cos status` prints a one-line headline with counts of active workers, queued
 items, and open decisions, or an all-quiet message when each count is zero.
 `cos briefing`, the daily brief, starts `Briefing:` and the same headline,
-then lists the red box, staff at work, queued items, recent outcomes,
+then lists the Red box, staff at work, queued items, recent outcomes,
 ministers, and learned playbooks. Queued items show stored holds and dependency
 statuses, including completed dependencies in the archive. The digest does not
 predict dispatch readiness; Jevscript's `routing.ready` decides which items

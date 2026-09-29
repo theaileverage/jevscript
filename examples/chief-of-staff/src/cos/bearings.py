@@ -17,7 +17,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .host import Host
 
 SECTIONS = [
-    ("needs_you", "Needs you"),
+    ("needs_you", "Red box"),
     ("under_way", "Staff at work"),
     ("queued", "Queued and held"),
     ("finished", "Recently finished"),
