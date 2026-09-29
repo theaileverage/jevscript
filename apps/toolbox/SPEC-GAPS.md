@@ -1,6 +1,6 @@
 # Spec gaps found while building jevs toolbox
 
-The spec (`spec/jevscrypt-language-specification.md`) is the authority, and the
+The spec (`spec/jevscript-language-specification.md`) is the authority, and the
 toolbox does not edit it. Each entry below is a place where the toolbox needed
 something the spec or runtime does not give it, what it does instead, and where
 that workaround is visible. They are for the implementation lead to decide on.
@@ -8,7 +8,7 @@ that workaround is visible. They are for the implementation lead to decide on.
 ## 1. The CLI's `--stub` fails every typed tool verb
 
 Section 11.6 says built-in stubs are "visibly identified as stubs" but not what
-they return. The CLI stub (`crates/jevscrypt-cli/src/adapters.rs`) returns an
+they return. The CLI stub (`crates/jevscript-cli/src/adapters.rs`) returns an
 empty record for every `tool` verb. The runtime checks declared return types
 (section 9.4), so `examples/review_loop.jev` under `--stub tree` stops at once
 with `type_error: tree.test_summary is declared to return text but the adapter
@@ -41,10 +41,10 @@ judgments, inline judgments and machine steps) by posting the shown state and
 questions to the recorded profile's endpoint with `TYPESAFE_API_KEY`, using a
 TypeScript port of `wire::request_body` and `wire::parse_response`
 (`shared/wire.ts`). `test/resend.test.ts` proves the port byte-identical to
-the body the runtime posts, for both a named judgment and machine steps, and
-checks that a judgment reworded under the same shape hash still resends the
-recorded wording. `test/wire.test.ts` checks that malformed responses fail
-with the runtime's messages.
+the body `jevscript serve` posted during the same run, for a named judgment and
+both machine steps; checks that a judgment reworded under the same shape hash
+still resends the recorded wording; and checks that each malformed response
+fails a resend with the message the runtime gave for the same response.
 
 No RPC method was added. Resending never writes the recording (the tests
 compare its hash before and after). **Decision needed:** whether a
@@ -85,7 +85,7 @@ both rules would be labelled as the named one.
 - `Run.events()` in `sdk/js` ends only after an event arrives once the run has
   ended; after the terminal pause no event arrives, so the iterator never
   returns. The toolbox reads the recording file for anything after the end.
-- When a `jevscrypt serve` process dies while the SDK writes to it, the write's
+- When a `jevscript serve` process dies while the SDK writes to it, the write's
   `EPIPE` surfaces as an unhandled `error` on the child's stdin and takes the
   host process down. Seen once when serve processes were killed by hand.
 
@@ -93,42 +93,66 @@ both rules would be labelled as the named one.
 
 `task.start` with `replay` needs a loaded program, and `program.load` needs
 source. "Replay uses the recording only" is met by running
-`jevscrypt replay <recording>` (section 11.6) with `TYPESAFE_API_KEY` and
-`JEVSCRYPT_PROFILES` removed from its environment. The CLI prints only pauses,
+`jevscript replay <recording>` (section 11.6) with `TYPESAFE_API_KEY` and
+`JEVSCRIPT_PROFILES` removed from its environment. The CLI prints only pauses,
 so the toolbox reads the replayed run's events from the recording file.
 
 ## 8. Ideas live outside the repository, so relative `use` paths do not resolve
 
 Ideas are stored under `~/.jevs-toolbox`, and each check writes the source to a
 temporary file there. A program with a relative `use` (section 3.9) will not
-find its library; `JEVSCRYPT_PATH` roots still apply.
+find its library; `JEVSCRIPT_PATH` roots still apply.
 
-## For the migration to Jevscript
+## Moving from Jevscrypt to Jevscript
 
-This toolbox was built against the older Jevscrypt repository. None of the
-items below was fixed here; each needs checking against current Jevscript
-before the toolbox moves, and the toolbox's workaround dropped if Jevscript
-already behaves.
+The toolbox was built against the older Jevscrypt repository (branch
+`jevs-toolbox` at `f566526`) and moved here unchanged apart from what is listed
+below. Each suspected issue in that copy was checked against Jevscript before
+its workaround was kept or dropped. Outside `apps/toolbox`, the move adds a
+`toolbox` job to `.github/workflows/ci.yml` and the `verify-toolbox` skill under
+`.claude/skills/`; no runtime, SDK, adapter or spec file changed.
 
-| Suspected issue in this copy | Where seen | Toolbox dependency to revisit |
+| Suspected issue | Checked against Jevscript | Outcome |
 | --- | --- | --- |
-| CLI `--stub` returns `{}` for typed tool verbs, so `review_loop.jev` fails with `type_error` (item 1) | `crates/jevscrypt-cli/src/adapters.rs` | `server/adapters.ts` `stubAdapter` typed returns |
-| `sdk/js` `Run.events()` never returns after the terminal pause (item 6) | `sdk/js/src/index.ts` | `server/runs.ts` reads the recording file after the end |
-| `sdk/js` crashes the host with an unhandled `EPIPE` when `serve` dies mid-write (item 6) | `sdk/js/src/rpc.ts` | none yet; the toolbox server would still go down |
-| No raw-request RPC method; resend ports `wire::request_body`/`parse_response` (item 3) | spec 11.5, `jev.rs` | `shared/wire.ts` and its byte-parity test |
-| `machine_step` has no verdict field (item 4) | spec 7.8, `record.rs` | `shared/recording.ts` `machineSteps` |
-| `request` events have no origin (item 5) | spec 10.3 | `shared/requests.ts` `originOf` |
-| Language server paths and CLI flags | `JEVS_LSP_COMMAND` default points at the separate `jevscript` checkout | `server/lsp.ts`, `server/env.ts`, `server/jevscrypt.ts` (binary name `jevscrypt`) |
+| CLI `--stub` fails typed tool verbs (item 1) | Reproduced: `jevscript run examples/review_loop.jev --stub claude --stub tree --stub me` stops with `type_error: tree.test_summary is declared to return text but the adapter returned record` | Still present; the toolbox's typed stub stays |
+| `Run.events()` never returns after the terminal pause (item 6) | `sdk/js/src/index.ts`: `#finish` sets the ended flag but does not wake an iterator waiting for the next event (code reading) | Still present; the toolbox still reads the recording file after the end |
+| `EPIPE` from a dead `serve` crashes the host (item 6) | `sdk/js/src/rpc.ts` has no `error` listener on the child's stdin (code reading) | Still present in the SDK; the toolbox's own JSONL adapter had the same defect, reproduced in `test/bench.test.ts`, and is fixed |
+| No raw-request RPC method (item 3) | Section 11.5 and `METHODS` in `sdk/js/src/rpc.ts` unchanged | Still present; the wire port stays, proven against the runtime's own bodies |
+| `machine_step` has no verdict (item 4) | `Event::MachineStep` in `crates/jevscript-runtime/src/record.rs` unchanged | Still present; the verdict is still read from event order |
+| `request` events have no origin (item 5) | `Event::Request` unchanged | Still present; the origin is still inferred |
+| Replay needs source over JSON-RPC (item 7) | `task.start` still takes `program_id` (section 11.5) | Still present; replay still uses `jevscript replay` |
+| Language server path and CLI names | The old default pointed at a separate `jevscript` checkout | Resolved: the default is `<JEVSCRIPT_BIN> lsp` from this checkout, and every name is `jevscript`/`JEVSCRIPT_*` |
 
-Also for the migration: the language server requires `tokenTypes` and
-`tokenModifiers` in the semantic-tokens client capability and exits without
-them (LSP 3.17 marks them required, so this is correct; `src/lsp.ts` sends
-them).
+Found while moving, and fixed in the toolbox only:
+
+- **`check --tools` reports through diagnostics.** Jevscript prints
+  `file:0:0: verb_missing: tree.flaky` with the usual cause, help and docs
+  lines, where the old CLI printed a bare `verb_missing: tree.flaky`. The old
+  parser matched only the bare form, so Check manifests silently reported
+  nothing missing. `server/jevscript.ts` now reads `verb_missing` diagnostics.
+- **The IR leaves out empty lists.** `crates/jevscript-ir/ir.schema.json` does
+  not require `machines` (nor a machine's `params`), and `jevscript compile`
+  omits them when empty. Every screen that read `ir.machines` threw on a
+  program without a machine, which blanked the page. `shared/ir.ts` `readIr`
+  fills them in where IR JSON arrives: `jevscript compile` output and a
+  recording's `start` event.
+- **An applied pin could not be reverted.** Clicking an edge or state reopened
+  only `open` pins, so after Apply the pin's Revert button was out of reach.
+  Applied pins reopen now.
+
+Not taken up: recordings now carry `log` events (section 5.8), which the
+toolbox does not display.
+
+For the lead, outside the toolbox: section 9.2 writes `ask <text>, options
+[<text>...]`, but `me.ask "Which lane?", options ["today", "week"]` is a
+`syntax` error (`expected ]`, found `,`) at the first comma in the list. Bound
+to a variable first (`options lanes`), it compiles and runs.
 
 ## Review status
 
-Codex (`gpt-6-sol`) reviewed commit 75a2612 and reported seven findings. All
-seven were addressed in 808aef0 and 790f11f, each with a test except the Chat
-"checking…" display (no DOM test tooling). A Codex re-review of those fixes was
-started but ended with "Selected model is at capacity" before it wrote a
-report, so the fixes are verified by tests and a browser pass, not re-reviewed.
+The source lead reported 55 passing toolbox tests and a clean typecheck and
+build in Jevscrypt. Codex reviewed commit `75a2612` there and reported seven
+findings, all addressed in `808aef0` and `790f11f`; a re-review of those fixes
+ended at model capacity without a verdict, so it is not a pass. None of that
+is evidence about this copy. Here the suite was rebuilt at the toolbox's
+boundaries (see the README), and the browser pass runs in CI.

@@ -1,7 +1,8 @@
 /**
- * The bridge to the Jevscrypt language server that lives in the separate
- * `jevscript` repository. It is started as a subprocess, one per page
- * connection, from `JEVS_LSP_COMMAND`; nothing of it is copied here. The page
+ * The bridge to the Jevscript language server, `jevscript lsp` from this
+ * checkout. It is started as a subprocess, one per page connection, from
+ * `JEVS_LSP_COMMAND` when that is set and the toolbox's `jevscript` binary
+ * otherwise. The page
  * speaks LSP JSON messages over the `/lsp` WebSocket, one message per frame,
  * and this module converts them to and from the `Content-Length` framing the
  * server reads on stdio.
@@ -9,15 +10,12 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { WebSocket } from 'ws'
 
-export const DEFAULT_LSP_COMMAND = `${join(homedir(), '.treehouse/jevscript-4c52f4/1/jevscript/target/debug/jevscript')} lsp`
-
-export function lspCommand(env: NodeJS.ProcessEnv = process.env): string {
-  return env['JEVS_LSP_COMMAND'] ?? DEFAULT_LSP_COMMAND
+export function lspCommand(env: NodeJS.ProcessEnv, bin: string): string {
+  return env['JEVS_LSP_COMMAND'] ?? `${bin} lsp`
 }
 
 /** Whether the command's program exists, so the page can show `disconnected` without trying. */

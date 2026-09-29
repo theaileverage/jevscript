@@ -193,7 +193,7 @@ function bindChoices(need: IrNeed): { title: string; flag: string; text: string;
   const subprocess = { title: 'Subprocess', flag: '--bind', text: 'Any command speaking JSONL on stdio. Checked against its manifest.', spec: { kind: 'subprocess', command: '' } as BindingSpec }
   switch (need.kind) {
     case 'agent':
-      return [stub, subprocess, { title: 'Claude Code', flag: 'SDK host', text: 'Runs claude in a tmux pane. All five agent verbs.', spec: { kind: 'claude-code', session: 'jevscrypt', idleSeconds: 20, pollMs: 1000 } }]
+      return [stub, subprocess, { title: 'Claude Code', flag: 'SDK host', text: 'Runs claude in a tmux pane. All five agent verbs.', spec: { kind: 'claude-code', session: 'jevscript', idleSeconds: 20, pollMs: 1000 } }]
     case 'person':
       return [{ title: 'This toolbox', flag: 'pause stack', text: 'ask and take_over land in the pause stack; notify shows in the run panel.', spec: { kind: 'toolbox' } }, subprocess]
     default:

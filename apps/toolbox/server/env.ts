@@ -26,9 +26,9 @@ export interface ToolboxPaths {
 
 export function paths(env: NodeJS.ProcessEnv = process.env): ToolboxPaths {
   return {
-    bin: env['JEVSCRYPT_BIN'] ?? join(REPO_ROOT, 'target/debug/jevscrypt'),
+    bin: env['JEVSCRIPT_BIN'] ?? join(REPO_ROOT, 'target/debug/jevscript'),
     home: env['JEVS_TOOLBOX_HOME'] ?? join(homedir(), '.jevs-toolbox'),
-    bundledProfiles: join(REPO_ROOT, 'crates/jevscrypt-runtime/profiles/bundled.json'),
+    bundledProfiles: join(REPO_ROOT, 'crates/jevscript-runtime/profiles/bundled.json'),
     examples: join(REPO_ROOT, 'examples'),
   }
 }

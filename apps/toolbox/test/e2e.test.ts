@@ -1,105 +1,43 @@
 /**
  * End to end through the toolbox server: `examples/review_loop.jev` under stub
- * bindings, over the page's WebSocket, against the real `jevscrypt serve` and
+ * bindings, over the page's WebSocket, against the real `jevscript serve` and
  * a local stand-in for the TypeSafe endpoint. Then the recording is replayed
  * and must make no live call of any kind (spec section 10.4).
  */
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { WebSocket } from 'ws'
 
 import { machineGraph } from '../shared/graph.ts'
 import type { Pause } from '../shared/pauses.ts'
 import type { CheckResult, ReplayResult, ServerMessage } from '../shared/protocol.ts'
 import { machineSteps, type RecordingEvent } from '../shared/recording.ts'
-import { startToolbox, type Toolbox } from '../server/app.ts'
-import { paths, REPO_ROOT } from '../server/env.ts'
+import { REPO_ROOT } from '../server/env.ts'
+import { type Client, fakeJev, type FakeJev, open, until } from './harness.ts'
 
-/** The labels the stand-in prefers, in order; anything else gets `stay`. */
-const PREFERRED = ['finished', 'approved']
-
-let jevHits = 0
-let jev: Server
-let toolbox: Toolbox
-let socket: WebSocket
-const pushes: ServerMessage[] = []
-let nextId = 1
-const waiting = new Map<number, (message: ServerMessage) => void>()
-
-function request<T>(type: string, payload: Record<string, unknown> = {}): Promise<T> {
-  const id = nextId++
-  return new Promise((resolve, reject) => {
-    waiting.set(id, (message) => {
-      if (message.type !== 'reply') return
-      if (message.ok) resolve(message.result as T)
-      else reject(new Error(message.error))
-    })
-    socket.send(JSON.stringify({ id, type, ...payload }))
-  })
-}
-
-async function until(predicate: () => boolean, ms = 30_000): Promise<void> {
-  const deadline = Date.now() + ms
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error('timed out waiting for the run')
-    await new Promise((resolve) => setTimeout(resolve, 25))
-  }
-}
+let jev: FakeJev
+let session: Awaited<ReturnType<typeof open>>
+let client: Client
+let pushes: ServerMessage[]
+const request = <T>(type: string, payload: Record<string, unknown> = {}) => client.request<T>(type, payload)
 
 beforeAll(async () => {
-  jev = createServer((req, res) => {
-    let body = ''
-    req.on('data', (chunk: Buffer) => (body += chunk))
-    req.on('end', () => {
-      jevHits += 1
-      const sent = JSON.parse(body) as { model: string; questions: Record<string, { type: string; criteria: unknown }> }
-      const answers: Record<string, unknown> = {}
-      for (const [id, question] of Object.entries(sent.questions)) {
-        if (question.type !== 'choice') {
-          answers[id] = { noul: 0.9 }
-          continue
-        }
-        const labels = Object.keys(question.criteria as Record<string, unknown>)
-        const pick = PREFERRED.find((label) => labels.includes(label)) ?? 'stay'
-        const probabilities = Object.fromEntries(
-          labels.map((label) => [label, label === pick ? 0.87 : 0.13 / (labels.length - 1)]),
-        )
-        answers[id] = { choice: pick, probabilities, confidence: 0.87 }
-      }
-      res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ model: sent.model, answers, usage: { input_tokens: 120, output_tokens: 0 } }))
-    })
-  })
-  await new Promise<void>((done) => jev.listen(0, '127.0.0.1', done))
   const home = await mkdtemp(join(tmpdir(), 'jevs-toolbox-e2e-'))
-  const profiles = join(home, 'profiles.json')
-  const bundled = JSON.parse(await readFile(paths().bundledProfiles, 'utf8')) as Record<string, unknown>[]
-  const endpoint = `http://127.0.0.1:${(jev.address() as AddressInfo).port}/v1/systemone`
-  await writeFile(profiles, JSON.stringify(bundled.map((profile) => ({ ...profile, endpoint }))))
+  jev = await fakeJev(['finished', 'approved'])
   process.env['TYPESAFE_API_KEY'] = 'test-key'
-  process.env['JEVSCRYPT_PROFILES'] = profiles
-
-  toolbox = await startToolbox({ home, env: process.env })
-  socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/ws`)
-  socket.on('message', (data) => {
-    const message = JSON.parse(String(data)) as ServerMessage
-    if (message.type === 'reply') waiting.get(message.id)?.(message)
-    else pushes.push(message)
-  })
-  await new Promise((resolve) => socket.once('open', resolve))
+  process.env['JEVSCRIPT_PROFILES'] = await jev.profiles(home)
+  session = await open({ home, env: process.env })
+  client = session.client
+  pushes = client.pushes
 })
 
 afterAll(async () => {
-  socket?.close()
-  await toolbox?.close()
-  await new Promise<void>((done) => jev.close(() => done()))
+  await session.close()
+  await jev.close()
   delete process.env['TYPESAFE_API_KEY']
-  delete process.env['JEVSCRYPT_PROFILES']
+  delete process.env['JEVSCRIPT_PROFILES']
 })
 
 describe('review_loop.jev under stub bindings, through the server', () => {
@@ -154,12 +92,12 @@ describe('review_loop.jev under stub bindings, through the server', () => {
     expect(steps[1]?.menu.find((entry) => entry.event === 'rejected')?.risky).toBe(true)
     expect(steps[0]?.checks.every((check) => check.pass)).toBe(true)
 
-    const hitsBeforeReplay = jevHits
+    const hitsBeforeReplay = jev.bodies.length
     expect(hitsBeforeReplay).toBe(2)
     const callsBeforeReplay = events.filter((event) => event.event === 'call').length
     const replay = await request<ReplayResult>('replay', { recording: started.recording })
     expect(replay.exitCode).toBe(0)
-    expect(jevHits).toBe(hitsBeforeReplay)
+    expect(jev.bodies.length).toBe(hitsBeforeReplay)
     expect((replay.pauses.at(-1) as Pause).kind).toBe('done')
     expect(replay.stderr).not.toContain('stub')
     expect(replay.events.filter((event) => event.event === 'call')).toHaveLength(callsBeforeReplay)

@@ -1,5 +1,5 @@
 /**
- * The `jevscrypt` CLI, for what the JSON-RPC surface does not carry:
+ * The `jevscript` CLI, for what the JSON-RPC surface does not carry:
  * `compile` (the IR and every warning, spec section 11.6), `check --tools`
  * (manifest comparison, section 9.4) and `replay` (section 10.4).
  */
@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 import type { CheckResult, Diagnostic, ReplayResult } from '../shared/protocol.ts'
 import { parseDiagnostics } from '../shared/protocol.ts'
-import type { Ir } from '../shared/ir.ts'
+import { readIr } from '../shared/ir.ts'
 import type { Pause } from '../shared/pauses.ts'
 import { parseRecording } from '../shared/recording.ts'
 import { readFile } from 'node:fs/promises'
@@ -39,7 +39,7 @@ export function programFileName(fileName: string): string {
   return base.endsWith('.jev') ? base : `${base || 'program'}.jev`
 }
 
-export class Jevscrypt {
+export class Jevscript {
   readonly bin: string
   readonly workDir: string
 
@@ -57,19 +57,19 @@ export class Jevscrypt {
     return path
   }
 
-  /** `jevscrypt compile`: the IR when it compiles, and every diagnostic, warnings included. */
+  /** `jevscript compile`: the IR when it compiles, and every diagnostic, warnings included. */
   async compile(fileName: string, source: string): Promise<CheckResult> {
     const path = await this.materialize(fileName, source)
     const result = await exec(this.bin, ['compile', path])
     const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
-    if (result.code === 0) return { diagnostics, ir: JSON.parse(result.stdout) as Ir }
+    if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
     if (diagnostics.length === 0) {
-      throw new Error(`jevscrypt compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
+      throw new Error(`jevscript compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
     }
     return { diagnostics, ir: null }
   }
 
-  /** `jevscrypt check --tools`: each tool verb the program uses that a manifest lacks. */
+  /** `jevscript check --tools`: each tool verb the program uses that a manifest lacks. */
   async checkTools(
     fileName: string,
     source: string,
@@ -79,22 +79,22 @@ export class Jevscrypt {
     const manifestPath = join(await mkdtemp(join(tmpdir(), 'jevs-tools-')), 'manifests.json')
     await writeFile(manifestPath, JSON.stringify(manifests))
     const result = await exec(this.bin, ['check', path, '--tools', manifestPath])
-    const missing = result.stderr
-      .split('\n')
-      .filter((line) => line.startsWith('verb_missing: '))
-      .map((line) => line.slice('verb_missing: '.length))
-    return { missing, diagnostics: relabel(parseDiagnostics(result.stderr), path, programFileName(fileName)) }
+    const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
+    return {
+      missing: diagnostics.filter((diagnostic) => diagnostic.code === 'verb_missing').map((diagnostic) => diagnostic.message),
+      diagnostics: diagnostics.filter((diagnostic) => diagnostic.code !== 'verb_missing'),
+    }
   }
 
   /**
-   * `jevscrypt replay`: the recording and nothing else. The child gets no
+   * `jevscript replay`: the recording and nothing else. The child gets no
    * TypeSafe key and no profiles overlay, so any attempt to call Jev would
    * fail instead of spending; the CLI binds no adapters at all.
    */
   async replay(recording: string, env: NodeJS.ProcessEnv = process.env): Promise<ReplayResult> {
     const sealed: NodeJS.ProcessEnv = { ...env }
     delete sealed['TYPESAFE_API_KEY']
-    delete sealed['JEVSCRYPT_PROFILES']
+    delete sealed['JEVSCRIPT_PROFILES']
     const result = await exec(this.bin, ['replay', recording], sealed)
     const pauses = result.stdout
       .split('\n')

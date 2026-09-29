@@ -1,6 +1,6 @@
 /**
  * Model profiles as the runtime sees them (spec section 10.6): the bundle,
- * with `JEVSCRYPT_PROFILES` layered over it, a profile with the same id
+ * with `JEVSCRIPT_PROFILES` layered over it, a profile with the same id
  * replacing the bundled one. The toolbox only displays them; the runtime
  * resolves them itself at `task.start`.
  */

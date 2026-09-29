@@ -3,7 +3,7 @@
  * extensions that use it: semantic-token colouring, diagnostics with a hover
  * card, hover and completion. The server is the `jevscript` language server,
  * started by the toolbox server; when it is not there, editors fall back to
- * plain text and `jevscrypt check` diagnostics.
+ * plain text and `jevscript check` diagnostics.
  */
 import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { type Diagnostic as CmDiagnostic, forEachDiagnostic, linter, lintGutter, setDiagnostics } from '@codemirror/lint'
@@ -137,7 +137,7 @@ const tokenField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-/** Plain `jevscrypt check` diagnostics, for when there is no language server. */
+/** Plain `jevscript check` diagnostics, for when there is no language server. */
 export function checkDiagnostics(doc: Text, diagnostics: readonly Diagnostic[], reference: ErrorReference): CmDiagnostic[] {
   return diagnostics.map((diagnostic) => {
     const line = doc.line(Math.max(1, Math.min(diagnostic.line, doc.lines)))
@@ -147,7 +147,7 @@ export function checkDiagnostics(doc: Text, diagnostics: readonly Diagnostic[], 
       to: Math.max(from + 1, line.to),
       severity: diagnostic.severity,
       message: diagnostic.message,
-      renderMessage: () => diagnosticCard(diagnostic.code, diagnostic.message, null, reference, 'jevscrypt check'),
+      renderMessage: () => diagnosticCard(diagnostic.code, diagnostic.message, null, reference, 'jevscript check'),
     }
   })
 }
@@ -205,7 +205,7 @@ export function lspDocument(options: LspDocOptions): Extension {
         void client.ready().then((ok) => {
           if (!ok) return
           client.notify('textDocument/didOpen', {
-            textDocument: { uri, languageId: 'jevscrypt', version: this.version, text: view.state.doc.toString() },
+            textDocument: { uri, languageId: 'jevscript', version: this.version, text: view.state.doc.toString() },
           })
           void this.tokens()
         })

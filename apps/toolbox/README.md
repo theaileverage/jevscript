@@ -1,19 +1,19 @@
 # jevs toolbox
 
-A local web app for trying Jevscrypt ideas: describe an idea and get a checked
+A local web app for trying Jevscript ideas: describe an idea and get a checked
 program, run it, tune it, watch a machine step through its states, and bind its
-capabilities. It drives the real runtime (`jevscrypt serve` through `sdk/js`)
+capabilities. It drives the real runtime (`jevscript serve` through `sdk/js`)
 and never shows a program that has not been compiled.
 
 ## Run it
 
-The toolbox needs the runtime binary, the JavaScript SDK and the Claude Code
-adapter built first:
+The toolbox needs the runtime binary, the JavaScript SDK and the agent adapter
+suite (for the Claude Code adapter) built first:
 
 ```sh
-cargo build                                        # target/debug/jevscrypt
+cargo build                                        # target/debug/jevscript
 (cd sdk/js && pnpm install && pnpm run build)
-(cd adapters/claude-code && pnpm install && pnpm run build)
+(cd adapters && pnpm install && pnpm run build)
 cd apps/toolbox && pnpm install && pnpm dev        # http://127.0.0.1:5178
 ```
 
@@ -24,7 +24,7 @@ Node 26 or later runs the server's TypeScript directly.
 ## Screens
 
 - **Chat.** Describe an idea; Claude drafts a program with the spec as its
-  system prompt. Every draft is compiled with `jevscrypt compile`; errors go
+  system prompt. Every draft is compiled with `jevscript compile`; errors go
   back to Claude for up to two repairs, and a draft that still fails is shown
   with its diagnostics and is not adopted. A pasted program (fenced or bare) is
   checked without any model. Commands: `/run`, `/replay`, `/check`,
@@ -60,10 +60,10 @@ Replay uses only that file.
 | `TYPESAFE_API_KEY` | from `.env` | Jev calls in runs, `/judge` and resend |
 | `ANTHROPIC_API_KEY` | from `.env` | Chat drafting and the annotator; without it both say so, and pasted programs still work |
 | `JEVS_TOOLBOX_MODEL` | `claude-opus-5-5` | The Claude model for drafting and annotating |
-| `JEVSCRYPT_PROFILES` | none | A profiles overlay, shown in the profile switcher and used by runs |
-| `JEVSCRYPT_BIN` | `<repo>/target/debug/jevscrypt` | The runtime binary |
-| `JEVSCRYPT_PATH` | none | Module roots for `use` (spec section 3.9) |
-| `JEVS_LSP_COMMAND` | `~/.treehouse/jevscript-4c52f4/1/jevscript/target/debug/jevscript lsp` | The language server, started per page connection |
+| `JEVSCRIPT_PROFILES` | none | A profiles overlay, shown in the profile switcher and used by runs |
+| `JEVSCRIPT_BIN` | `<repo>/target/debug/jevscript` | The runtime binary |
+| `JEVSCRIPT_PATH` | none | Module roots for `use` (spec section 3.9) |
+| `JEVS_LSP_COMMAND` | `<JEVSCRIPT_BIN> lsp` | The language server, started per page connection |
 | `JEVS_TOOLBOX_HOME` | `~/.jevs-toolbox` | Ideas and recordings |
 | `JEVS_TOOLBOX_PORT` | `5178` | The server port |
 
@@ -73,7 +73,7 @@ from the main checkout's `.env`. Variables already set win. Nothing is copied.
 ## Real and stubbed
 
 Real: compile, check and `check --tools` (the CLI); runs, pauses, resume, abort
-and recording (the SDK over `jevscrypt serve`); replay (`jevscrypt replay`, with
+and recording (the SDK over `jevscript serve`); replay (`jevscript replay`, with
 no key and no adapters); profiles (the bundle plus the overlay); the language
 server; the JSONL subprocess and Claude Code adapters; resend.
 
@@ -82,20 +82,28 @@ Stubbed: the Stub binding is a demonstration adapter. It follows the CLI's
 see `SPEC-GAPS.md` item 1.
 
 Not verified end to end in this build: live Claude drafting and live annotator
-edits (no Anthropic key was available; both are tested against a scripted
-model), and a live Claude Code pane (the adapter has its own tmux tests).
+edits, and live Jev answers. The tests run the real Anthropic SDK client and the
+real runtime against local stand-ins for both services (`test/fixtures.ts`),
+which prove the toolbox's side of each exchange but nothing about the live
+services. A live Claude Code pane is not driven either; the adapter has its own
+tmux tests, and the toolbox's pane tail is checked against a real tmux pane.
 
 ## Tests
 
 ```sh
-pnpm test        # vitest: server bridge, IR→graph, dials, pause stack, annotator, resend, LSP bridge, e2e
+pnpm test            # boundary suite: /ws, /lsp, the CLI, jevscript serve and a real tmux pane
+pnpm test:browser    # builds the page, starts `pnpm start`'s server and drives all four screens in Chrome
 pnpm run typecheck
 pnpm build
 ```
 
-The end-to-end test runs `examples/review_loop.jev` under stub bindings through
-the server against a local stand-in for the TypeSafe endpoint, checks the graph
-and the recorded steps, then replays the recording and checks that no request
-reached the endpoint. No test needs the `jevscript` repository or any key.
+Every test enters the toolbox the way the page does: through the server's `/ws`
+and `/lsp` WebSockets, or through the page itself in a browser. Behind the
+server everything is real (`jevscript compile`, `check --tools`, `replay`,
+`jevscript serve` through the SDK, `jevscript lsp`), except the TypeSafe and
+Anthropic endpoints, which are local fixtures. The browser pass uses Chrome
+(`channel: 'chrome'`); set `JEVS_BROWSER` to another Chrome or Chromium binary.
+Screenshots land in `JEVS_EVIDENCE` when it is set, else in the run's temporary folder.
 
-`SPEC-GAPS.md` lists where the toolbox had to work around the spec or runtime.
+`SPEC-GAPS.md` lists where the toolbox had to work around the spec or runtime,
+and what was checked when it moved from the older Jevscrypt repository.

@@ -69,7 +69,8 @@ export function MachinesScreen({ idea }: { idea: Idea }) {
     const x = at.x - (box?.left ?? 0) + (wrap.current?.scrollLeft ?? 0)
     const y = at.y - (box?.top ?? 0) + (wrap.current?.scrollTop ?? 0)
     const full: PinTarget = target.kind === 'state' ? { kind: 'state', machine: machine!.name, state: target.state } : { kind: 'edge', machine: machine!.name, from: target.from, event: target.event }
-    const existing = pins.find((pin) => pin.status === 'open' && JSON.stringify(pin.target) === JSON.stringify(full))
+    // An applied pin reopens too, so its edit can be reverted.
+    const existing = pins.findLast((pin) => pin.status !== 'discarded' && JSON.stringify(pin.target) === JSON.stringify(full))
     setPopover({ target: full, x, y, pinId: existing?.id ?? null })
   }
 
@@ -349,7 +350,7 @@ function PinBody({ idea, pin, onDone }: { idea: Idea; pin: Pin; onDone?: () => v
               </div>
               {reply.check ? (
                 <div className="small muted" style={{ marginBottom: 10, lineHeight: 1.5 }}>
-                  jevscrypt check: {reply.check.errors.length} {reply.check.errors.length === 1 ? 'error' : 'errors'},{' '}
+                  jevscript check: {reply.check.errors.length} {reply.check.errors.length === 1 ? 'error' : 'errors'},{' '}
                   {reply.check.newWarnings.length === 0 ? 'no new warnings' : `${reply.check.newWarnings.length} new ${reply.check.newWarnings.length === 1 ? 'warning' : 'warnings'}`}.
                   {reply.check.reachability.length > 0 ? ` ${reply.check.reachability.join(' ')}` : ''}
                   {[...reply.check.errors, ...reply.check.newWarnings].map((diagnostic, index) => (

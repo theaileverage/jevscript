@@ -23,7 +23,7 @@ export interface RunView {
   pauses: Pause[]
   ended: boolean
   failed: string | null
-  /** A replay's view: pauses from `jevscrypt replay`, events from the recording file. */
+  /** A replay's view: pauses from `jevscript replay`, events from the recording file. */
   replay: ReplayResult | null
   notices: { capability: string; message: string }[]
   startedAt: string
@@ -359,7 +359,7 @@ async function startRun(idea: Idea): Promise<string | null> {
   }
 }
 
-/** Replay the idea's newest recording through `jevscrypt replay`: no model, no adapters. */
+/** Replay the idea's newest recording through `jevscript replay`: no model, no adapters. */
 async function replayLast(id: string): Promise<void> {
   const idea = state.ideas.find((candidate) => candidate.id === id)
   const last = idea?.runs.filter((run) => !run.replay).at(-1)

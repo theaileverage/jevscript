@@ -2,10 +2,10 @@
  * The slice of the compiled IR the toolbox reads (spec section 11.1).
  *
  * The SDKs deliberately never expose the IR; the toolbox is a developer tool
- * and reads the `jevscrypt compile` JSON (and the copy embedded in a
+ * and reads the `jevscript compile` JSON (and the copy embedded in a
  * recording's `start` event, spec section 10.3) for exactly what it draws:
  * needs, budgets, thresholds and machines. The authoritative shape is
- * `crates/jevscrypt-ir/ir.schema.json`.
+ * `crates/jevscript-ir/ir.schema.json`.
  */
 
 export interface Position {
@@ -74,7 +74,7 @@ export interface IrMachine {
   params: { name: string }[]
   budget: Budget
   thresholds: Thresholds
-  goal: Expr
+  goal?: Expr
   initial: string
   states: IrState[]
   shape_hash: string
@@ -107,6 +107,17 @@ export interface Ir {
   file?: string | null
 }
 
+/**
+ * The IR as the toolbox reads it. The schema lets the compiler leave out
+ * empty lists (a program with no machines has no `machines`, a machine with
+ * no parameters no `params`), so they are filled in here, where JSON from
+ * `jevscript compile` or a recording's `start` event first arrives.
+ */
+export function readIr(json: unknown): Ir {
+  const raw = json as Ir & { machines?: (Omit<IrMachine, 'params'> & { params?: IrMachine['params'] })[] }
+  return { ...raw, machines: (raw.machines ?? []).map((machine) => ({ ...machine, params: machine.params ?? [] })) }
+}
+
 const BINARY: Record<string, string> = {
   or: 'or',
   and: 'and',
@@ -124,7 +135,7 @@ const BINARY: Record<string, string> = {
 }
 
 /**
- * Print an expression back as Jevscrypt source, for guard labels. Covers the
+ * Print an expression back as Jevscript source, for guard labels. Covers the
  * forms a `when` guard is written in; anything else prints as `…` rather than
  * as a guess.
  */

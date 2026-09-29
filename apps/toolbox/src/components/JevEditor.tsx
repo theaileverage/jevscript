@@ -1,7 +1,7 @@
 /**
  * A `.jev` editor. With the language server it gets semantic colours,
  * diagnostics with hover cards, hover and completion; without it, plain text
- * and the `jevscrypt check` diagnostics. The text passed in is the source of
+ * and the `jevscript check` diagnostics. The text passed in is the source of
  * truth: when it changes from outside (a dial, an applied edit), the editor
  * takes it.
  */
@@ -20,7 +20,7 @@ export interface JevEditorProps {
   fileName: string
   onChange?: (value: string) => void
   readOnly?: boolean
-  /** `jevscrypt check` diagnostics, used when the language server is unavailable. */
+  /** `jevscript check` diagnostics, used when the language server is unavailable. */
   fallback?: readonly Diagnostic[]
   onDiagnostics?: (diagnostics: Diagnostic[]) => void
   onRun?: () => void

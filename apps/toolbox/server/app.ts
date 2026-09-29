@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net'
 import { join, resolve, sep } from 'node:path'
 
-import { load } from '@jevscrypt/sdk'
+import { load } from 'jevscript'
 import { WebSocket, WebSocketServer } from 'ws'
 
 import type { ClientMessage, Idea, Replies, Request, ServerMessage } from '../shared/protocol.ts'
@@ -19,7 +19,7 @@ import { paths as defaultPaths, REPO_ROOT } from './env.ts'
 import { IdeaStore, newIdea } from './ideas.ts'
 import { bridgeLsp, lspAvailable, lspCommand, readErrorReference } from './lsp.ts'
 import { resend, resendHistory } from './resend.ts'
-import { Jevscrypt } from './jevscrypt.ts'
+import { Jevscript } from './jevscript.ts'
 import { readProfiles } from './profiles.ts'
 import { RunManager } from './runs.ts'
 
@@ -45,10 +45,10 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
   const defaults = defaultPaths(env)
   const bin = options.bin ?? defaults.bin
   const home = options.home ?? defaults.home
-  const jev = new Jevscrypt(bin, join(home, 'work'))
+  const jev = new Jevscript(bin, join(home, 'work'))
   const ideas = new IdeaStore(home)
   const model = options.model ?? null
-  const spec = await readFile(join(REPO_ROOT, 'spec/jevscrypt-language-specification.md'), 'utf8')
+  const spec = await readFile(join(REPO_ROOT, 'spec/jevscript-language-specification.md'), 'utf8')
   const sockets = new Set<WebSocket>()
   const broadcast = (message: ServerMessage) => {
     const text = JSON.stringify(message)
@@ -59,7 +59,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     if (idea) broadcast({ type: 'idea.updated', idea })
   })
   await seedIdeas(ideas, defaults.examples)
-  const lsp = lspCommand(env)
+  const lsp = lspCommand(env, bin)
   const errorReference = await readErrorReference(join(REPO_ROOT, 'docs/error-reference.md'))
 
   const recordingPath = (path: string) => {
@@ -76,12 +76,12 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       home,
       claude: { available: model !== null, model: model?.name ?? options.modelName ?? 'claude-opus-5-5' },
       typesafeKey: Boolean(env['TYPESAFE_API_KEY']),
-      profilesOverlay: env['JEVSCRYPT_PROFILES'] ?? null,
+      profilesOverlay: env['JEVSCRIPT_PROFILES'] ?? null,
       lsp: { command: lsp, available: lspAvailable(lsp) },
     }),
     check: (request) => jev.compile(request.fileName, request.source),
     'tools.check': (request) => jev.checkTools(request.fileName, request.source, request.manifests),
-    profiles: () => readProfiles(defaults.bundledProfiles, env['JEVSCRYPT_PROFILES']),
+    profiles: () => readProfiles(defaults.bundledProfiles, env['JEVSCRIPT_PROFILES']),
     'ideas.list': async () => ({ ideas: await ideas.list() }),
     'ideas.save': async (request) => ({ idea: await ideas.save(request.idea) }),
     'ideas.delete': async (request) => {

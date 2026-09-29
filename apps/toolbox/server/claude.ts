@@ -1,5 +1,5 @@
 /**
- * Claude, for the two places the toolbox writes Jevscrypt: drafting a program
+ * Claude, for the two places the toolbox writes Jevscript: drafting a program
  * from an idea in Chat, and answering or editing at a pin in the Machines
  * annotator. The spec goes in the system prompt, cached. Every program Claude
  * writes is compiled before anyone sees it, and compile errors go back to
@@ -77,14 +77,14 @@ export class AnthropicModel implements Model {
   }
 }
 
-/** Compiles a program; the server passes `Jevscrypt.compile`. */
+/** Compiles a program; the server passes `Jevscript.compile`. */
 export type Compile = (fileName: string, source: string) => Promise<CheckResult>
 
 export function systemPrompt(spec: string): string {
   return [
-    'You write programs in Jevscrypt for developers testing ideas in "jevs toolbox".',
+    'You write programs in Jevscript for developers testing ideas in "jevs toolbox".',
     'The language specification below is the only authority on syntax and semantics. Do not use a keyword, verb, label form or builtin it does not define. Reserved words cannot be names. A `pick` needs an `other` (or `none`) label. There is no inline if/else expression.',
-    'When you write or change a program, reply with a short explanation and then the complete program in exactly one ```jev fenced block. The toolbox compiles it with `jevscrypt check` and sends you any errors to fix.',
+    'When you write or change a program, reply with a short explanation and then the complete program in exactly one ```jev fenced block. The toolbox compiles it with `jevscript check` and sends you any errors to fix.',
     '<specification>',
     spec,
     '</specification>',
@@ -127,7 +127,7 @@ export function extractProgram(text: string): { program: string | null; prose: s
     open = { language: (start[2] as string).toLowerCase(), lines: [] }
   }
   if (open) blocks.push(open)
-  const found = blocks.find((block) => ['', 'jev', 'jevscrypt'].includes(block.language))
+  const found = blocks.find((block) => ['', 'jev', 'jevscript'].includes(block.language))
   return {
     program: found ? found.lines.join('\n').replace(/\s+$/, '') + '\n' : null,
     prose: prose.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
@@ -224,7 +224,7 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
       ...history,
       {
         role: 'user',
-        content: `jevscrypt check reported:\n${report}\n\nFix the program and reply with the complete corrected program in one \`\`\`jev block.`,
+        content: `jevscript check reported:\n${report}\n\nFix the program and reply with the complete corrected program in one \`\`\`jev block.`,
       },
     ]
     completion = await deps.model.complete(system, history)

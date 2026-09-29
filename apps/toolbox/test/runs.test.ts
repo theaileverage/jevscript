@@ -10,14 +10,13 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { WebSocket } from 'ws'
-
 import type { Pause } from '../shared/pauses.ts'
-import type { Idea, ServerMessage } from '../shared/protocol.ts'
+import type { Idea } from '../shared/protocol.ts'
 import { parseRecording } from '../shared/recording.ts'
 import { startToolbox, type Toolbox } from '../server/app.ts'
 import { paths } from '../server/env.ts'
 import { IdeaStore, newIdea } from '../server/ideas.ts'
+import { connect, until } from './harness.ts'
 
 /** Pauses on a person and makes no Jev call, so no endpoint is needed. */
 const ASK = `program ask_me
@@ -28,48 +27,6 @@ task main:
   a = me.ask "Go ahead?"
   me.notify "answered {a.answer}"
 `
-
-interface Client {
-  request<T>(type: string, payload?: Record<string, unknown>): Promise<T>
-  pushes: ServerMessage[]
-  close(): void
-}
-
-async function connect(toolbox: Toolbox): Promise<Client> {
-  const socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/ws`)
-  const pushes: ServerMessage[] = []
-  const waiting = new Map<number, (message: ServerMessage) => void>()
-  let next = 1
-  socket.on('message', (data) => {
-    const message = JSON.parse(String(data)) as ServerMessage
-    if (message.type === 'reply') waiting.get(message.id)?.(message)
-    else pushes.push(message)
-  })
-  await new Promise((resolve) => socket.once('open', resolve))
-  return {
-    pushes,
-    close: () => socket.close(),
-    request<T>(type: string, payload: Record<string, unknown> = {}) {
-      const id = next++
-      return new Promise<T>((resolve, reject) => {
-        waiting.set(id, (message) => {
-          if (message.type !== 'reply') return
-          if (message.ok) resolve(message.result as T)
-          else reject(new Error(message.error))
-        })
-        socket.send(JSON.stringify({ id, type, ...payload }))
-      })
-    },
-  }
-}
-
-async function until(predicate: () => boolean, ms = 20_000): Promise<void> {
-  const deadline = Date.now() + ms
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error('timed out')
-    await new Promise((resolve) => setTimeout(resolve, 25))
-  }
-}
 
 const start = (idea: Idea) => ({
   run: { ideaId: idea.id, title: idea.title, fileName: 'ask_me.jev', source: ASK, inputs: {}, bindings: {}, model: 'jev-latest', sample: false },

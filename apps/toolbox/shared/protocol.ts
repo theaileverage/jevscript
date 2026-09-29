@@ -10,7 +10,7 @@ import type { Profile, RecordingEvent } from './recording.ts'
 import type { ResendRecord } from './requests.ts'
 import type { JevRequest } from './wire.ts'
 
-/** Section 12's diagnostic, as `jevscrypt check` prints it: `file:line:col: code: message`. */
+/** Section 12's diagnostic, as `jevscript check` prints it: `file:line:col: code: message`. */
 export interface Diagnostic {
   file: string
   line: number
@@ -198,7 +198,7 @@ export type ServerMessage =
   | { type: 'notify'; runId: string; capability: string; message: string }
   | { type: 'idea.updated'; idea: Idea }
 
-/** Parse `jevscrypt check`/`compile` stderr lines: `file:line:col: [warning: ]code: message`. */
+/** Parse `jevscript check`/`compile` stderr lines: `file:line:col: [warning: ]code: message`. */
 export function parseDiagnostics(stderr: string): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
   for (const line of stderr.split('\n')) {

@@ -69,8 +69,8 @@ export function ChatScreen({ idea }: { idea: Idea }) {
           <div className="chat">
             {idea.messages.length === 0 && !idea.source.trim() ? (
               <div className="empty" style={{ padding: 0 }}>
-                Describe an idea and {claude?.available ? `${claude.model} drafts` : 'paste'} a Jevscrypt program for it. Every draft is compiled
-                with <code>jevscrypt check</code> before you see it.
+                Describe an idea and {claude?.available ? `${claude.model} drafts` : 'paste'} a Jevscript program for it. Every draft is compiled
+                with <code>jevscript check</code> before you see it.
                 {claude?.available ? null : ' Drafting needs ANTHROPIC_API_KEY on the server; pasted programs are checked either way.'}
               </div>
             ) : null}
@@ -165,7 +165,7 @@ async function command(idea: Idea, text: string): Promise<void> {
       return
     case 'check': {
       const result = await actions.check(idea.id)
-      note(result ? result.diagnostics.map(formatDiagnostic).join('\n') || 'jevscrypt check: 0 errors, 0 warnings' : 'Nothing to check.')
+      note(result ? result.diagnostics.map(formatDiagnostic).join('\n') || 'jevscript check: 0 errors, 0 warnings' : 'Nothing to check.')
       return
     }
     case 'judge': {
@@ -203,7 +203,7 @@ function ProgramBlock({ idea, message, run, pending = null }: { idea: Idea; mess
     <div className="codeblock">
       <div className="bar-top">
         <span>
-          {idea.fileName} · jevscrypt check:{' '}
+          {idea.fileName} · jevscript check:{' '}
           {pending ?? `${errors} ${errors === 1 ? 'error' : 'errors'}, ${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`}
           {program.attempts > 1 ? ` · ${program.attempts - 1} repair${program.attempts > 2 ? 's' : ''}` : ''}
         </span>

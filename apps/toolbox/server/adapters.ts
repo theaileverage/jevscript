@@ -6,8 +6,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 
-import type { Adapter, CallArgs, Handle, Observation, ToolManifest } from '@jevscrypt/sdk'
-import { ClaudeCodeAdapter } from '@jevscrypt/adapter-claude-code'
+import type { Adapter, CallArgs, Handle, Observation, ToolManifest } from 'jevscript'
+import { ClaudeCodeAdapter } from '@jevscript/adapter-claude-code'
 
 import type { CapabilityKind, IrNeed, IrSignature } from '../shared/ir.ts'
 import type { BindingSpec } from '../shared/protocol.ts'
@@ -105,6 +105,8 @@ export class SubprocessAdapter implements Adapter {
   readonly #waiting: ((line: string | null) => void)[] = []
   #queue: Promise<unknown> = Promise.resolve()
   #stderr = ''
+  /** Set once the child can no longer answer; later exchanges fail at once instead of waiting. */
+  #gone = false
 
   constructor(name: string, kind: CapabilityKind, command: string, manifest?: ToolManifest) {
     this.name = name
@@ -115,6 +117,8 @@ export class SubprocessAdapter implements Adapter {
       this.#stderr = (this.#stderr + chunk).slice(-4000)
     })
     this.#child.on('error', () => this.#drain())
+    // Writing to a child that has exited is EPIPE; without a listener it would take the server down.
+    this.#child.stdin.on('error', () => this.#drain())
     this.#lines = createInterface({ input: this.#child.stdout })
     this.#lines.on('line', (line) => this.#waiting.shift()?.(line))
     this.#lines.on('close', () => this.#drain())
@@ -136,10 +140,12 @@ export class SubprocessAdapter implements Adapter {
   /** One exchange at a time: the protocol has no request ids. */
   #exchange(request: unknown, field: string): Promise<unknown> {
     const next = this.#queue.then(async () => {
-      const line = await new Promise<string | null>((resolve) => {
-        this.#waiting.push(resolve)
-        this.#child.stdin.write(`${JSON.stringify(request)}\n`)
-      })
+      const line = this.#gone
+        ? null
+        : await new Promise<string | null>((resolve) => {
+            this.#waiting.push(resolve)
+            this.#child.stdin.write(`${JSON.stringify(request)}\n`)
+          })
       if (line === null) {
         throw new Error(`adapter \`${this.name}\` exited unexpectedly${this.#stderr ? `: ${this.#stderr.trim()}` : ''}`)
       }
@@ -161,6 +167,7 @@ export class SubprocessAdapter implements Adapter {
   }
 
   #drain(): void {
+    this.#gone = true
     for (const resolve of this.#waiting.splice(0)) resolve(null)
   }
 }

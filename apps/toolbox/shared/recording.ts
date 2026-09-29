@@ -7,7 +7,7 @@
  * from source.
  */
 import type { Ir, IrMachine, Thresholds } from './ir.ts'
-import { printExpr } from './ir.ts'
+import { printExpr, readIr } from './ir.ts'
 
 /** One JSONL line (spec section 10.3). */
 export interface RecordingEvent {
@@ -51,7 +51,7 @@ export function startInfo(events: readonly RecordingEvent[]): StartInfo | null {
     task: String(start['task'] ?? ''),
     inputs: (start['inputs'] as Record<string, unknown>) ?? {},
     bindings: (start['bindings'] as { name: string; kind: string }[]) ?? [],
-    ir: (start['ir'] as Ir | undefined) ?? null,
+    ir: start['ir'] ? readIr(start['ir']) : null,
     profile: (start['profile'] as Profile | undefined) ?? null,
     sample: start['sample'] ?? null,
   }

@@ -1,6 +1,6 @@
 /**
  * Live runs through the JavaScript SDK (spec section 11.2): each run loads its
- * program into its own `jevscrypt serve`, binds the adapters the user chose,
+ * program into its own `jevscript serve`, binds the adapters the user chose,
  * records to a new file, and is stepped here. A pause the host must answer
  * parks the loop until the page answers it.
  */
@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { type Adapter, load, type Program, type Run } from '@jevscrypt/sdk'
+import { type Adapter, load, type Program, type Run } from 'jevscript'
 
 import type { Pause, Resume } from '../shared/pauses.ts'
 import { needsHost } from '../shared/pauses.ts'
@@ -16,7 +16,7 @@ import type { LiveRunState, RunSummary, ServerMessage, StartRun } from '../share
 import { formatDiagnostic } from '../shared/protocol.ts'
 import { endOf, parseRecording, type RecordingEvent } from '../shared/recording.ts'
 import { bindAdapter, type BoundAdapter } from './adapters.ts'
-import type { Jevscrypt } from './jevscrypt.ts'
+import type { Jevscript } from './jevscript.ts'
 
 type Answer = { resume: Resume } | { abort: true }
 
@@ -40,7 +40,7 @@ interface Live {
 export type OnEnded = (ideaId: string, summary: RunSummary) => Promise<void>
 
 export class RunManager {
-  readonly #jev: Jevscrypt
+  readonly #jev: Jevscript
   readonly #recordings: string
   readonly #send: (message: ServerMessage) => void
   readonly #live = new Map<string, Live>()
@@ -48,7 +48,7 @@ export class RunManager {
   readonly #starting = new Set<string>()
   readonly #onEnded: OnEnded
 
-  constructor(jev: Jevscrypt, home: string, send: (message: ServerMessage) => void, onEnded: OnEnded = async () => {}) {
+  constructor(jev: Jevscript, home: string, send: (message: ServerMessage) => void, onEnded: OnEnded = async () => {}) {
     this.#jev = jev
     this.#recordings = join(home, 'recordings')
     this.#send = send

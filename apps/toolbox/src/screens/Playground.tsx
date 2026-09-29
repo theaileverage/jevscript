@@ -42,7 +42,7 @@ export function PlaygroundScreen({ idea }: { idea: Idea }) {
                 ? 'jevscript lsp · diagnostics, hover, completion'
                 : lsp === 'connecting'
                   ? 'jevscript lsp · connecting'
-                  : 'jevscript lsp · disconnected, plain text and jevscrypt check diagnostics'}
+                  : 'jevscript lsp · disconnected, plain text and jevscript check diagnostics'}
             </div>
           </div>
           <div className="actions">
@@ -179,7 +179,7 @@ function TuningPanel({ idea }: { idea: Idea }) {
         <h5>Model profile</h5>
         <div className="profiles">
           {profiles.map((profile) => (
-            <button key={profile.model} className={profile.model === idea.model ? 'active' : ''} onClick={() => actions.updateIdea(idea.id, { model: profile.model })} title={profile.source === 'overlay' ? 'from JEVSCRYPT_PROFILES' : 'bundled'}>
+            <button key={profile.model} className={profile.model === idea.model ? 'active' : ''} onClick={() => actions.updateIdea(idea.id, { model: profile.model })} title={profile.source === 'overlay' ? 'from JEVSCRIPT_PROFILES' : 'bundled'}>
               {profile.model}
             </button>
           ))}
@@ -188,7 +188,7 @@ function TuningPanel({ idea }: { idea: Idea }) {
           <div className="small muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
             {selected?.aliases ? `${selected.model} → ${resolved.model} · ` : ''}
             {resolved.max_questions_per_request} questions per request · {Math.round(resolved.total_tokens / 1000)}k tokens · ${resolved.price_per_million_input_usd} per M input
-            {selected?.source === 'overlay' ? ' · from JEVSCRYPT_PROFILES' : ''}
+            {selected?.source === 'overlay' ? ' · from JEVSCRIPT_PROFILES' : ''}
           </div>
         ) : null}
       </section>

@@ -1,6 +1,6 @@
 /**
  * The TypeSafe wire mapping, ported line for line from `wire` in
- * `crates/jevscrypt-runtime/src/jev.rs` so the Requests tab can resend a
+ * `crates/jevscript-runtime/src/jev.rs` so the Requests tab can resend a
  * recorded request exactly as `HttpJevClient` would have sent it. The JSON-RPC
  * surface has no raw-request method (spec section 11.5), and `judgment.run`
  * rebuilds its questions from current source, so every resend goes through
