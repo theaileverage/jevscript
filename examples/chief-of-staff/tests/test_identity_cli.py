@@ -455,6 +455,37 @@ def test_minister_keeps_unmerged_preferences_without_overwriting_child_files(mak
     assert not (docs / "captain.md").exists()
 
 
+def test_readding_minister_preserves_child_preferences_without_late_captain_copy(make_host, jevscript_bin: str, tmp_path: Path) -> None:
+    host = make_host()
+    home = host.home.root
+    cli_rules(host, tmp_path, [])
+    principal, captain = home / "data" / "principal.md", home / "data" / "captain.md"
+    principal.write_bytes(b"# Preferences\n\n- Parent preference\n")
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    child_principal = child / "data" / "principal.md"
+    child_principal.write_bytes(b"# Preferences\n\n- Child preference\n")
+    before = {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file()}
+
+    captain.write_bytes(b"# Preferences\n\n- Parent legacy preference\n")
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "updated operations")
+    assert "ops (portfolio: updated operations):" in cos(home, jevscript_bin, "minister", "list").stdout
+    assert {path.relative_to(child): path.read_bytes() for path in child.rglob("*") if path.is_file()} == before
+    assert not (child / "data" / "captain.md").exists()
+    assert child_principal.read_bytes() == b"# Preferences\n\n- Child preference\n"
+
+    parent_config = read_json(home / "config.json", {})
+    for key, value in (("jev.mode", "fake"), ("jev.fake_rules", parent_config["jev"]["fake_rules"]), ("adapters.staff", parent_config["adapters"]["staff"])):
+        cos(child, jevscript_bin, "config", "set", key, json.dumps(value))
+    cos(child, jevscript_bin, "say", "Update the guide", "--project", "proj")
+    cos(child, jevscript_bin, "tick")
+    [brief] = (child / "data").glob("*/brief.md")
+    preferences = brief.read_text().split("## Standing preferences\n", 1)[1].split("\n## Task Skills", 1)[0]
+    assert "Child preference" in preferences
+    assert "Not yet merged" not in preferences
+    assert "Parent legacy preference" not in preferences
+
+
 def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str) -> None:
     host = make_host(
         rules=[{"match": {"id": "^verdict$"}, "answer": {"choice": "approve"}}],
