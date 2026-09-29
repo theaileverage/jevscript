@@ -155,6 +155,16 @@ def test_help_names_the_homes_identity_without_creating_or_migrating_it(make_hos
     for verb in ("briefing", "red-box", "minister"):
         assert verb in named
 
+    config = read_json(home / "config.json", {})
+    config["scout"] = {"models": {"old-harness": "old-model"}}
+    (home / "config.json").write_text(json.dumps(config))
+    before_help = fingerprint(home / "config.json")
+    assert "Abigail runs your administration" in cos(home, jevscript_bin, "--help").stdout
+    assert fingerprint(home / "config.json") == before_help
+    env = {**os.environ, "JEVSCRIPT_BIN": jevscript_bin, "COS_JEV": "fake", "PYTHONPATH": str(SRC)}
+    show = subprocess.run([sys.executable, "-m", "cos", "--home", str(home), "config", "show"], env=env, capture_output=True, text=True, check=False)
+    assert show.returncode != 0 and "scout.models has no native binding" in show.stderr
+
 
 def configure_identity(home: Path, jevscript_bin: str) -> None:
     cos(home, jevscript_bin, "config", "set", "identity.name", "Abigail")
@@ -171,8 +181,12 @@ def test_configured_names_reach_notifications_briefs_and_the_session(make_host, 
     bin_dir = tmp_path / "bin"
     osascript, claude = fake_bin(bin_dir, "osascript"), fake_bin(bin_dir, "claude")
 
-    cos(home, jevscript_bin, "say", "What's going on?", path=bin_dir)
-    cos(home, jevscript_bin, "tick", path=bin_dir)
+    status_say = cos(home, jevscript_bin, "say", "What's going on?", path=bin_dir)
+    status_tick = cos(home, jevscript_bin, "tick", path=bin_dir)
+    outbox = [json.loads(line) for line in (home / "state" / "outbox.jsonl").read_text().splitlines()]
+    assert outbox[-1]["name"] == "Abigail"
+    assert outbox[-1]["message"] == cos(home, jevscript_bin, "status").stdout.strip()
+    assert f"cos (Abigail): {outbox[-1]['message']}" in status_say.stderr + status_tick.stderr
     [call] = [json.loads(line) for line in osascript.read_text().splitlines()]
     assert call[0] == "-e" and call[1].endswith(' with title "Abigail"'), call
 
@@ -192,6 +206,56 @@ def test_configured_names_reach_notifications_briefs_and_the_session(make_host, 
     assert f"Ankeeth's conversational front door to Abigail, whose home is\n`{home}`" in prompt
     assert "Never write\nAbigail's state files directly." in prompt
     assert "Chief of Staff" not in prompt and "{" not in prompt
+
+
+def test_new_minister_inherits_the_named_parent_in_its_worker_brief(make_host, jevscript_bin: str, tmp_path: Path) -> None:
+    host = make_host()
+    home = host.home.root
+    cli_rules(host, tmp_path, [])
+    configure_identity(home, jevscript_bin)
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    raw = read_json(child / "config.json", {})
+    assert raw["identity"] == {"name": "Abigail", "principal": "Ankeeth"}
+    parent_config = read_json(home / "config.json", {})
+    for key, value in (("jev.mode", "fake"), ("jev.fake_rules", parent_config["jev"]["fake_rules"]), ("adapters.staff", parent_config["adapters"]["staff"])):
+        cos(child, jevscript_bin, "config", "set", key, json.dumps(value))
+    cos(child, jevscript_bin, "say", "Update the guide", "--project", "proj")
+    cos(child, jevscript_bin, "tick")
+    [brief] = (child / "data").glob("*/brief.md")
+    assert "You are working for Abigail on behalf of Ankeeth." in brief.read_text()
+
+
+def test_existing_minister_acquires_missing_identity_once(make_host, jevscript_bin: str) -> None:
+    host = make_host()
+    home = host.home.root
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    assert "identity" not in read_json(child / "config.json", {})
+    configure_identity(home, jevscript_bin)
+    cos(child, jevscript_bin, "status")
+    assert read_json(child / "config.json", {})["identity"] == {"name": "Abigail", "principal": "Ankeeth"}
+    migrated = fingerprint(child / "config.json")
+    cos(child, jevscript_bin, "status")
+    assert fingerprint(child / "config.json") == migrated
+
+
+def test_minister_explicit_identity_survives_migration_and_parent_renames(make_host, jevscript_bin: str) -> None:
+    host = make_host()
+    home = host.home.root
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    cos(child, jevscript_bin, "config", "set", "identity.name", "Beatrice")
+    configure_identity(home, jevscript_bin)
+    cos(child, jevscript_bin, "status")
+    assert read_json(child / "config.json", {})["identity"] == {"name": "Beatrice", "principal": "Ankeeth"}
+    cos(home, jevscript_bin, "config", "set", "identity.name", "Charlotte")
+    cos(home, jevscript_bin, "config", "set", "identity.principal", "Someone Else")
+    cos(child, jevscript_bin, "status")
+    assert read_json(child / "config.json", {})["identity"] == {"name": "Beatrice", "principal": "Ankeeth"}
+    cos(child, jevscript_bin, "config", "set", "identity.name", "Diana")
+    cos(child, jevscript_bin, "status")
+    assert read_json(child / "config.json", {})["identity"] == {"name": "Diana", "principal": "Ankeeth"}
 
 
 def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str) -> None:
