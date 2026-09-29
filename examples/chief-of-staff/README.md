@@ -96,12 +96,14 @@ that differ, and worker briefs carry the differing `captain.md` under a "Not yet
 merged" heading until the principal merges it by hand and deletes it.
 
 At creation, a minister copies the parent's current identity, including
-defaults, plus its existing projects, dispatch profiles and `principal.md`.
-If the parent's `captain.md` differs from `principal.md`, it copies that file so
-the minister's briefs retain the unmerged preferences. Migration fills any
-missing minister identity fields once without replacing explicit child values;
-later parent name changes do not change the minister's identity. Existing
-child preference files are not overwritten.
+defaults. It also copies any missing projects, dispatch profiles and
+`principal.md`; re-adding a minister can fill missing files but never replaces
+existing child files. If the parent's `captain.md` differs from `principal.md`,
+only a new minister receives that file so its briefs retain the unmerged
+preferences. Re-adding a minister updates its portfolio in the registry and
+charter without copying a later `captain.md`. Migration fills missing minister
+identity fields once without replacing explicit child values; later parent
+name changes do not change the minister's identity.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
