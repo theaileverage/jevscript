@@ -48,6 +48,9 @@ def cmd_config(args: argparse.Namespace) -> None:
     except json.JSONDecodeError:
         value = args.value
     warnings = home.set_config(args.key, value)
+    if args.key == "identity" or args.key in ("identity.name", "identity.principal"):
+        stored = read_json(home.config_path, {})["identity"]
+        value = stored if args.key == "identity" else stored[args.key.split(".")[1]]
     print(f"{args.key} = {json.dumps(value)}")
     for warning in warnings:
         print(f"warning: {warning}", file=sys.stderr)
@@ -257,15 +260,15 @@ def build_parser(identity: dict[str, str] | None = None) -> argparse.ArgumentPar
     parser.add_argument("--home", default=DEFAULT_HOME, help="the home directory (default: $COS_HOME or ~/.cos)")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("init", help="create a home").set_defaults(func=cmd_init)
+    sub.add_parser("init", help="create a home", description=f"Create a home for {name}.").set_defaults(func=cmd_init)
 
-    p = sub.add_parser("config", help="show or change config.json")
+    p = sub.add_parser("config", help="show or change config.json", description=f"Show or change {name}'s config.json.")
     p.add_argument("action", choices=["show", "set"])
     p.add_argument("key", nargs="?")
     p.add_argument("value", nargs="?")
     p.set_defaults(func=cmd_config)
 
-    p = sub.add_parser("project", help="the project registry and delivery posture")
+    p = sub.add_parser("project", help="the project registry and delivery posture", description=f"Manage projects in {name}'s administration.")
     p.add_argument("action", choices=["add", "list", "remove"])
     p.add_argument("name", nargs="?")
     p.add_argument("path", nargs="?")
@@ -275,12 +278,12 @@ def build_parser(identity: dict[str, str] | None = None) -> argparse.ArgumentPar
     p.add_argument("--branch-prefix", default="cos/")
     p.set_defaults(func=cmd_project)
 
-    p = sub.add_parser("profiles", help="dispatch profiles (harness, model, effort rules)")
+    p = sub.add_parser("profiles", help="dispatch profiles (harness, model, effort rules)", description=f"Manage {name}'s dispatch profiles.")
     p.add_argument("file", nargs="?")
     p.set_defaults(func=cmd_profiles)
 
     for verb in ("say", "ask"):
-        p = sub.add_parser(verb, help=f"hand a request to {name}" + (" (alias of say)" if verb == "ask" else ""))
+        p = sub.add_parser(verb, help=f"hand a request to {name}" + (" (alias of say)" if verb == "ask" else ""), description=f"Hand a request to {name}.")
         p.add_argument("text", nargs="+")
         p.add_argument("--after", action="append", help="a backlog id this depends on")
         p.add_argument("--project")
@@ -289,59 +292,59 @@ def build_parser(identity: dict[str, str] | None = None) -> argparse.ArgumentPar
         p.add_argument("--reply-to", help="ID of the message this replies to")
         p.add_argument("--native-thread", help="provider thread ID, if supplied")
         p.set_defaults(func=cmd_say)
-    sub.add_parser("status", help="one line: under way, queued, waiting on you").set_defaults(func=cmd_status)
+    sub.add_parser("status", help="one line: under way, queued, waiting on you", description=f"Show {name}'s current work.").set_defaults(func=cmd_status)
 
-    p = sub.add_parser("steer", help="send a worker an instruction through its inbox")
+    p = sub.add_parser("steer", help="send a worker an instruction through its inbox", description=f"Steer one of {name}'s workers.")
     p.add_argument("task")
     p.add_argument("text", nargs="+")
     p.set_defaults(func=cmd_steer)
 
-    sub.add_parser("red-box", aliases=["decisions"], help="the red box: what needs you").set_defaults(func=cmd_red_box)
-    p = sub.add_parser("answer", help="answer a decision")
+    sub.add_parser("red-box", aliases=["decisions"], help="the red box: what needs you", description=f"See decisions in {name}'s Red box.").set_defaults(func=cmd_red_box)
+    p = sub.add_parser("answer", help="answer a decision", description=f"Answer a decision in {name}'s Red box.")
     p.add_argument("key")
     p.add_argument("answer", nargs="+")
     p.set_defaults(func=cmd_answer)
 
-    p = sub.add_parser("away", help="away mode")
+    p = sub.add_parser("away", help="away mode", description=f"Put {name} in away mode.")
     p.add_argument("note", nargs="*")
     p.set_defaults(func=cmd_mode)
-    p = sub.add_parser("quiet", help="quiet mode")
+    p = sub.add_parser("quiet", help="quiet mode", description=f"Set {name}'s quiet mode.")
     p.add_argument("state", nargs="?", default="on", choices=["on", "off"])
     p.set_defaults(func=cmd_mode)
-    sub.add_parser("back", help="leave away mode and read the digest").set_defaults(func=cmd_mode)
+    sub.add_parser("back", help="leave away mode and read the digest", description=f"Bring {name} back and read the digest.").set_defaults(func=cmd_mode)
 
-    p = sub.add_parser("remember", help="record a standing preference")
+    p = sub.add_parser("remember", help="record a standing preference", description=f"Record a standing preference for {name}.")
     p.add_argument("text", nargs="+")
     p.set_defaults(func=cmd_remember)
 
-    sub.add_parser("briefing", aliases=["bearings"], help="the daily brief of the administration").set_defaults(func=cmd_briefing)
-    sub.add_parser("tick", help="run one wake of everything and exit").set_defaults(func=cmd_tick)
-    p = sub.add_parser("watch", help="session start, then supervise until interrupted")
+    sub.add_parser("briefing", aliases=["bearings"], help="the daily brief of the administration", description=f"Read {name}'s daily Briefing.").set_defaults(func=cmd_briefing)
+    sub.add_parser("tick", help="run one wake of everything and exit", description=f"Run one wake of {name}'s work.").set_defaults(func=cmd_tick)
+    p = sub.add_parser("watch", help="session start, then supervise until interrupted", description=f"Start and supervise {name}'s session.")
     p.add_argument("--interval", type=float)
     p.add_argument("--ticks", type=int)
     p.set_defaults(func=cmd_watch)
 
-    sub.add_parser("learn", help="run a learning pass now").set_defaults(func=cmd_learn)
+    sub.add_parser("learn", help="run a learning pass now", description=f"Run one of {name}'s learning passes.").set_defaults(func=cmd_learn)
     for verb in ("playbooks", "playbook"):
-        p = sub.add_parser(verb, help="review, disable, enable or revert learned playbooks")
+        p = sub.add_parser(verb, help="review, disable, enable or revert learned playbooks", description=f"Manage {name}'s learned playbooks.")
         p.add_argument("action", nargs="?", default="list", choices=["list", "show", "disable", "enable", "revert"])
         p.add_argument("name", nargs="?")
         p.set_defaults(func=cmd_playbooks)
 
-    p = sub.add_parser("minister", aliases=["mate"], help=f"ministers: instances of {name} that each hold a portfolio")
+    p = sub.add_parser("minister", aliases=["mate"], help=f"ministers: instances of {name} that each hold a portfolio", description=f"Manage ministers in {name}'s administration.")
     p.add_argument("action", choices=["add", "list", "start"])
     p.add_argument("name", nargs="?")
     p.add_argument("--portfolio", "--scope", dest="scope", default="", help="the work this minister takes")
     p.set_defaults(func=cmd_minister)
 
-    sub.add_parser("doctor", help="check the binary, the key, adapters and backends").set_defaults(func=cmd_doctor)
-    p = sub.add_parser("smoke", help="live smoke check of one terminal backend")
+    sub.add_parser("doctor", help="check the binary, the key, adapters and backends", description=f"Check {name}'s local setup.").set_defaults(func=cmd_doctor)
+    p = sub.add_parser("smoke", help="live smoke check of one terminal backend", description=f"Smoke check a backend for {name}.")
     p.add_argument("backend", choices=[b for b in backends.BACKENDS if b != "fake"])
     p.set_defaults(func=cmd_smoke)
-    p = sub.add_parser("demo", help="an offline end-to-end run with a fake Jev and a fake agent")
+    p = sub.add_parser("demo", help="an offline end-to-end run with a fake Jev and a fake agent", description=f"Run an offline demo of {name}.")
     p.add_argument("--dir")
     p.set_defaults(func=cmd_demo)
-    p = sub.add_parser("session", help=f"open an interactive agent session with {name}")
+    p = sub.add_parser("session", help=f"open an interactive agent session with {name}", description=f"Open an interactive agent session with {name}.")
     p.add_argument("--agent", choices=["claude", "codex"], default="claude")
     p.add_argument("--no-watch", action="store_true", help="connect to an already running watcher")
     p.set_defaults(func=cmd_session)

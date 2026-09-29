@@ -170,6 +170,21 @@ def test_help_names_the_homes_identity_without_creating_or_migrating_it(make_hos
     assert show.returncode != 0 and "scout.models has no native binding" in show.stderr
 
 
+def test_selected_home_subcommand_help_uses_name_without_migrating(make_host, jevscript_bin: str) -> None:
+    home = make_host().home.root
+    make_legacy(home)
+    config = read_json(home / "config.json", {})
+    config["identity"] = {"name": "Abigail"}
+    config["scout"] = {"models": {"old-harness": "old-model"}}
+    (home / "config.json").write_text(json.dumps(config))
+    before = {name: fingerprint(home / name) for name in ("config.json", "data/captain.md")}
+    for command in ("session", "say", "minister", "briefing", "red-box", "ask", "mate", "bearings", "decisions"):
+        help_text = cos(home, jevscript_bin, command, "--help").stdout
+        assert "Abigail" in help_text and "Chief of Staff" not in help_text, command
+    assert {name: fingerprint(home / name) for name in before} == before
+    assert not (home / "data" / "principal.md").exists()
+
+
 def configure_identity(home: Path, jevscript_bin: str) -> None:
     cos(home, jevscript_bin, "config", "set", "identity.name", "Abigail")
     cos(home, jevscript_bin, "config", "set", "identity.principal", "Ankeeth")
@@ -191,6 +206,20 @@ def test_invalid_identity_writes_leave_config_unchanged(make_host, jevscript_bin
         result = cos_result(home, jevscript_bin, "config", "set", key, value)
         assert result.returncode != 0 and field in result.stderr
         assert fingerprint(home / "config.json") == before
+
+
+def test_config_confirmation_prints_the_saved_identity(make_host, jevscript_bin: str) -> None:
+    home = make_host().home.root
+    name = cos(home, jevscript_bin, "config", "set", "identity.name", "  Abigail  ")
+    saved = read_json(home / "config.json", {})["identity"]
+    assert name.stdout.strip() == f"identity.name = {json.dumps(saved['name'])}"
+    principal = cos(home, jevscript_bin, "config", "set", "identity.principal", "  Ankeeth  ")
+    saved = read_json(home / "config.json", {})["identity"]
+    assert principal.stdout.strip() == f"identity.principal = {json.dumps(saved['principal'])}"
+    whole = cos(home, jevscript_bin, "config", "set", "identity", json.dumps({"name": "  Beatrice  ", "principal": "  Morgan  "}))
+    saved = read_json(home / "config.json", {})["identity"]
+    assert saved == {"name": "Beatrice", "principal": "Morgan"}
+    assert whole.stdout.strip() == f"identity = {json.dumps(saved)}"
 
 
 def test_stored_invalid_identity_falls_back_in_help_and_blocks_operations(make_host, jevscript_bin: str) -> None:
