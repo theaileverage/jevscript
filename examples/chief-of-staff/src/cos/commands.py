@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from .state.backlog import Backlog
@@ -149,8 +150,21 @@ class Commands:
 
     def briefing(self) -> Reply:
         from .bearings import render
+        from .mates import Mates
+        from .state.workers import Workers
 
-        return Reply(render(self.host))
+        # The briefing reads durable records; starting a Host would also start
+        # Jev (and write fake profiles in offline homes) before any work runs.
+        reader = SimpleNamespace(
+            home=self.home,
+            registry=self.registry,
+            backlog=self.backlog,
+            decisions=self.decisions,
+            workers=Workers(self.home),
+            learning=SimpleNamespace(playbooks=self.playbook_registry),
+        )
+        reader.mates = Mates(reader)
+        return Reply(render(reader))
 
     def decisions_open(self) -> Reply:
         rows = self.decisions.open()

@@ -70,10 +70,14 @@ uv run cos --home ~/.cos config set identity.name Abigail          # default: Ch
 uv run cos --home ~/.cos config set identity.principal Ankeeth     # default: the principal
 ```
 
-The name appears in `cos --home <home> --help`, desktop notification titles,
-worker and reviewer briefs, the agent session's instructions, and messages
-such as "Abigail stopped while handling ...". Help reads the home's config
-without creating or migrating the home.
+The name appears in `cos --home <home> --help`, selected-home subcommand help,
+desktop notification titles, worker and reviewer briefs, the agent session's
+instructions, and messages such as "Abigail stopped while handling ...".
+Both identity fields must be nonempty text; `config set` trims surrounding
+whitespace and prints the saved value. An invalid value is rejected before
+`config.json` changes. Operational commands report invalid stored identity
+values. Help reads the home's identity without creating or migrating the home;
+if it is invalid, help uses the defaults without checking unrelated settings.
 
 The product words are the principal (the person, whose standing preferences
 live in `data/principal.md`), ministers (`cos minister`, instances with their
@@ -84,12 +88,20 @@ principal). The old verbs `cos bearings`, `cos decisions` and `cos mate`, the
 `--scope` flag and the `adapters.crew` config key still work. The Jevscript
 capability names (`crew`, `fleet`) are unchanged, so old recordings replay.
 
-Every command that opens a home migrates it in place, and running it again
+Operational commands migrate an opened home in place. Repeating the migration
 changes nothing. A lone `data/captain.md` becomes `data/principal.md`, and a
 lone `adapters.crew` entry becomes `adapters.staff`. Where both the old and the
-new record exist, neither is changed. If they differ, every CLI run and
-`cos doctor` report it, and worker briefs carry `captain.md` under a "Not yet
+new record exist, neither is changed. Operational CLI commands report pairs
+that differ, and worker briefs carry the differing `captain.md` under a "Not yet
 merged" heading until the principal merges it by hand and deletes it.
+
+At creation, a minister copies the parent's current identity, including
+defaults, plus its existing projects, dispatch profiles and `principal.md`.
+If the parent's `captain.md` differs from `principal.md`, it copies that file so
+the minister's briefs retain the unmerged preferences. Migration fills any
+missing minister identity fields once without replacing explicit child values;
+later parent name changes do not change the minister's identity. Existing
+child preference files are not overwritten.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
