@@ -116,8 +116,8 @@ class Host:
         return from_config(entry, kind, name, log=log)
 
     def terminal(self) -> backends.Backend:
-        """The terminal backend the host uses for its own processes (second
-        mates). Workers' terminals belong to the agent adapter."""
+        """The terminal backend the host uses for its own processes (ministers).
+        Workers' terminals belong to the agent adapter."""
         if self._terminal is None:
             config = self.home.config
             self._terminal = backends.make(config["backend"], **config.get("backend_options", {}))

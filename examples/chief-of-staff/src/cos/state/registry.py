@@ -114,7 +114,7 @@ class Registry:
         write_json(self.mates_path, [m for m in self.mates() if m["name"] != name] + [record])
         charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
         atomic_write(child.data / "charter.md", charter)
-        # A minister shares the parent's projects, profiles and memory at creation.
+        # A minister copies the parent's projects, profiles and preferences at creation.
         sources = [self.home.data / name for name in ("projects.json", "profiles.json", self.home.preferences_path.name)]
         legacy, current = self.home.legacy_preferences_path, self.home.preferences_path
         if legacy.exists() and current.exists() and legacy.read_bytes() != current.read_bytes():
@@ -131,7 +131,7 @@ class Registry:
         return record
 
     def homes(self) -> list[dict[str, Any]]:
-        """The routing list intake picks among: this home first, then mates."""
+        """The routing list intake picks among: this home first, then ministers."""
         return [{"name": "main", "scope": "any work no second mate's scope covers"}] + [
             {"name": m["name"], "scope": m["scope"]} for m in self.mates()
         ]

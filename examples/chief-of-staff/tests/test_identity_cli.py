@@ -269,6 +269,19 @@ def test_briefing_labels_the_red_box_without_changing_status_or_state(make_host,
     assert fingerprint(home / "state" / "decisions.json") == decisions
 
 
+def test_briefing_reads_a_home_without_starting_jev_or_writing_runtime_state(jevscript_bin: str, tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    cos(home, jevscript_bin, "init")
+    status = cos(home, jevscript_bin, "status").stdout.strip()
+    before = {path.relative_to(home): fingerprint(path) for path in home.rglob("*") if path.is_file()}
+
+    briefing = cos(home, jevscript_bin, "briefing").stdout
+
+    assert briefing.splitlines()[0] == f"Briefing: {status}"
+    assert "\nRed box\n  - nothing" in briefing
+    assert {path.relative_to(home): fingerprint(path) for path in home.rglob("*") if path.is_file()} == before
+
+
 def test_configured_names_reach_notifications_briefs_and_the_session(make_host, jevscript_bin: str, tmp_path: Path) -> None:
     status_rule = [{"match": {"id": "^work$", "text": "going on"}, "answer": {"choice": "status"}}]
     host = make_host()

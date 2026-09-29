@@ -225,9 +225,9 @@ class Home:
         """Move records an older home wrote under their old names.
 
         Idempotent, and never overwrites: where the old and the new name both
-        exist, both are kept exactly as they are and ``unresolved`` reports
-        them. The adapter key is decided from the raw file, before defaults
-        merge in, so no default can mask an existing ``adapters.crew``.
+        exist, both are kept exactly as they are; ``unresolved`` reports pairs
+        that differ. The adapter key is decided from the raw file before
+        defaults merge in, so no default can mask an existing ``adapters.crew``.
         """
         legacy, current = self.legacy_preferences_path, self.preferences_path
         if legacy.exists() and not current.exists():
