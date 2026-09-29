@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import backends
-from .state.home import DEFAULT_CONFIG, Home, LockHeld, read_json
+from .state.home import DEFAULT_CONFIG, Home, LockHeld, read_json, validated_identity
 from .jevbin import SetupError, find_jevscript, keychain_key
 
 DEFAULT_HOME = os.environ.get("COS_HOME", "~/.cos")
@@ -246,11 +246,7 @@ def help_identity(argv: list[str] | None) -> dict[str, str]:
     known, _ = _pre_parser().parse_known_args(argv)
     try:
         stored = read_json(Home(known.home).config_path, {})
-        identity = stored.get("identity", {})
-        if not isinstance(identity, dict):
-            raise ValueError("identity must be an object")
-        names = {**DEFAULT_CONFIG["identity"], **identity}
-        return {key: str(names[key]) for key in ("name", "principal")}
+        return validated_identity(stored.get("identity", {}))
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return dict(DEFAULT_CONFIG["identity"])
 

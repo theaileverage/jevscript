@@ -22,12 +22,16 @@ from cos.state.home import read_json
 
 
 def cos(home: Path, jevscript_bin: str, *args: str, path: Path | None = None) -> subprocess.CompletedProcess[str]:
+    result = cos_result(home, jevscript_bin, *args, path=path)
+    assert result.returncode == 0, result.stderr
+    return result
+
+
+def cos_result(home: Path, jevscript_bin: str, *args: str, path: Path | None = None) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "JEVSCRIPT_BIN": jevscript_bin, "COS_JEV": "fake", "PYTHONPATH": str(SRC)}
     if path is not None:
         env["PATH"] = f"{path}{os.pathsep}{env['PATH']}"
-    result = subprocess.run([sys.executable, "-m", "cos", "--home", str(home), *args], env=env, capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stderr
-    return result
+    return subprocess.run([sys.executable, "-m", "cos", "--home", str(home), *args], env=env, capture_output=True, text=True, check=False)
 
 
 def fake_bin(directory: Path, name: str) -> Path:
@@ -169,6 +173,71 @@ def test_help_names_the_homes_identity_without_creating_or_migrating_it(make_hos
 def configure_identity(home: Path, jevscript_bin: str) -> None:
     cos(home, jevscript_bin, "config", "set", "identity.name", "Abigail")
     cos(home, jevscript_bin, "config", "set", "identity.principal", "Ankeeth")
+
+
+def test_invalid_identity_writes_leave_config_unchanged(make_host, jevscript_bin: str) -> None:
+    home = make_host().home.root
+    cos(home, jevscript_bin, "config", "set", "identity.name", "  Abigail  ")
+    assert read_json(home / "config.json", {})["identity"]["name"] == "Abigail"
+    before = fingerprint(home / "config.json")
+    for key, value, field in (
+        ("identity.name", "null", "identity.name"),
+        ("identity.name", "42", "identity.name"),
+        ("identity.name", "   ", "identity.name"),
+        ("identity.principal", '"  "', "identity.principal"),
+        ("identity", json.dumps({"name": "Abigail", "principal": None}), "identity.principal"),
+        ("identity", "[]", "identity"),
+    ):
+        result = cos_result(home, jevscript_bin, "config", "set", key, value)
+        assert result.returncode != 0 and field in result.stderr
+        assert fingerprint(home / "config.json") == before
+
+
+def test_stored_invalid_identity_falls_back_in_help_and_blocks_operations(make_host, jevscript_bin: str) -> None:
+    home = make_host().home.root
+    configure_identity(home, jevscript_bin)
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    child_config = read_json(child / "config.json", {})
+    child_config.pop("identity")
+    (child / "config.json").write_text(json.dumps(child_config))
+    child_before = fingerprint(child / "config.json")
+
+    config = read_json(home / "config.json", {})
+    config["identity"]["name"] = None
+    (home / "config.json").write_text(json.dumps(config))
+    before = fingerprint(home / "config.json")
+    help_text = cos(home, jevscript_bin, "--help").stdout
+    assert "Chief of Staff runs your administration" in help_text and "Abigail" not in help_text
+    assert fingerprint(home / "config.json") == before
+    for command in (("status",), ("config", "show")):
+        result = cos_result(home, jevscript_bin, *command)
+        assert result.returncode != 0 and "identity.name must be nonempty text" in result.stderr
+    child_status = cos_result(child, jevscript_bin, "status")
+    assert child_status.returncode != 0 and "identity.name must be nonempty text" in child_status.stderr
+    assert fingerprint(child / "config.json") == child_before
+    for identity, error in (({"name": "Abigail", "principal": "  "}, "identity.principal"), ([], "identity must be an object")):
+        config["identity"] = identity
+        (home / "config.json").write_text(json.dumps(config))
+        before = fingerprint(home / "config.json")
+        assert "Chief of Staff runs your administration" in cos(home, jevscript_bin, "--help").stdout
+        result = cos_result(home, jevscript_bin, "status")
+        assert result.returncode != 0 and error in result.stderr
+        assert fingerprint(home / "config.json") == before
+
+
+def test_briefing_labels_the_red_box_without_changing_status_or_state(make_host, jevscript_bin: str) -> None:
+    host = make_host()
+    home = host.home.root
+    host.decisions.record("choice", "Choose a path?", ["A", "B"])
+    decisions = fingerprint(home / "state" / "decisions.json")
+    status = cos(home, jevscript_bin, "status").stdout.strip()
+    briefing = cos(home, jevscript_bin, "briefing").stdout
+    assert briefing.splitlines()[0] == f"Briefing: {status}"
+    assert "\nRed box\n  - Choose a path?" in briefing
+    assert "\nNeeds you\n" not in briefing
+    assert cos(home, jevscript_bin, "bearings").stdout == briefing
+    assert fingerprint(home / "state" / "decisions.json") == decisions
 
 
 def test_configured_names_reach_notifications_briefs_and_the_session(make_host, jevscript_bin: str, tmp_path: Path) -> None:

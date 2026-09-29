@@ -144,6 +144,19 @@ def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def validated_identity(configured: Any) -> dict[str, str]:
+    if not isinstance(configured, dict):
+        raise ValueError("identity must be an object")
+    values = {**DEFAULT_CONFIG["identity"], **configured}
+    names = {}
+    for field in ("name", "principal"):
+        value = values[field]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"identity.{field} must be nonempty text")
+        names[field] = value.strip()
+    return names
+
+
 def native_scout_models(configured: Any) -> dict[str, str]:
     if not isinstance(configured, dict):
         raise ValueError("scout.models must be a map of native model IDs or null")
@@ -194,6 +207,7 @@ class Home:
             directory.mkdir(parents=True, exist_ok=True)
         if not self.config_path.exists():
             write_json(self.config_path, {})
+        validated_identity(read_json(self.config_path, {}).get("identity", {}))
         self.migrate()
         return self
 
@@ -233,10 +247,10 @@ class Home:
                 parent = read_json(self.data / "parent.json", None)
                 if isinstance(parent, dict) and "home" in parent:
                     parent_raw = read_json(Home(parent["home"]).config_path, {})
-                    parent_identity = {**DEFAULT_CONFIG["identity"], **parent_raw.get("identity", {})}
+                    parent_identity = validated_identity(parent_raw.get("identity", {}))
                     raw.setdefault("identity", child_identity)
                     for field in missing:
-                        child_identity[field] = str(parent_identity[field])
+                        child_identity[field] = parent_identity[field]
                     changed = True
         if changed:
             write_json(self.config_path, raw)
@@ -262,6 +276,7 @@ class Home:
     @property
     def config(self) -> dict[str, Any]:
         config = _merge(DEFAULT_CONFIG, read_json(self.config_path, {}))
+        config["identity"] = validated_identity(config["identity"])
         _validate_scout_config(config)
         return config
 
@@ -269,8 +284,7 @@ class Home:
     def identity(self) -> dict[str, str]:
         """The configured names every surface uses: ``name`` for the CoS and
         ``principal`` for the person it works for."""
-        identity = self.config["identity"]
-        return {"name": str(identity["name"]), "principal": str(identity["principal"])}
+        return self.config["identity"]
 
     def set_config(self, dotted: str, value: Any) -> list[str]:
         if dotted == "adapters.crew" or dotted.startswith("adapters.crew."):
@@ -282,7 +296,12 @@ class Home:
             cursor = cursor.setdefault(part, {})
         cursor[parts[-1]] = value
         candidate = _merge(DEFAULT_CONFIG, raw)
+        candidate["identity"] = validated_identity(candidate["identity"])
         _validate_scout_config(candidate)
+        if dotted == "identity" or dotted in {"identity.name", "identity.principal"}:
+            for field in ("name", "principal"):
+                if field in raw["identity"]:
+                    raw["identity"][field] = candidate["identity"][field]
         warnings: list[str] = []
         if dotted in {"skill_catalog", "policy", "policy.skill_shortlist", "policy.skill_terms"}:
             from ..skills import Skills
