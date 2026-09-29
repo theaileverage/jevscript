@@ -232,10 +232,11 @@ class Home:
             if missing:
                 parent = read_json(self.data / "parent.json", None)
                 if isinstance(parent, dict) and "home" in parent:
-                    parent_identity = Home(parent["home"]).identity
+                    parent_raw = read_json(Home(parent["home"]).config_path, {})
+                    parent_identity = {**DEFAULT_CONFIG["identity"], **parent_raw.get("identity", {})}
                     raw.setdefault("identity", child_identity)
                     for field in missing:
-                        child_identity[field] = parent_identity[field]
+                        child_identity[field] = str(parent_identity[field])
                     changed = True
         if changed:
             write_json(self.config_path, raw)
