@@ -5,7 +5,7 @@
  */
 import type { Ir } from './ir.ts'
 import type { JevAnswer, RecordingEvent } from './recording.ts'
-import { requests } from './recording.ts'
+import { machineSteps, requests } from './recording.ts'
 import type { JevRequest, Question } from './wire.ts'
 
 /**
@@ -37,22 +37,23 @@ export function requestEntries(events: readonly RecordingEvent[], ir: Ir | null)
   const trailSteps = new Map<number, number>()
   const machineStepNumbers = new Map<number, number>()
   let step = 0
-  let machineSteps = 0
+  let machineStepCount = 0
   for (const event of events) {
     if (event.event === 'step') step = Number((event['record'] as { step?: number })?.step ?? step)
-    if (event.event === 'machine_step') machineSteps += 1
+    if (event.event === 'machine_step') machineStepCount += 1
     if (event.event === 'request') {
       trailSteps.set(event.seq, step)
-      machineStepNumbers.set(event.seq, machineSteps + 1)
+      machineStepNumbers.set(event.seq, machineStepCount + 1)
     }
   }
-  const machineNames = events.filter((event) => event.event === 'machine_step').map((event) => String(event['machine']))
+  const owners = new Map(machineSteps(events, ir).filter((step) => step.requestId !== null).map((step) => [step.requestId, step]))
   return views.map((view, index) => {
     const request: JevRequest = {
       state: (view.state as Record<string, unknown>) ?? {},
       questions: (events.find((event) => event.seq === view.seq)?.['questions'] as Question[]) ?? [],
     }
-    const origin = originOf(request, ir, machineNames)
+    const owner = owners.get(view.requestId)
+    const origin = owner ? { kind: 'machine' as const, machine: owner.machine, state: owner.from } : originOf(request, ir)
     return {
       index: index + 1,
       requestId: view.requestId,
@@ -67,12 +68,11 @@ export function requestEntries(events: readonly RecordingEvent[], ir: Ir | null)
   })
 }
 
-function originOf(request: JevRequest, ir: Ir | null, machineNames: string[]): RequestOrigin {
+function originOf(request: JevRequest, ir: Ir | null): RequestOrigin {
   const state = request.state
   const onlyEvent = request.questions.length === 1 && request.questions[0]?.id === 'event'
   if (onlyEvent && typeof state['state'] === 'string' && 'goal' in state && 'obs' in state) {
-    const owner = ir?.machines.find((machine) => machine.states.some((candidate) => candidate.name === state['state']))
-    return { kind: 'machine', machine: owner?.name ?? machineNames[0] ?? null, state: state['state'] }
+    return { kind: 'machine', machine: null, state: state['state'] }
   }
   const stateKeys = Object.keys(state).sort().join()
   for (const judgment of (ir?.judgments ?? []) as { name: string; params: string[]; results?: { name: string }[] }[]) {

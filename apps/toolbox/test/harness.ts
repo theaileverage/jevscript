@@ -15,7 +15,7 @@ export interface Client {
 
 /** A page's connection to `/ws`: requests with replies, and every push kept in order. */
 export async function connect(toolbox: Pick<Toolbox, 'url'>): Promise<Client> {
-  const socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/ws`)
+  const socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/ws`, { origin: toolbox.url })
   const pushes: ServerMessage[] = []
   const waiting = new Map<number, (message: ServerMessage) => void>()
   let next = 1

@@ -1,6 +1,5 @@
 /** Small readings of a run and its program that several screens share. */
 import type { Ir } from '../shared/ir.ts'
-import type { RecordingEvent } from '../shared/recording.ts'
 import type { RequestOrigin } from '../shared/requests.ts'
 
 /**
@@ -11,6 +10,7 @@ import type { RequestOrigin } from '../shared/requests.ts'
 export function confidenceThreshold(ir: Ir | null | undefined, origin: RequestOrigin | null): { value: number; owner: string } | null {
   if (!ir) return null
   if (origin?.kind === 'machine') {
+    if (origin.machine === null) return null
     const machine = ir.machines.find((candidate) => candidate.name === origin.machine)
     if (machine?.thresholds.min_confidence !== undefined) return { value: machine.thresholds.min_confidence, owner: `machine ${machine.name}` }
   }
@@ -18,12 +18,9 @@ export function confidenceThreshold(ir: Ir | null | undefined, origin: RequestOr
   return main?.thresholds.min_confidence !== undefined ? { value: main.thresholds.min_confidence, owner: 'task main' } : null
 }
 
-/** The `calls` budget a run is spending against: the machine that stepped, else `main` (spec section 7.1). */
-export function callsLimit(ir: Ir | null | undefined, events: readonly RecordingEvent[]): number | null {
+/** The main task's `calls` budget, paired with the run's total usage (spec section 7.1). */
+export function callsLimit(ir: Ir | null | undefined): number | null {
   if (!ir) return null
-  const machineName = events.find((event) => event.event === 'machine_step')?.['machine']
-  const machine = ir.machines.find((candidate) => candidate.name === machineName)
-  if (machine?.budget.calls !== undefined) return machine.budget.calls
   return ir.tasks.find((task) => task.name === 'main')?.budget.calls ?? null
 }
 

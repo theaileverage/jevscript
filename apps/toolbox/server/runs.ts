@@ -5,8 +5,8 @@
  * parks the loop until the page answers it.
  */
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 import { type Adapter, load, type Program, type Run } from 'jevscript'
 
@@ -27,6 +27,7 @@ interface Live {
   recording: string
   startedAt: string
   program: Program
+  sourceDir: string
   run: Run
   adapters: BoundAdapter[]
   answer: ((answer: Answer) => void) | null
@@ -86,11 +87,12 @@ export class RunManager {
       throw new Error(`the program does not compile: ${first ? formatDiagnostic(first) : 'unknown error'}`)
     }
     const path = await this.#jev.materialize(request.fileName, request.source)
-    const recording = await this.newRecordingPath(request.title)
-    const program = await load(path, { bin: this.#jev.bin })
+    let program: Program | null = null
     const adapters: BoundAdapter[] = []
     let runId = ''
     try {
+      const recording = await this.newRecordingPath(request.title)
+      program = await load(path, { bin: this.#jev.bin })
       const bind: Record<string, Adapter> = {}
       for (const need of compiled.ir.needs) {
         const bound = bindAdapter(need, request.bindings[need.name], (capability, message) =>
@@ -114,6 +116,7 @@ export class RunManager {
         recording,
         startedAt: new Date().toISOString(),
         program,
+        sourceDir: dirname(path),
         run,
         adapters,
         answer: null,
@@ -127,7 +130,8 @@ export class RunManager {
       return { runId, recording }
     } catch (error) {
       await Promise.allSettled(adapters.map((bound) => bound.close()))
-      await program.close()
+      await program?.close()
+      await rm(dirname(path), { recursive: true, force: true })
       throw error
     }
   }
@@ -242,7 +246,11 @@ export class RunManager {
   async #close(live: Live): Promise<void> {
     if (!this.#live.delete(live.runId)) return
     await Promise.allSettled(live.adapters.map((bound) => bound.close()))
-    await live.program.close().catch(() => undefined)
+    try {
+      await live.program.close().catch(() => undefined)
+    } finally {
+      await rm(live.sourceDir, { recursive: true, force: true })
+    }
   }
 
   async #summary(live: Live): Promise<RunSummary> {

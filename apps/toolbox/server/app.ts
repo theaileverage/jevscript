@@ -4,10 +4,10 @@
  * built files in production). Every request the page makes is dispatched here.
  */
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 
 import { load } from 'jevscript'
 import { WebSocket, WebSocketServer } from 'ws'
@@ -44,6 +44,11 @@ export interface Toolbox {
 
 export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbox> {
   const env = options.env ?? process.env
+  const allowedOrigins = new Set((env['JEVS_TOOLBOX_ALLOWED_ORIGINS'] ?? '').split(',').filter(Boolean).map((origin) => {
+    const exact = origin.trim()
+    if (!localOrigin(exact)) throw new Error(`invalid toolbox allowed origin: ${exact}`)
+    return exact
+  }))
   const defaults = defaultPaths(env)
   const bin = options.bin ?? defaults.bin
   const home = options.home ?? defaults.home
@@ -131,11 +136,16 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     'errors.reference': async () => errorReference,
     'runs.live': async () => ({ runs: runs.live() }),
     judge: async (request) => {
-      const program = await load(await jev.materialize(request.fileName, request.source), { bin })
+      const path = await jev.materialize(request.fileName, request.source)
       try {
-        return { answers: await program.judgment(request.judgment).run(request.state, { model: request.model }) }
+        const program = await load(path, { bin })
+        try {
+          return { answers: await program.judgment(request.judgment).run(request.state, { model: request.model }) }
+        } finally {
+          await program.close()
+        }
       } finally {
-        await program.close()
+        await rm(dirname(path), { recursive: true, force: true })
       }
     },
   }
@@ -151,8 +161,15 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
   const lspServer = new WebSocketServer({ noServer: true })
   lspServer.on('connection', (ws: WebSocket) => bridgeLsp(ws, lsp))
   server.on('upgrade', (request, socket, head) => {
+    const origin = request.headers.origin
+    const ownOrigin = `http://${request.headers.host ?? ''}`
+    if (!origin || !localOrigin(origin) || (origin !== ownOrigin && !allowedOrigins.has(origin))) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+      return
+    }
     if (request.url === '/ws') wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request))
     else if (request.url === '/lsp') lspServer.handleUpgrade(request, socket, head, (ws) => lspServer.emit('connection', ws, request))
+    else socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
   })
   wss.on('connection', (socket: WebSocket) => {
     sockets.add(socket)
@@ -190,6 +207,16 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       await new Promise<void>((done) => server.close(() => done()))
       ideas.close()
     },
+  }
+}
+
+function localOrigin(origin: string): boolean {
+  if (!/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):[0-9]+$/.test(origin)) return false
+  try {
+    const url = new URL(origin)
+    return url.origin === origin && Number(url.port) > 0 && Number(url.port) <= 65535
+  } catch {
+    return false
   }
 }
 

@@ -59,7 +59,7 @@ export function MachinesScreen({ idea }: { idea: Idea }) {
   const view = overlay(graph, steps, position)
   const step = position > 0 ? steps[position - 1] : undefined
   const usage = usageSoFar(events)
-  const limit = callsLimit(recordedIr ?? ir, events)
+  const limit = callsLimit(recordedIr ?? ir)
   const pins = idea.pins.filter((pin) => pin.target.machine === machine.name)
   const machinePins = pins.filter((pin) => pin.target.kind === 'machine')
   const drawn = pins.filter((pin) => pin.target.kind !== 'machine' && pin.status !== 'discarded')

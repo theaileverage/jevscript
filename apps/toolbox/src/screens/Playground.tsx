@@ -91,7 +91,7 @@ function Console({
   const check = useStore((s) => s.checks[idea.id])
   const events = run?.events ?? []
   const usage = usageSoFar(events)
-  const limit = callsLimit(startInfo(events)?.ir ?? check?.result?.ir, events)
+  const limit = callsLimit(startInfo(events)?.ir ?? check?.result?.ir)
   const requestCount = requests(events).length
   return (
     <div className="console">

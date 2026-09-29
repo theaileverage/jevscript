@@ -4,9 +4,8 @@
  * (manifest comparison, section 9.4) and `replay` (section 10.4).
  */
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 import type { CheckResult, Diagnostic, ReplayResult } from '../shared/protocol.ts'
 import { parseDiagnostics } from '../shared/protocol.ts'
@@ -53,20 +52,29 @@ export class Jevscript {
     await mkdir(this.workDir, { recursive: true })
     const dir = await mkdtemp(join(this.workDir, 'src-'))
     const path = join(dir, programFileName(fileName))
-    await writeFile(path, source)
-    return path
+    try {
+      await writeFile(path, source)
+      return path
+    } catch (error) {
+      await rm(dir, { recursive: true, force: true })
+      throw error
+    }
   }
 
   /** `jevscript compile`: the IR when it compiles, and every diagnostic, warnings included. */
   async compile(fileName: string, source: string): Promise<CheckResult> {
     const path = await this.materialize(fileName, source)
-    const result = await exec(this.bin, ['compile', path])
-    const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
-    if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
-    if (diagnostics.length === 0) {
-      throw new Error(`jevscript compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
+    try {
+      const result = await exec(this.bin, ['compile', path])
+      const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
+      if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
+      if (diagnostics.length === 0) {
+        throw new Error(`jevscript compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
+      }
+      return { diagnostics, ir: null }
+    } finally {
+      await rm(dirname(path), { recursive: true, force: true })
     }
-    return { diagnostics, ir: null }
   }
 
   /** `jevscript check --tools`: each tool verb the program uses that a manifest lacks. */
@@ -76,13 +84,17 @@ export class Jevscript {
     manifests: Record<string, unknown>,
   ): Promise<{ missing: string[]; diagnostics: Diagnostic[] }> {
     const path = await this.materialize(fileName, source)
-    const manifestPath = join(await mkdtemp(join(tmpdir(), 'jevs-tools-')), 'manifests.json')
-    await writeFile(manifestPath, JSON.stringify(manifests))
-    const result = await exec(this.bin, ['check', path, '--tools', manifestPath])
-    const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
-    return {
-      missing: diagnostics.filter((diagnostic) => diagnostic.code === 'verb_missing').map((diagnostic) => diagnostic.message),
-      diagnostics: diagnostics.filter((diagnostic) => diagnostic.code !== 'verb_missing'),
+    try {
+      const manifestPath = join(dirname(path), 'manifests.json')
+      await writeFile(manifestPath, JSON.stringify(manifests))
+      const result = await exec(this.bin, ['check', path, '--tools', manifestPath])
+      const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
+      return {
+        missing: diagnostics.filter((diagnostic) => diagnostic.code === 'verb_missing').map((diagnostic) => diagnostic.message),
+        diagnostics: diagnostics.filter((diagnostic) => diagnostic.code !== 'verb_missing'),
+      }
+    } finally {
+      await rm(dirname(path), { recursive: true, force: true })
     }
   }
 
