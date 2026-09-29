@@ -226,17 +226,17 @@ class Home:
         if isinstance(adapters, dict) and "crew" in adapters and "staff" not in adapters:
             adapters["staff"] = adapters.pop("crew")
             changed = True
-        parent = read_json(self.data / "parent.json", None)
-        if isinstance(parent, dict) and "home" in parent:
-            parent_raw = read_json(Home(parent["home"]).config_path, {})
-            parent_identity = parent_raw.get("identity")
-            child_identity = raw.get("identity", {})
-            if isinstance(parent_identity, dict) and isinstance(child_identity, dict):
-                for field in ("name", "principal"):
-                    if field in parent_identity and field not in child_identity:
-                        raw.setdefault("identity", child_identity)
+        child_identity = raw.get("identity", {})
+        if isinstance(child_identity, dict):
+            missing = [field for field in ("name", "principal") if field not in child_identity]
+            if missing:
+                parent = read_json(self.data / "parent.json", None)
+                if isinstance(parent, dict) and "home" in parent:
+                    parent_identity = Home(parent["home"]).identity
+                    raw.setdefault("identity", child_identity)
+                    for field in missing:
                         child_identity[field] = parent_identity[field]
-                        changed = True
+                    changed = True
         if changed:
             write_json(self.config_path, raw)
 
