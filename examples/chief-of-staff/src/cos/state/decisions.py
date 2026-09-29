@@ -89,11 +89,12 @@ class Decisions:
     # -- telling the person -----------------------------------------------------
 
     def notify(self, message: str) -> None:
-        append_jsonl(self.home.state / "outbox.jsonl", {"at": iso(), "ts": now(), "message": message})
+        name = self.home.identity["name"]
+        append_jsonl(self.home.state / "outbox.jsonl", {"at": iso(), "ts": now(), "name": name, "message": message})
         if self.echo:
-            print(f"cos: {message}", file=sys.stderr)
+            print(f"cos ({name}): {message}", file=sys.stderr)
         if self.notifier is not None:
-            self.notifier(message, self.home.identity["name"])
+            self.notifier(message, name)
 
     def digest(self, message: str) -> None:
         append_jsonl(self.home.state / "digest.jsonl", {"at": iso(), "ts": now(), "message": message})

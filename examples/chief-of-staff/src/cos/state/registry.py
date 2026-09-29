@@ -104,12 +104,13 @@ class Registry:
         return read_json(self.mates_path, [])
 
     def add_mate(self, name: str, scope: str) -> dict[str, Any]:
-        child = Home(self.home.root / "mates" / name).init()
+        child = Home(self.home.root / "mates" / name)
+        write_json(child.data / "parent.json", {"home": str(self.home.root), "name": name})
+        child.init()
         record = {"name": name, "scope": scope, "home": str(child.root)}
         write_json(self.mates_path, [m for m in self.mates() if m["name"] != name] + [record])
         charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
         atomic_write(child.data / "charter.md", charter)
-        write_json(child.data / "parent.json", {"home": str(self.home.root), "name": name})
         # A minister shares the parent's projects, profiles and memory at creation.
         for record_name in ("projects.json", "profiles.json", self.home.preferences_path.name):
             source = self.home.data / record_name
