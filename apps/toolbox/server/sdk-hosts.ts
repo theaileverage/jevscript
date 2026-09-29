@@ -23,6 +23,29 @@ interface Hosted extends LiveRunState {
   closed: Promise<void>
 }
 
+// Apply after interpreter startup: inherited stdio works, but generated code cannot spawn or open sockets.
+const LINUX_SECCOMP = `import ctypes
+policy = ctypes.CDLL('libseccomp.so.2')
+policy.seccomp_init.argtypes = [ctypes.c_uint32]
+policy.seccomp_init.restype = ctypes.c_void_p
+policy.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+policy.seccomp_rule_add.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int, ctypes.c_uint]
+policy.seccomp_load.argtypes = [ctypes.c_void_p]
+policy.seccomp_release.argtypes = [ctypes.c_void_p]
+context = policy.seccomp_init(0x7fff0000)
+if not context:
+    raise RuntimeError('Could not initialize Python host confinement.')
+try:
+    for name in ('fork', 'vfork', 'clone', 'clone3', 'execve', 'execveat', 'socket', 'socketpair', 'connect', 'bind', 'listen', 'accept', 'accept4'):
+        syscall = policy.seccomp_syscall_resolve_name(name.encode())
+        if syscall >= 0 and policy.seccomp_rule_add(context, 0x00050001, syscall, 0) != 0:
+            raise RuntimeError('Could not configure Python host confinement.')
+    if policy.seccomp_load(context) != 0:
+        raise RuntimeError('Could not enable Python host confinement.')
+finally:
+    policy.seccomp_release(context)
+`
+
 /** Python needs an OS sandbox; it has no equivalent of Node's permission mode. */
 async function pythonCommand(dir: string, host: string): Promise<{ bin: string; args: string[] }> {
   const discovered = await new Promise<{ executable: string; framework: string | null; prefix: string }>((resolve, reject) => execFile('python3', ['-c', "import json,sys,sysconfig,os;name=sysconfig.get_config_var('PYTHONFRAMEWORK');app=os.path.join(sys.prefix,'Resources',str(name)+'.app','Contents','MacOS',str(name));print(json.dumps({'executable':sys.executable,'framework':app if name and os.path.isfile(app) else None,'prefix':sys.base_prefix}))"], { env: { PATH: process.env['PATH'] }, timeout: 5000 }, (error, stdout) => {
@@ -39,7 +62,8 @@ async function pythonCommand(dir: string, host: string): Promise<{ bin: string; 
   }
   if (process.platform === 'linux') {
     await new Promise<void>((resolve, reject) => execFile('bwrap', ['--version'], { timeout: 5000 }, error => error ? reject(new Error('Python hosts require bubblewrap on Linux. Install bwrap; no unsandboxed host was started.')) : resolve()))
-    return { bin: 'bwrap', args: ['--unshare-all', '--die-with-parent', '--preserve-fds', '2', '--ro-bind', '/usr', '/usr', '--ro-bind', '/lib', '/lib', '--ro-bind-try', '/lib64', '/lib64', '--ro-bind', discovered.prefix, discovered.prefix, '--dev', '/dev', '--proc', '/proc', '--bind', dir, dir, '--chdir', dir, python, '-I', '-B', '-c', bootstrap] }
+    // Bubblewrap passes inherited FDs to its command; no preserve-fds option exists in 0.9.
+    return { bin: 'bwrap', args: ['--unshare-all', '--die-with-parent', '--ro-bind', '/usr', '/usr', '--ro-bind', '/lib', '/lib', '--ro-bind-try', '/lib64', '/lib64', '--ro-bind', discovered.prefix, discovered.prefix, '--dev', '/dev', '--proc', '/proc', '--bind', dir, dir, '--chdir', dir, python, '-I', '-B', '-c', LINUX_SECCOMP + '\n' + bootstrap] }
   }
   throw new Error('Python hosts need a supported OS sandbox (macOS Seatbelt or Linux bubblewrap).')
 }

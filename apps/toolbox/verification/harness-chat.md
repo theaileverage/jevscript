@@ -3,7 +3,7 @@
 The task branch includes the stable local migration head
 `2b168f097c6e76f00a2893592389271a87044ce6`, including its configured-Origin
 allowlist and accepted review fixes. The follow-up authorizes a ready review
-through direct feature-branch delivery; Firstmate owns merging. No no-mistakes
+through direct feature-branch delivery; the maintainer owns merging. No no-mistakes
 pipeline is used for this delivery.
 
 ## Live browser evidence
@@ -40,7 +40,7 @@ that every advertised model will accept a later request.
 
 ## Complete SDK hosts and editor acceptance
 
-On 2026-09-29 at 21:46–21:52 UTC, Chrome at 1440×900 drove fresh New Idea
+On 2026-09-29 during the follow-up, Chrome at 1440×900 drove fresh New Idea
 requests on the retained 5394 demo. **SDK Portable TypeScript acceptance** used
 Claude Code's discovered `default` choice, reported `claude-opus-5-5`, and
 produced `portable_ts.jev` plus a complete TypeScript SDK host. **SDK Portable

@@ -152,9 +152,31 @@ if (result.outputs.greeting !== 'Alternate, Host!') throw new Error('incorrect s
     })
 
     it(`executes the ${language} SDK host, preserves recording/replay and answers person pauses`, async () => {
-      const { client, idea, host } = await setup(ASK)
+      const { client, idea, host, home } = await setup(ASK)
       host.name = language === 'python' ? 'host.py' : 'host.ts'
       host.source = sdkHost(idea.fileName, language)
+      if (language === 'python') {
+        const outside = join(home, 'outside-python.txt')
+        await writeFile(outside, 'preserved')
+        host.source = `import socket, subprocess, sys
+try:
+    open(${JSON.stringify(outside)}).read()
+    raise AssertionError('Python host read outside its workspace')
+except OSError:
+    pass
+try:
+    with socket.socket() as connection:
+        connection.connect(('127.0.0.1', ${new URL(session!.toolbox.url).port}))
+    raise AssertionError('Python host connected outside its sandbox')
+except OSError:
+    pass
+try:
+    subprocess.run([sys.executable, '-c', 'pass'], check=True)
+    raise AssertionError('Python host started a subprocess')
+except OSError:
+    pass
+` + host.source
+      }
       idea.workspace.files.push({ id: 'support', name: language === 'python' ? 'toolbox_runtime.py' : 'runtime.ts', kind: 'host', support: true, source: language === 'python' ? PY_SUPPORT : TS_SUPPORT })
       idea.bindings = { me: { kind: 'toolbox' } }
       expect((await client.request<PairCheck>('pair.check', { idea, hostFileId: host.id })).host.ok).toBe(true)

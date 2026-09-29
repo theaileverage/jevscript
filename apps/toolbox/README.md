@@ -142,7 +142,7 @@ entry points. Existing `runIdea()` hosts remain supported for earlier ideas.
 
 Toolbox Run permits host filesystem access only in its disposable workspace and
 blocks network and child-process execution. TypeScript uses Node's permission
-mode; Python uses macOS Seatbelt or Linux bubblewrap (`bwrap` must be installed).
+mode; Python uses macOS Seatbelt or Linux bubblewrap with a seccomp policy (`bwrap` and `libseccomp2` must be installed).
 Python discovery selects the actual installed interpreter, including framework
 interpreters on macOS; it does not install another Python or launch unsandboxed.
 External effects run through configured adapters in the toolbox process. Child

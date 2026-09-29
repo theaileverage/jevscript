@@ -111,7 +111,7 @@ jobs:
         with:
           node-version: 26
       - name: Install runtime verification tools
-        run: sudo apt-get update && sudo apt-get install -y tmux bubblewrap python3
+        run: sudo apt-get update && sudo apt-get install -y tmux bubblewrap libseccomp2 python3
       - name: SDK and agent adapters the toolbox links
         run: |
           (cd sdk/js && pnpm install --frozen-lockfile && pnpm run build)

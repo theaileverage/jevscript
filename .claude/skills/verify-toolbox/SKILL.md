@@ -68,7 +68,7 @@ installed adapter CLI's discovery. Exercise spawn, send, wait, observe and stop
 through the supported adapter with a private tmux session, read-only sandbox and
 approval policy never. Stop only that run-owned agent/session. Report signed-out,
 missing CLI, unsupported OS sandbox or provider failures honestly; no fixture
-fallback. Linux Python requires bubblewrap and must be reported separately from
+fallback. Linux Python requires bubblewrap and libseccomp2 and must be reported separately from
 a macOS-only local pass.
 
 ## Drive
