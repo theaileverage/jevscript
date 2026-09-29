@@ -136,9 +136,19 @@ Found while moving, and fixed in the toolbox only:
   program without a machine, which blanked the page. `shared/ir.ts` `readIr`
   fills them in where IR JSON arrives: `jevscript compile` output and a
   recording's `start` event.
+- **Deleting an idea deleted nothing.** The request carried the idea's id in
+  a field named `id`, which the page's request id overwrote, so the server
+  looked for an idea named after a request number. No screen offers delete
+  yet, so it went unnoticed. The field is now `ideaId`.
 - **An applied pin could not be reverted.** Clicking an edge or state reopened
   only `open` pins, so after Apply the pin's Revert button was out of reach.
   Applied pins reopen now.
+
+Added with the move: the toolbox's own state (ideas, pins, the run index and
+resend history) now lives in SQLite at `<home>/toolbox.sqlite` instead of JSON
+files, with a one-time import of an earlier build's files; recordings stay
+JSONL. `pnpm demo` runs the toolbox against local stand-ins for both services.
+The README has both.
 
 Not taken up: recordings now carry `log` events (section 5.8), which the
 toolbox does not display.

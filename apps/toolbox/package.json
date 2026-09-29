@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node server/main.ts",
     "start": "NODE_ENV=production node server/main.ts",
+    "demo": "vite build && node demo/main.ts",
     "build": "vite build",
     "test": "vitest run",
     "test:browser": "vite build && vitest run -c vitest.browser.config.ts",

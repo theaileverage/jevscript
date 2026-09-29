@@ -177,7 +177,7 @@ export const actions = {
   },
 
   async deleteIdea(id: string): Promise<void> {
-    await api.request('ideas.delete', { id }).catch(fail)
+    await api.request('ideas.delete', { ideaId: id }).catch(fail)
     set((s) => {
       const ideas = s.ideas.filter((idea) => idea.id !== id)
       return { ideas, currentId: s.currentId === id ? (ideas[0]?.id ?? null) : s.currentId }

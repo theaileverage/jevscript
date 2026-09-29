@@ -6,5 +6,5 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["server", "shared", "test", "vite.config.ts", "vitest.config.ts", "vitest.browser.config.ts"]
+  "include": ["server", "shared", "test", "demo", "vite.config.ts", "vitest.config.ts", "vitest.browser.config.ts"]
 }

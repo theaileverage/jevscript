@@ -1,6 +1,6 @@
 ---
 name: verify-toolbox
-description: Prove the jevs toolbox (apps/toolbox) works the way a developer uses it — its server's /ws and /lsp boundaries against the real jevscript CLI, serve and lsp, and all four screens (Chat, Playground, Machines, Adapters) in Chrome against fixture TypeSafe and Anthropic endpoints. Use after touching apps/toolbox, the SDK or adapter surfaces it links, the CLI output it parses, or the IR it reads.
+description: Prove the jevs toolbox (apps/toolbox) works the way a developer uses it — its server's /ws and /lsp boundaries against the real jevscript CLI, serve and lsp, its SQLite state across restarts, `pnpm demo`, and all four screens (Chat, Playground, Machines, Adapters) in Chrome against fixture TypeSafe and Anthropic endpoints. Use after touching apps/toolbox, the SDK or adapter surfaces it links, the CLI output it parses, or the IR it reads.
 ---
 
 # Verify the jevs toolbox
@@ -9,7 +9,8 @@ The toolbox is a local web app over the real runtime: `pnpm start` serves the
 page and a WebSocket API, and behind it sit `jevscript compile`, `check
 --tools`, `replay`, `jevscript serve` (through `sdk/js`) and `jevscript lsp`.
 The only things replaced are the two paid services, TypeSafe and Anthropic,
-which `apps/toolbox/test/fixtures.ts` stands in for locally.
+which `apps/toolbox/demo/services.ts` stands in for locally. The toolbox's own
+state is in `<home>/toolbox.sqlite`; recordings are JSONL files beside it.
 
 Nothing here calls a live service. The drive script unsets both keys, and the
 fixtures set their own, so a key in `.env` is never read by a test.
@@ -29,17 +30,19 @@ command that fixes it.
 
 ## Launch
 
-For a manual pass, start the fixtures and the production server:
+For a manual pass, start the fixture demo (`pnpm demo`) with its state in the
+evidence directory:
 
 ```sh
 .claude/skills/verify-toolbox/scripts/launch.sh [evidence-dir] [port]
 ```
 
-Ready when it prints `jevs toolbox on http://127.0.0.1:<port>` with
-`chat drafting: claude-opus-5-5` and `Jev: TYPESAFE_API_KEY set`. Both lines
-refer to the fixtures. The fixture Claude drafts the inbox triage program for
-any request, and at a pin it proposes the stuck-to-waiting edit when asked to
-"ask me instead". Open the URL with chrome-devtools-axi.
+Ready when it prints `jevs toolbox demo: http://127.0.0.1:<port>` with the
+database path and both fixture endpoints. The demo reads no `.env` and replaces
+every provider variable with the fixtures' values. The fixture Claude drafts the
+inbox triage program for any request, and at a pin it proposes the
+stuck-to-waiting edit when asked to "ask me instead". Open the URL with
+chrome-devtools-axi.
 
 ## Drive
 
@@ -55,13 +58,19 @@ It runs, each into `<evidence-dir>/<step>.log`:
   (retry, a dead adapter, a manifest refusal), run lifecycle, resend parity
   with the runtime's own request bodies and error messages, `jevscript lsp`
   through `/lsp`, a real tmux pane tail, and `review_loop.jev` end to end with
-  a zero-call replay.
+  a zero-call replay; the database keeping ideas, pins, the run index and
+  resend history across a restart, the one-time import of an earlier build's
+  JSON files, and the refusal of a newer schema.
 - **browser.** `pnpm test:browser`. It builds the page, starts
   `node server/main.ts` as `pnpm start` does, and drives Chat (draft, run,
   `/judge`, `/check`), the pause stack (retry, budget, confirm options, two
   runs stacked), Playground (LSP colours and diagnostics, dials writing to
   source, run, Requests, replay with no live call), Machines (graph, steps,
-  pin, apply and revert) and Adapters (binding, the manifest check).
+  pin, apply and revert) and Adapters (binding, the manifest check), then
+  restarts the server and finds the ideas, pin, binding and steps again. It
+  also runs `pnpm demo` as a process with real-looking keys and a dead
+  Anthropic URL in its environment, drafts and runs through it, stops it with
+  Ctrl-C, restarts it on the same home and finds the state again.
 
 It exits non-zero if any step failed.
 
@@ -85,7 +94,7 @@ browser pass's screenshots. Label what it proves honestly:
 .claude/skills/verify-toolbox/scripts/cleanup.sh <evidence-dir>
 ```
 
-Stops the server and fixtures that `launch.sh` started, and keeps the evidence.
-Test runs clean up after themselves: the toolbox home, recordings and
+Stops the demo that `launch.sh` started (it closes its fixtures), and keeps the
+evidence. Test runs clean up after themselves: the toolbox home, recordings and
 screenshots live in temporary folders, and the tmux check uses a private
 `TMUX_TMPDIR` server that it kills.

@@ -1,8 +1,8 @@
 /**
  * Resending an edited Jev request as a separate live call. It reads the
  * recording and never writes it, and it runs no task, so the run, its
- * recording and its replay are untouched. History is kept per request under
- * the idea's folder.
+ * recording and its replay are untouched. History is kept per request in the
+ * toolbox database.
  *
  * Every resend posts the shown state and questions to the recorded profile's
  * endpoint. `judgment.run` would rebuild the questions from the idea's current
@@ -10,13 +10,12 @@
  * those equal the recorded ones: the hash covers the answer shape (spec section
  * 11.4), not descriptions, conditions or detail blocks.
  */
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
 import { type Profile, type JevAnswer, parseRecording, startInfo } from '../shared/recording.ts'
 import { editedPaths, requestEntries, type ResendRecord } from '../shared/requests.ts'
 import { errorMessage, type JevRequest, parseResponse, requestBody } from '../shared/wire.ts'
+import type { ToolboxStore } from './store.ts'
 
 export interface ResendInput {
   ideaId: string
@@ -26,7 +25,7 @@ export interface ResendInput {
 }
 
 export interface ResendDeps {
-  home: string
+  store: ToolboxStore
   env: NodeJS.ProcessEnv
   fetch?: typeof fetch
 }
@@ -59,7 +58,7 @@ export async function resend(input: ResendInput, deps: ResendDeps): Promise<Rese
     error,
     latencyMs: Date.now() - began,
   }
-  await appendHistory(deps.home, input.ideaId, input.recording, input.requestId, record)
+  await deps.store.appendResend(input.ideaId, record)
   return record
 }
 
@@ -81,25 +80,4 @@ async function viaEndpoint(request: JevRequest, profile: Profile, deps: ResendDe
     throw new Error(`HTTP ${response.status}: the response is not JSON: ${String(error)}`)
   }
   return parseResponse(json, request)
-}
-
-function historyPath(home: string, ideaId: string, recording: string, requestId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(ideaId) || !/^[A-Za-z0-9_-]+$/.test(requestId)) throw new Error('invalid id')
-  const run = `${basename(recording, '.jsonl')}-${createHash('sha256').update(recording).digest('hex').slice(0, 8)}`
-  return join(home, 'ideas', ideaId, 'resends', run, `${requestId}.json`)
-}
-
-export async function resendHistory(home: string, ideaId: string, recording: string, requestId: string): Promise<ResendRecord[]> {
-  try {
-    return JSON.parse(await readFile(historyPath(home, ideaId, recording, requestId), 'utf8')) as ResendRecord[]
-  } catch {
-    return []
-  }
-}
-
-async function appendHistory(home: string, ideaId: string, recording: string, requestId: string, record: ResendRecord): Promise<void> {
-  const path = historyPath(home, ideaId, recording, requestId)
-  const history = await resendHistory(home, ideaId, recording, requestId)
-  await mkdir(join(path, '..'), { recursive: true })
-  await writeFile(path, JSON.stringify([...history, record], null, 2))
 }

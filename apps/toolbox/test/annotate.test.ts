@@ -14,8 +14,8 @@ import type { Pin, PinTarget } from '../shared/annotator.ts'
 import type { Idea } from '../shared/protocol.ts'
 import { AnthropicModel } from '../server/claude.ts'
 import { REPO_ROOT } from '../server/env.ts'
-import { newIdea } from '../server/ideas.ts'
-import { STUCK_TO_WAITING as STUCK_EDIT } from './fixtures.ts'
+import { newIdea } from '../shared/ideas.ts'
+import { STUCK_TO_WAITING as STUCK_EDIT } from '../demo/services.ts'
 import { fakeClaude, type FakeClaude, open } from './harness.ts'
 
 const STUCK_TO_WAITING = [STUCK_EDIT]

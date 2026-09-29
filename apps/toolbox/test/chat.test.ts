@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { Idea } from '../shared/protocol.ts'
 import { AnthropicModel, MAX_REPAIRS } from '../server/claude.ts'
 import { REPO_ROOT } from '../server/env.ts'
-import { newIdea } from '../server/ideas.ts'
+import { newIdea } from '../shared/ideas.ts'
 import { fakeClaude, type FakeClaude, open } from './harness.ts'
 
 /** The design's first draft: `when` is reserved, the pick lacks `other`, and it uses an inline if/else. */

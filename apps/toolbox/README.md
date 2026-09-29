@@ -21,6 +21,31 @@ cd apps/toolbox && pnpm install && pnpm dev        # http://127.0.0.1:5178
 to it over WebSocket. `pnpm build && pnpm start` serves the built page instead.
 Node 26 or later runs the server's TypeScript directly.
 
+## Try it without keys
+
+```sh
+cd apps/toolbox && pnpm demo                       # http://127.0.0.1:5188
+```
+
+`pnpm demo` builds the page and serves it on 127.0.0.1 only, with the TypeSafe
+and Anthropic endpoints replaced by local stand-ins (`demo/services.ts`). The
+stand-in Claude drafts an inbox triage program for any request and, at a pin,
+answers a question or proposes an edit (ask it to "ask me instead" on the
+`stuck` edge); the stand-in Jev prefers `finished`, `approved` and `week`. Every
+screen works: Chat, Playground, Machines and Adapters.
+
+The demo never reads a real provider key. It loads no `.env` file, and it
+replaces `TYPESAFE_API_KEY`, `JEVSCRIPT_PROFILES` and the `ANTHROPIC_*`
+variables in its own environment with the stand-ins' values before anything
+starts. The one thing on its screens that can reach outside is binding an agent
+to Claude Code on the Adapters screen, which starts your real `claude` in tmux.
+
+Its state is kept apart from a real toolbox home: `~/.jevs-toolbox-demo`
+(`JEVS_TOOLBOX_HOME` and `JEVS_TOOLBOX_PORT` override the home and port). It
+survives a restart. Ctrl-C stops the demo and its stand-ins; `pnpm demo --
+--reset` starts it clean, and removing `~/.jevs-toolbox-demo` forgets it
+entirely.
+
 ## Screens
 
 - **Chat.** Describe an idea; Claude drafts a program with the spec as its
@@ -49,9 +74,23 @@ Node 26 or later runs the server's TypeScript directly.
   manifests runs the section 9.4 comparison. An agent bound to Claude Code shows
   a live tail of its pane, labelled as agent-written and never acted on.
 
-Ideas, their chat, pins, resend history and every recording live under
-`~/.jevs-toolbox`, never in the repository. Each run records to a new file, and
-Replay uses only that file.
+## Where state lives
+
+Everything lives under the toolbox home (`~/.jevs-toolbox`), never in the
+repository:
+
+- `toolbox.sqlite` holds the toolbox's own state: ideas with their chat,
+  bindings and inputs, pins, the index of runs per idea, and resend history.
+  The server prints its path at start-up and reports it in `status`.
+- `recordings/` holds one JSONL recording per run, as the runtime writes it
+  (spec section 10.3). The database only points at them, and Replay uses only
+  the file.
+
+Builds before the database kept the same state as JSON files under
+`ideas/`. The first start with a database imports them in one transaction,
+records that it did, and leaves the files in place as a backup; it never
+imports them again. A database written by a newer toolbox is refused rather
+than read.
 
 ## Environment
 
@@ -64,8 +103,8 @@ Replay uses only that file.
 | `JEVSCRIPT_BIN` | `<repo>/target/debug/jevscript` | The runtime binary |
 | `JEVSCRIPT_PATH` | none | Module roots for `use` (spec section 3.9) |
 | `JEVS_LSP_COMMAND` | `<JEVSCRIPT_BIN> lsp` | The language server, started per page connection |
-| `JEVS_TOOLBOX_HOME` | `~/.jevs-toolbox` | Ideas and recordings |
-| `JEVS_TOOLBOX_PORT` | `5178` | The server port |
+| `JEVS_TOOLBOX_HOME` | `~/.jevs-toolbox` (`~/.jevs-toolbox-demo` for `pnpm demo`) | The database and recordings |
+| `JEVS_TOOLBOX_PORT` | `5178` (`5188` for `pnpm demo`) | The server port |
 
 Keys are read at start-up from the checkout's `.env` and, in a git worktree,
 from the main checkout's `.env`. Variables already set win. Nothing is copied.
@@ -83,7 +122,7 @@ see `SPEC-GAPS.md` item 1.
 
 Not verified end to end in this build: live Claude drafting and live annotator
 edits, and live Jev answers. The tests run the real Anthropic SDK client and the
-real runtime against local stand-ins for both services (`test/fixtures.ts`),
+real runtime against local stand-ins for both services (`demo/services.ts`),
 which prove the toolbox's side of each exchange but nothing about the live
 services. A live Claude Code pane is not driven either; the adapter has its own
 tmux tests, and the toolbox's pane tail is checked against a real tmux pane.
@@ -91,8 +130,8 @@ tmux tests, and the toolbox's pane tail is checked against a real tmux pane.
 ## Tests
 
 ```sh
-pnpm test            # boundary suite: /ws, /lsp, the CLI, jevscript serve and a real tmux pane
-pnpm test:browser    # builds the page, starts `pnpm start`'s server and drives all four screens in Chrome
+pnpm test            # boundary suite: /ws, /lsp, the CLI, jevscript serve, the database and a real tmux pane
+pnpm test:browser    # builds the page; drives all four screens in Chrome, restarts the server, and runs `pnpm demo`
 pnpm run typecheck
 pnpm build
 ```

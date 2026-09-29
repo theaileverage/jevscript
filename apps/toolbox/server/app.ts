@@ -16,9 +16,9 @@ import type { ClientMessage, Idea, Replies, Request, ServerMessage } from '../sh
 import { parseRecording } from '../shared/recording.ts'
 import { annotate, chatTurn, type Model } from './claude.ts'
 import { paths as defaultPaths, REPO_ROOT } from './env.ts'
-import { IdeaStore, newIdea } from './ideas.ts'
+import { newIdea, ToolboxStore } from './store.ts'
 import { bridgeLsp, lspAvailable, lspCommand, readErrorReference } from './lsp.ts'
-import { resend, resendHistory } from './resend.ts'
+import { resend } from './resend.ts'
 import { Jevscript } from './jevscript.ts'
 import { readProfiles } from './profiles.ts'
 import { RunManager } from './runs.ts'
@@ -37,6 +37,8 @@ export interface ToolboxOptions {
 export interface Toolbox {
   url: string
   port: number
+  /** The SQLite file holding the toolbox's own state. */
+  database: string
   close(): Promise<void>
 }
 
@@ -46,7 +48,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
   const bin = options.bin ?? defaults.bin
   const home = options.home ?? defaults.home
   const jev = new Jevscript(bin, join(home, 'work'))
-  const ideas = new IdeaStore(home)
+  const ideas = new ToolboxStore(home)
   const model = options.model ?? null
   const spec = await readFile(join(REPO_ROOT, 'spec/jevscript-language-specification.md'), 'utf8')
   const sockets = new Set<WebSocket>()
@@ -74,6 +76,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     status: async () => ({
       bin,
       home,
+      database: ideas.path,
       claude: { available: model !== null, model: model?.name ?? options.modelName ?? 'claude-opus-5-5' },
       typesafeKey: Boolean(env['TYPESAFE_API_KEY']),
       profilesOverlay: env['JEVSCRIPT_PROFILES'] ?? null,
@@ -85,7 +88,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     'ideas.list': async () => ({ ideas: await ideas.list() }),
     'ideas.save': async (request) => ({ idea: await ideas.save(request.idea) }),
     'ideas.delete': async (request) => {
-      await ideas.delete(request.id)
+      await ideas.delete(request.ideaId)
       return { ok: true }
     },
     'chat.send': async (request) => {
@@ -121,9 +124,9 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     }),
     'pane.tail': (request) => paneTail(request.pane),
     resend: (request) =>
-      resend({ ...request, recording: recordingPath(request.recording) }, { home, env }),
+      resend({ ...request, recording: recordingPath(request.recording) }, { store: ideas, env }),
     'resends.list': async (request) => ({
-      history: await resendHistory(home, request.ideaId, recordingPath(request.recording), request.requestId),
+      history: await ideas.resendHistory(request.ideaId, recordingPath(request.recording), request.requestId),
     }),
     'errors.reference': async () => errorReference,
     'runs.live': async () => ({ runs: runs.live() }),
@@ -177,6 +180,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
   return {
     url: `http://${options.host ?? '127.0.0.1'}:${port}`,
     port,
+    database: ideas.path,
     async close() {
       await runs.closeAll()
       for (const socket of sockets) socket.terminate()
@@ -184,6 +188,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       for (const client of lspServer.clients) client.terminate()
       lspServer.close()
       await new Promise<void>((done) => server.close(() => done()))
+      ideas.close()
     },
   }
 }
@@ -203,7 +208,7 @@ function paneTail(pane: string): Promise<{ text: string }> {
 }
 
 /** A first launch starts with the repository's review loop and the brief's inbox triage. */
-async function seedIdeas(store: IdeaStore, examples: string): Promise<void> {
+async function seedIdeas(store: ToolboxStore, examples: string): Promise<void> {
   if ((await store.list()).length > 0) return
   const seeds: Partial<Idea>[] = [
     {

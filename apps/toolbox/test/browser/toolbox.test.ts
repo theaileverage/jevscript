@@ -2,7 +2,7 @@
  * The four screens in a real browser, against the production server started
  * exactly as `pnpm start` starts it, the real `jevscript` binary and language
  * server, and the fixture TypeSafe and Anthropic endpoints from
- * `test/fixtures.ts`. No live service is called.
+ * `demo/services.ts`. No live service is called.
  *
  * Needs `pnpm build` first (`pnpm test:browser` does it) and Chrome; set
  * `JEVS_BROWSER` to a Chrome or Chromium executable to use another one.
@@ -17,7 +17,9 @@ import { type Browser, chromium, type Page } from 'playwright-core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { APP_ROOT } from '../../server/env.ts'
-import { type Fixtures, startFixtures } from '../fixtures.ts'
+import type { Idea } from '../../shared/protocol.ts'
+import { type Fixtures, startFixtures } from '../../demo/services.ts'
+import { connect } from '../harness.ts'
 
 /** Pauses on a person and makes no Jev call. */
 const ASK = `program ask_me
@@ -59,6 +61,7 @@ let browser: Browser
 let page: Page
 let home: string
 let url: string
+let port: number
 const shots: string[] = []
 
 async function freePort(): Promise<number> {
@@ -82,12 +85,8 @@ const screen = (name: string) => page.locator('.rail .rail-item', { hasText: new
 const idea = (title: string) => page.locator('.rail .idea-item', { hasText: title }).click()
 const editorText = () => page.locator('.editor-area .cm-content').innerText()
 
-beforeAll(async () => {
-  home = await mkdtemp(join(tmpdir(), 'jevs-browser-'))
-  fixtures = await startFixtures(home)
-  await writeFile(join(home, 'flaky.sh'), FLAKY)
-  const port = await freePort()
-  url = `http://127.0.0.1:${port}`
+/** `pnpm start`'s server on the fixtures; its state lives in `<home>/toolbox`, so a restart keeps it. */
+async function startServer(): Promise<void> {
   server = spawn(process.execPath, ['server/main.ts'], {
     cwd: APP_ROOT,
     env: { ...process.env, ...fixtures.env, NODE_ENV: 'production', JEVS_TOOLBOX_HOME: join(home, 'toolbox'), JEVS_TOOLBOX_PORT: String(port) },
@@ -97,12 +96,22 @@ beforeAll(async () => {
   server.stdout?.on('data', (chunk: Buffer) => (log += chunk.toString()))
   server.stderr?.on('data', (chunk: Buffer) => (log += chunk.toString()))
   const deadline = Date.now() + 20_000
-  while (!log.includes('jevs toolbox on')) {
+  while (!log.includes('  Jev: ')) {
     if (Date.now() > deadline || server.exitCode !== null) throw new Error(`the toolbox did not start:\n${log}`)
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+  expect(log).toContain(`state: ${join(home, 'toolbox', 'toolbox.sqlite')}`)
   expect(log).toContain('chat drafting: claude-opus-5-5')
   expect(log).toContain('Jev: TYPESAFE_API_KEY set')
+}
+
+beforeAll(async () => {
+  home = await mkdtemp(join(tmpdir(), 'jevs-browser-'))
+  fixtures = await startFixtures(home)
+  await writeFile(join(home, 'flaky.sh'), FLAKY)
+  port = await freePort()
+  url = `http://127.0.0.1:${port}`
+  await startServer()
   const executablePath = process.env['JEVS_BROWSER']
   browser = await chromium.launch(executablePath ? { executablePath } : { channel: 'chrome' })
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
@@ -275,5 +284,29 @@ describe('the toolbox in a browser', () => {
     await page.getByRole('button', { name: 'Check manifests' }).click()
     await expect.poll(() => rows.filter({ hasText: 'tree' }).innerText()).toContain('verb_missing: tree.tests_pass')
     await shot('adapters')
+  })
+
+  it('keeps ideas, pins and the run index in SQLite across a server restart', async () => {
+    // The page saves an idea 400 ms after its last edit; restart only once the server holds those edits.
+    const observer = await connect({ url })
+    const review = async () => (await observer.request<{ ideas: Idea[] }>('ideas.list')).ideas.find((candidate) => candidate.title === 'Review loop for Claude')
+    await expect.poll(async () => (await review())?.pins.length, { timeout: 5_000 }).toBe(1)
+    await expect.poll(async () => (await review())?.bindings['tree'], { timeout: 5_000 }).toMatchObject({ kind: 'subprocess' })
+    observer.close()
+    const exited = new Promise((resolve) => server.once('exit', resolve))
+    server.kill('SIGTERM')
+    await exited
+    await startServer()
+    await page.reload()
+    await expect.poll(() => page.locator('.rail .idea-item').allInnerTexts()).toEqual(
+      expect.arrayContaining(['program tuned', 'program ask_me', 'Sort my inbox by urgency', 'Review loop for Claude']),
+    )
+    await idea('Review loop for Claude')
+    await screen('Machines')
+    await expect.poll(() => page.locator('svg.graph g.pin').count()).toBe(1)
+    await expect.poll(() => page.locator('.timeline').innerText()).toContain('2 steps')
+    await screen('Adapters')
+    await expect.poll(() => page.locator('table.caps tbody tr', { hasText: 'tree' }).innerText()).toContain('sh adapters/tree.sh')
+    await shot('after-restart')
   })
 })

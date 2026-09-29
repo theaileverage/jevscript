@@ -95,6 +95,8 @@ export interface ProfileInfo extends Profile {
 export interface ServerStatus {
   bin: string
   home: string
+  /** The SQLite database holding ideas, pins, the run index and resend history. */
+  database: string
   claude: { available: boolean; model: string }
   typesafeKey: boolean
   profilesOverlay: string | null
@@ -127,7 +129,7 @@ export type Request =
   | { type: 'profiles' }
   | { type: 'ideas.list' }
   | { type: 'ideas.save'; idea: Idea }
-  | { type: 'ideas.delete'; id: string }
+  | { type: 'ideas.delete'; ideaId: string }
   | { type: 'chat.send'; idea: Idea; text: string }
   | { type: 'annotate'; idea: Idea; target: PinTarget; query: string }
   | { type: 'run.start'; run: StartRun }
