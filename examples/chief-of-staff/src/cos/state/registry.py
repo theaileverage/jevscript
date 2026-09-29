@@ -108,16 +108,19 @@ class Registry:
 
     def add_mate(self, name: str, scope: str) -> dict[str, Any]:
         child = Home(self.home.root / "mates" / name)
+        mates = self.mates()
+        new_minister = not child.root.exists() and not any(m["name"] == name for m in mates)
         write_json(child.data / "parent.json", {"home": str(self.home.root), "name": name})
         child.init()
         record = {"name": name, "scope": scope, "home": str(child.root)}
-        write_json(self.mates_path, [m for m in self.mates() if m["name"] != name] + [record])
+        write_json(self.mates_path, [m for m in mates if m["name"] != name] + [record])
         charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
-        atomic_write(child.data / "charter.md", charter)
+        if not (child.data / "charter.md").exists():
+            atomic_write(child.data / "charter.md", charter)
         # A minister copies the parent's projects, profiles and preferences at creation.
         sources = [self.home.data / name for name in ("projects.json", "profiles.json", self.home.preferences_path.name)]
         legacy, current = self.home.legacy_preferences_path, self.home.preferences_path
-        if legacy.exists() and current.exists() and legacy.read_bytes() != current.read_bytes():
+        if new_minister and legacy.exists() and current.exists() and legacy.read_bytes() != current.read_bytes():
             sources.append(legacy)
         for source in sources:
             target = child.data / source.name
