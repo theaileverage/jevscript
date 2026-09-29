@@ -22,6 +22,9 @@ import {
   reachabilityChanges,
   type SourceEdit,
 } from '../shared/annotator.ts'
+import { DEFAULT_HOST } from '../shared/host.ts'
+import { PY_SUPPORT, TS_SUPPORT } from '../shared/host-support.ts'
+import { sdkHost } from '../shared/sdk-host.ts'
 import { machineGraph } from '../shared/graph.ts'
 import type { Ir, IrMachine } from '../shared/ir.ts'
 import { printExpr, textLiteral } from '../shared/ir.ts'
@@ -85,7 +88,10 @@ export function systemPrompt(spec: string): string {
   return [
     'You write programs in Jevscript for developers testing ideas in "jevs toolbox".',
     'The language specification below is the only authority on syntax and semantics. Do not use a keyword, verb, label form or builtin it does not define. Reserved words cannot be names. A `pick` needs an `other` (or `none`) label. There is no inline if/else expression.',
-    'When you write or change a program, reply with a short explanation and then the complete program in exactly one ```jev fenced block. The toolbox compiles it with `jevscript check` and sends you any errors to fix.',
+    'When writing or changing a program, reply with a short explanation, exactly one complete ```jev fenced block, AND one complete companion host block (```typescript by default; ```python if requested). The toolbox checks Jev with the real compiler. Never return TODOs, placeholder bindings or invented SDK methods.',
+    'The companion runs inside the toolbox. Use the actual jevscript SDK load/task/start/run iteration/resume/abort/close surface shown below. The toolbox supplies runtime.ts (TS) or toolbox_runtime.py (Python) with runtime.transport (private JSONL stdio to the actual Rust runtime), runtime.inputs (saved idea inputs), runtime.bindings (configured real adapters for all declared capabilities), runtime.recording (new recording path), runtime.model (Jev decision profile) and runtime.sample. answerPause/answer_pause waits for the pause stack answer. No agent credentials are available to host source. Load the generated program file by name, choose the correct task, and merge concrete initial input values into runtime.inputs when required. These visible, editable context modules and runtime.json are saved as idea files and also work standalone with the installed SDK. Always call closeRuntime()/close_runtime() in finally after closing the program, to close subprocess adapters and terminal input. Inside the toolbox configuration/transport is provided at Run pair; outside it, runtime.json supplies inputs, bindings, profile, sample and a recording path. For no-capability programs the bindings are an empty object. These are complete working support files; do not invent other context APIs. Include result handling, error handling and finally close the program. Host source is saved and editable; it never executes during drafting.',
+    '<typescript-sdk-example>', sdkHost('example.jev'), '</typescript-sdk-example>',
+    '<python-sdk-example>', sdkHost('example.jev', 'python'), '</python-sdk-example>',
     '<specification>',
     spec,
     '</specification>',
@@ -102,7 +108,7 @@ const CLOSE_FENCE = /^(.*?)```(.*)$/
  * the reply with every fenced block removed, so Chat never shows code that was
  * not checked. `extra` counts the fenced blocks dropped from view.
  */
-export function extractProgram(text: string): { program: string | null; prose: string; extra: number } {
+export function extractProgram(text: string): { program: string | null; prose: string; extra: number; host: { language: 'typescript' | 'python'; source: string } | null } {
   const blocks: { language: string; lines: string[] }[] = []
   const prose: string[] = []
   let open: { language: string; lines: string[] } | null = null
@@ -129,7 +135,9 @@ export function extractProgram(text: string): { program: string | null; prose: s
   }
   if (open) blocks.push(open)
   const found = blocks.find((block) => ['', 'jev', 'jevscript'].includes(block.language))
+  const host = blocks.find(block => ['typescript', 'ts', 'javascript', 'js', 'python', 'py'].includes(block.language) && /jevscript/.test(block.lines.join('\n')) && /\bload\s*\(/.test(block.lines.join('\n')) && /\.task\s*\(/.test(block.lines.join('\n')) && !/TODO|NotImplemented|runIdea\(/.test(block.lines.join('\n')))
   return {
+    host: host ? { language: ['python', 'py'].includes(host.language) ? 'python' : 'typescript', source: host.lines.join('\n').trimEnd() + '\n' } : null,
     program: found ? found.lines.join('\n').replace(/\s+$/, '') + '\n' : null,
     prose: prose.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
     extra: blocks.length - (found ? 1 : 0),
@@ -157,6 +165,7 @@ export interface ChatDeps {
   spec: string
   origin?: ChatOrigin
   unavailable?: string
+  checkHost?: (source: string, language: 'typescript' | 'python') => Promise<boolean>
 }
 
 function message(role: ChatMessage['role'], text: string, program?: DraftProgram, origin?: ChatOrigin): ChatMessage {
@@ -165,8 +174,17 @@ function message(role: ChatMessage['role'], text: string, program?: DraftProgram
 
 function adopt(idea: Idea, program: DraftProgram): Idea {
   if (!program.clean) return idea
-  const name = programName(program.source)
-  return { ...idea, source: program.source, fileName: name ? `${name}.jev` : idea.fileName }
+  const fileName = draftFileName(idea, program.source)
+  return { ...idea, source: program.source, fileName, workspace: { ...idea.workspace,
+    files: idea.workspace.files.map(file => file.id === idea.workspace.entryFileId ? { ...file, name: fileName, source: program.source } : file),
+  } }
+}
+
+/** A new draft names its entry once; later program declarations do not rename saved files. */
+function draftFileName(idea: Idea, source: string): string {
+  if (idea.source.trim()) return idea.workspace.files.find(file => file.id === idea.workspace.entryFileId)?.name ?? idea.fileName
+  const name = programName(source)
+  return name ? `${name}.jev` : idea.fileName
 }
 
 async function checked(compile: Compile, fileName: string, source: string, attempts: number): Promise<DraftProgram> {
@@ -191,7 +209,7 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
 
   const pasted = pastedProgram(text)
   if (pasted !== null) {
-    const program = await checked(deps.compile, programName(pasted) ? `${programName(pasted)}.jev` : next.fileName, pasted, 0)
+    const program = await checked(deps.compile, draftFileName(next, pasted), pasted, 0)
     const reply = program.clean
       ? 'Checked. It compiles, so it is now this idea’s program.'
       : 'Checked. It does not compile yet; the diagnostics are below.'
@@ -214,29 +232,37 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
   }
 
   const context = next.chatAgent
-    ? `\n\nIdea details: ${next.title}\n${next.description}\nThis idea's workspace (entry Jev file: ${next.fileName}). Companion Jev files are available to use; host files are saved alongside the program and run only on an explicit Run pair action:\n${JSON.stringify(next.workspace.files)}`
+    ? `\n\nIdea details: ${next.title}\n${next.description}\nThis idea's workspace (entry Jev file: ${next.fileName}). ${next.source.trim() ? 'Preserve the saved entry filename even if you change the program declaration; the host must load that exact file.' : 'Name the first Jev file from its program declaration.'} Companion Jev files are available to use; host files are saved alongside the program and run only on an explicit Run pair action:\n${JSON.stringify(next.workspace.files)}`
     : next.source.trim() ? `\n\nThe idea's current program (${next.fileName}):\n\`\`\`jev\n${next.source}\`\`\`` : ''
   const prior = next.chatAgent
     ? idea.messages.filter(item => item.origin?.kind !== 'error').map(item => ({ role: item.role, content: item.text + (item.program ? `\n\`\`\`jev\n${item.program.source}\`\`\`` : '') }))
     : next.claudeHistory
   let history = [...prior, { role: 'user', content: text + context }]
+  const expectedLanguage = /\bpython\b/i.test(text) && !/\b(type|java)script\b/i.test(text) || !/\b(type|java)script\b/i.test(text) && next.workspace.files.some(file => file.kind === 'host' && file.name.endsWith('.py')) ? 'python' : 'typescript'
   const system = systemPrompt(deps.spec)
   try {
     let completion = await deps.model.complete(system, history)
     history = [...history, { role: 'assistant', content: completion.content }]
-    const { prose, extra } = extractProgram(completion.text)
+    let extracted = extractProgram(completion.text)
     let program: DraftProgram | undefined
     for (let attempt = 1; ; attempt++) {
       const draft = extractProgram(completion.text).program
       if (draft === null) break
-      program = await checked(deps.compile, programName(draft) ? `${programName(draft)}.jev` : next.fileName, draft, attempt)
-      if (program.clean || attempt > MAX_REPAIRS) break
+      program = await checked(deps.compile, draftFileName(next, draft), draft, attempt)
+      extracted = extractProgram(completion.text)
+      const wantsPython = expectedLanguage === 'python'
+      const host = extracted.host
+      const fileName = draftFileName(next, draft)
+      const loadPath = host ? /\bload\s*\(\s*['"]([^'"]+)['"]/.exec(host.source)?.[1] : undefined
+      const hostSyntax = !host || !deps.checkHost || await deps.checkHost(host.source, host.language)
+      const hostError = deps.origin?.kind === 'agent' && (!hostSyntax || loadPath !== fileName || !host || host.language !== (wantsPython ? 'python' : 'typescript') || !/\bload\s*\(/.test(host.source) || !host.source.includes('jevscript') || /TODO|NotImplemented|runIdea\(/.test(host.source))
+      if (program.clean && !hostError || attempt > MAX_REPAIRS) break
       const report = program.diagnostics.filter((d) => d.severity === 'error').map(formatDiagnostic).join('\n')
       history = [
         ...history,
         {
           role: 'user',
-          content: `jevscript check reported:\n${report}\n\nFix the program and reply with the complete corrected program in one \`\`\`jev block.`,
+          content: `jevscript check reported:\n${report}\n\nThe companion must load exactly ${JSON.stringify(fileName)} (the actual saved entry filename); its syntax check ${hostSyntax ? 'passed' : 'failed'}. Return both the complete Jev program and its complete ${wantsPython ? 'Python' : 'TypeScript'} SDK companion. The host must import the actual SDK load, start the task with inputs/bindings/record, iterate pauses, handle results/errors, and close in finally. Fix any program errors. Reply with the program in one \`\`\`jev block.`,
         },
       ]
       completion = await deps.model.complete(system, history)
@@ -244,13 +270,41 @@ export async function chatTurn(idea: Idea, text: string, deps: ChatDeps): Promis
     }
 
     next = { ...next, claudeHistory: next.chatAgent ? next.claudeHistory : history }
+    const { prose, host } = extractProgram(completion.text)
+    const extra = extracted.extra - (host ? 1 : 0)
     const repaired = program && program.attempts > 1 ? ` (${program.attempts - 1} repair${program.attempts > 2 ? 's' : ''} after check)` : ''
     const hidden = extra > 0 ? `\n\n(${extra === 1 ? 'Another code block' : `${extra} other code blocks`} in the reply went unchecked and ${extra === 1 ? 'is' : 'are'} not shown.)` : ''
     const reply = program
       ? `${prose || 'Here is a draft.'}${program.clean ? repaired : `\n\nIt still does not compile after ${MAX_REPAIRS} repairs; the diagnostics are below.`}${hidden}`
       : `${prose}${hidden}`.trim()
     const origin = deps.origin?.kind === 'agent' ? { ...deps.origin, model: completion.model ?? deps.origin.model } : deps.origin
-    return adopt({ ...next, messages: [...next.messages, message('assistant', reply, program, origin)] }, program ?? { source: '', diagnostics: [], clean: false, attempts: 0 })
+    const acceptedHost = host && host.language === expectedLanguage && /\bload\s*\(\s*['"]([^'"]+)['"]/.exec(host.source)?.[1] === draftFileName(next, program?.source ?? '') && (!deps.checkHost || await deps.checkHost(host.source, host.language))
+    if (program?.clean && deps.origin?.kind === 'agent' && !acceptedHost) {
+      return { ...next, messages: [...next.messages, message('assistant', 'The agent’s Jev draft compiles, but its SDK companion did not pass the filename, language or syntax check after two repairs. The previous workspace is preserved. Ask the selected agent to fix the complete pair.', program, { kind: 'error', ...next.chatAgent! })] }
+    }
+    next = adopt({ ...next, messages: [...next.messages, message('assistant', reply, program, origin)] }, program ?? { source: '', diagnostics: [], clean: false, attempts: 0 })
+    if (program?.clean) {
+      const language = expectedLanguage
+      const hostName = language === 'python' ? 'host.py' : 'host.ts'
+      const existing = next.workspace.files.find(file => file.kind === 'host' && file.name === hostName)
+      const companion = { id: existing?.id ?? randomUUID(), name: hostName, kind: 'host' as const, source: host?.source ?? sdkHost(next.fileName, language) }
+      let files = existing ? next.workspace.files.map(file => file.id === existing.id ? companion : file) : [...next.workspace.files, companion]
+      if (language === 'python' && idea.messages.length === 0) files = files.filter(file => file.source !== DEFAULT_HOST || file.kind !== 'host')
+      const helperName = language === 'python' ? 'toolbox_runtime.py' : 'runtime.ts'
+      if (!files.some(file => file.name === helperName)) files.push({ id: randomUUID(), name: helperName, kind: 'host', support: true, source: language === 'python' ? PY_SUPPORT : TS_SUPPORT })
+      if (!files.some(file => file.name === 'runtime.json')) {
+        const result = await deps.compile(next.fileName, next.source)
+        const bindings = (result.ir?.needs ?? []).map(need => {
+          const selected = next.bindings[need.name]
+          const harness = selected?.kind === 'claude-code' ? 'claude-code' : selected?.kind === 'codex' ? 'codex' : next.chatAgent?.harness ?? 'codex'
+          if (need.kind === 'agent' && !selected) next = { ...next, bindings: { ...next.bindings, [need.name]: { kind: harness, session: 'jevscript', idleSeconds: 20, pollMs: 1000 } } }
+          return { name: need.name, kind: need.kind, ...(need.kind === 'agent' ? { command: `jevscript-adapter-${harness}`, args: ['--backend', 'tmux'] } : {}), ...(need.signatures ? { manifest: { verbs: Object.fromEntries(need.signatures.map(signature => [signature.name, { returns: signature.returns }])) } } : {}) }
+        })
+        files.push({ id: randomUUID(), name: 'runtime.json', kind: 'host', support: true, source: JSON.stringify({ inputs: JSON.parse(next.inputs || '{}'), bindings, model: next.model, sample: next.sample, recording: 'run.jsonl' }, null, 2) + '\n' })
+      }
+      next = { ...next, workspace: { ...next.workspace, files } }
+    }
+    return next
   } catch (error) {
     if (!next.chatAgent) throw error
     return { ...next, messages: [...next.messages, message('assistant', error instanceof Error ? error.message : 'The local agent failed.', undefined, { kind: 'error', ...next.chatAgent })] }

@@ -110,8 +110,8 @@ jobs:
       - uses: actions/setup-node@v4.4.0
         with:
           node-version: 26
-      - name: Install tmux for the pane tail check
-        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install runtime verification tools
+        run: sudo apt-get update && sudo apt-get install -y tmux bubblewrap python3
       - name: SDK and agent adapters the toolbox links
         run: |
           (cd sdk/js && pnpm install --frozen-lockfile && pnpm run build)

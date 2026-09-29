@@ -1,10 +1,13 @@
 /** Executable CLI stand-ins. They exercise process/stdin boundaries without reaching either provider. */
+import { sdkHost } from '../shared/sdk-host.ts'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-export async function fakeAgents(home: string, source: string): Promise<NodeJS.ProcessEnv> {
+export async function fakeAgents(home: string, source: string, language: 'typescript' | 'python' = 'typescript'): Promise<NodeJS.ProcessEnv> {
   const root = join(home, 'fake-agents')
   await mkdir(root, { recursive: true })
+  const fileName = (/^program\s+(\w+)/m.exec(source)?.[1] ?? 'main') + '.jev'
+  const companion = sdkHost(fileName, language)
   const script = `#!${process.execPath}
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -37,8 +40,12 @@ process.stdin.on('end', () => {
   if (existsSync(join(root,'oversized'))) { process.stdout.write('x'.repeat(3*1024*1024)); return }
   if (existsSync(join(root,'failure'))) { process.stderr.write('PRIVATE_PROVIDER_SECRET'); process.exit(1) }
   const text = 'Executable '+harness+' '+model+' sorts each message into a lane.\\n\\n\\\`\\\`\\\`jev\\n'+${JSON.stringify(source)}+'\\\`\\\`\\\`'
-  if(harness==='claude-code') emit({type:'result',is_error:false,result:text,modelUsage:{['resolved-'+model]:{}}})
-  else { emit({type:'item.completed',item:{type:'agent_message',text}});emit({type:'turn.completed'}); }
+  const conversation = JSON.parse(input.split('\\nConversation:\\n')[1])
+  const savedFile = /The companion must load exactly "([^"]+)"/.exec(conversation.at(-1)?.content ?? '')?.[1]
+  const host = savedFile ? ${JSON.stringify(companion)}.replace(${JSON.stringify(JSON.stringify(fileName))}, JSON.stringify(savedFile)) : ${JSON.stringify(companion)}
+  const complete = text + '\\n\\n' + String.fromCharCode(96).repeat(3) + ${JSON.stringify(language + '\n')} + host + String.fromCharCode(96).repeat(3)
+  if(harness==='claude-code') emit({type:'result',is_error:false,result:complete,modelUsage:{['resolved-'+model]:{}}})
+  else { emit({type:'item.completed',item:{type:'agent_message',text:complete}});emit({type:'turn.completed'}); }
 })
 `
   for (const name of ['claude', 'codex']) {

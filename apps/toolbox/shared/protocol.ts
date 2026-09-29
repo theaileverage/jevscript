@@ -36,7 +36,7 @@ export interface CheckResult {
 export type BindingSpec =
   | { kind: 'stub' }
   | { kind: 'subprocess'; command: string; manifest?: string }
-  | { kind: 'claude-code'; session: string; idleSeconds: number; pollMs: number }
+  | { kind: 'claude-code' | 'codex'; session: string; idleSeconds: number; pollMs: number }
   | { kind: 'toolbox' }
 
 export interface DraftProgram {
@@ -89,6 +89,8 @@ export interface IdeaFile {
   id: string
   name: string
   kind: 'jev' | 'host'
+  /** Editable supporting code/configuration; not a runnable entry point (11.2). */
+  support?: boolean
   source: string
 }
 

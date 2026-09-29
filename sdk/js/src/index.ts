@@ -19,7 +19,7 @@
  * Replays are served entirely from the recording and never call adapters or
  * the model endpoint.
  */
-import { HOST_METHODS, METHODS, RpcClient } from './rpc.ts'
+import { HOST_METHODS, METHODS, RpcClient, type RpcTransport } from './rpc.ts'
 import type {
   Adapter,
   CallArgs,
@@ -39,7 +39,7 @@ import type {
 
 export * from './types.ts'
 export { SubprocessAgentAdapter, SubprocessAdapterError, subprocessAgent, type SubprocessAgentOptions } from './subprocess-adapter.ts'
-export { JevscriptRpcError, METHODS, HOST_METHODS, RpcClient } from './rpc.ts'
+export { JevscriptRpcError, METHODS, HOST_METHODS, RpcClient, type RpcTransport } from './rpc.ts'
 
 /** The `log` levels in order, lowest first (spec section 5.8). */
 export const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error']
@@ -63,6 +63,8 @@ export function logEvent(event: RecordingEvent): LogEvent | undefined {
 
 /** How to reach the runtime. */
 export interface LoadOptions {
+  /** Supplied JSONL stdio to a runtime owned by the embedding host (11.5). */
+  transport?: RpcTransport
   /** The runtime binary. Defaults to `$JEVSCRIPT_BIN`, then `jevscript`. */
   bin?: string
   /** Working directory for the runtime process. */
@@ -92,6 +94,7 @@ export async function load(pathOrSource: string, options: LoadOptions = {}): Pro
   const listeners = new Set<(event: RecordingEvent) => void>()
   const history: RecordingEvent[] = []
   const client = new RpcClient({
+    ...(options.transport === undefined ? {} : { transport: options.transport }),
     ...(options.bin === undefined ? {} : { bin: options.bin }),
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     onHostRequest: (method, params) => dispatch(bindings, method, params),

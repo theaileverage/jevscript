@@ -72,7 +72,10 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
     const idea = await ideas.appendRun(ideaId, summary)
     if (idea) broadcast({ type: 'idea.updated', idea })
   })
-  const hosts = new HostRunner(jev, runs, home, broadcast)
+  const hosts = new HostRunner(jev, runs, home, broadcast, async (ideaId, summary) => {
+    const idea = await ideas.appendRun(ideaId, summary)
+    if (idea) broadcast({ type: 'idea.updated', idea })
+  })
   await seedIdeas(ideas, defaults.examples)
   const lsp = lspCommand(env, bin)
   const errorReference = await readErrorReference(join(REPO_ROOT, 'docs/error-reference.md'))
@@ -117,6 +120,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       }
       const idea = await chatTurn(request.idea, request.text, {
         model: chatModel, compile: (f, s) => jev.compile(f, s, request.idea.workspace?.files), spec,
+        checkHost: (source, language) => hosts.checkDraft(source, language),
         origin: selected
           ? unavailable ? { kind: 'error', ...selected } : { kind: 'agent', ...selected, requestedModel: selected.model }
           : { kind: options.services === 'demo' ? 'fixture' : 'api', model: model?.name ?? '' },
@@ -166,17 +170,20 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       const idea = await ideas.save(request.idea)
       return hosts.start(idea, request.hostFileId)
     },
-    'run.start': (request) => runs.start(request.run),
+    'run.start': request => {
+      if (hosts.busy(request.run.ideaId)) throw new Error('This idea already has a host running.')
+      return runs.start(request.run)
+    },
     'run.resume': async (request) => {
-      runs.resume(request.runId, request.payload)
+      hosts.sdk.owns(request.runId) ? hosts.sdk.resume(request.runId, request.payload) : runs.resume(request.runId, request.payload)
       return { ok: true }
     },
     'run.abort': async (request) => {
-      await runs.abort(request.runId)
+      await (hosts.sdk.owns(request.runId) ? hosts.sdk.abort(request.runId) : runs.abort(request.runId))
       return { ok: true }
     },
     'run.inject': async (request) => {
-      await runs.inject(request.runId, request.capability, request.message)
+      await (hosts.sdk.owns(request.runId) ? hosts.sdk.inject(request.runId, request.capability, request.message) : runs.inject(request.runId, request.capability, request.message))
       return { ok: true }
     },
     replay: (request) => jev.replay(recordingPath(request.recording), env),
@@ -190,7 +197,7 @@ export async function startToolbox(options: ToolboxOptions = {}): Promise<Toolbo
       history: await ideas.resendHistory(request.ideaId, recordingPath(request.recording), request.requestId),
     }),
     'errors.reference': async () => errorReference,
-    'runs.live': async () => ({ runs: runs.live() }),
+    'runs.live': async () => ({ runs: [...runs.live(), ...hosts.sdk.live()] }),
     judge: async (request) => {
       const { path, dir } = await jev.materialize(request.fileName, request.source, request.files)
       try {

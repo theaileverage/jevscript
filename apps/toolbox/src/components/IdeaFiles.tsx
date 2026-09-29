@@ -5,6 +5,7 @@ import { formatDiagnostic } from '../../shared/protocol.ts'
 import { api } from '../api.ts'
 import { agentLabel } from '../agent-label.ts'
 import { actions, useStore } from '../store.ts'
+import { HostEditor } from './HostEditor.tsx'
 import { JevEditor } from './JevEditor.tsx'
 
 export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
@@ -15,7 +16,7 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
   const [selection, setSelection] = useState({ from: 0, to: 0 })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [pairCheck, setPairCheck] = useState('')
+  const [pairCheck, setPairCheck] = useState<{ fileId: string; text: string } | null>(null)
   const hostResult = useStore(s => s.hosts[idea.id])
   const check = useStore(s => s.checks[idea.id])
   useEffect(() => { setSelection({ from: 0, to: 0 }); setError('') }, [file?.id])
@@ -50,7 +51,7 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
     setError('')
     try {
       const result = await api.request('pair.check', { idea, hostFileId: file.id })
-      setPairCheck(`${idea.fileName}: ${result.jev.ir ? 'Jev compile passed' : 'Jev compile failed'}. ${result.host.message}\n${result.jev.diagnostics.map(formatDiagnostic).join('\n')}`.trim())
+      setPairCheck({ fileId: file.id, text: `${idea.fileName}: ${result.jev.ir ? 'Jev compile passed' : 'Jev compile failed'}. ${result.host.message}\n${result.jev.diagnostics.map(formatDiagnostic).join('\n')}`.trim() })
     } catch (error) { setError(error instanceof Error ? error.message : String(error)) }
     finally { setBusy(false) }
   }
@@ -62,13 +63,14 @@ export function IdeaFiles({ idea, agent }: { idea: Idea; agent: ChatAgent }) {
       <div className="file-tools">
         <input aria-label="New file name" value={name} onChange={event => setName(event.target.value)} />
         <button className="btn" onClick={add}>Add file</button>
-        {file.kind === 'jev' ? <><button className="btn" onClick={() => void actions.check(idea.id)}>Check Jev</button><button className="btn" onClick={() => void actions.run(idea.id)}>Run Jev</button></> : <><button className="btn" disabled={busy} onClick={() => void checkPair()}>Check pair</button><button className="btn" disabled={busy} onClick={() => void actions.run(idea.id, file.id)}>Run pair</button></>}
+        {file.kind === 'jev' ? <><button className="btn" onClick={() => void actions.check(idea.id)}>Check Jev</button><button className="btn" onClick={() => void actions.run(idea.id)}>Run Jev</button></> : <><button className="btn" disabled={busy || file.support} onClick={() => void checkPair()}>Check pair</button><button className="btn" disabled={busy || file.support} onClick={() => void actions.run(idea.id, file.id)}>Run pair</button></>}
       </div>
       {file.kind === 'jev'
         ? <JevEditor value={file.source} fileName={file.name} uri={`file:///toolbox/${idea.id}/${file.name}`} fallback={check?.result?.diagnostics ?? []} onDiagnostics={found => actions.setLspDiagnostics(idea.id, found)} onRun={() => void actions.run(idea.id)} onChange={change} onSelection={setSelection} className="workspace-editor" />
-        : <textarea className="host-source" aria-label="Host file source" value={file.source} onChange={event => change(event.target.value)} onSelect={event => setSelection({ from: event.currentTarget.selectionStart, to: event.currentTarget.selectionEnd })} />}
-      {file.kind === 'host' ? <div className="small muted">Run pair explicitly executes {file.name} locally. Its runIdea() call starts {idea.fileName} with the idea’s inputs, bindings and Jev profile; pauses and recordings use the normal runtime. No host source runs during drafting or checks.</div> : null}
-      {pairCheck ? <div role="status" className="pair-check">{pairCheck}</div> : null}
+        : <HostEditor id={file.id} name={file.name} value={file.source} onChange={change} onSelection={setSelection} />}
+      {file.support ? <div className="small muted">Editable SDK support file. Select host.ts or host.py to run the pair. Outside the toolbox, install the SDK and configured JSONL adapters; runtime.json supplies defaults. Toolbox Run uses the idea’s current inputs and binding choices.</div> : null}
+      {file.kind === 'host' && !file.support ? <div className="small muted">Run pair explicitly executes {file.name} locally. Its SDK runs {idea.fileName} with the idea’s configured bindings; pauses and recordings use the normal runtime. No host source runs during drafting or checks.</div> : null}
+      {pairCheck?.fileId === file.id ? <div role="status" className="pair-check">{pairCheck.text}</div> : null}
       {hostResult ? <div role="status" className={hostResult.ok ? 'green' : 'amber'}>{hostResult.message}</div> : null}
       <div className="file-annotation">
         <div className="muted small">Select text in {file.name}, then annotate it with the selected Harness model.</div>

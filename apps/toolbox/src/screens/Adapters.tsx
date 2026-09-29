@@ -32,6 +32,8 @@ export function bindingSummary(need: IrNeed, spec: BindingSpec | undefined): str
       return `Built-in stub${need.signatures ? ` · manifest from ${need.signatures.length} declared verbs` : ''}`
     case 'subprocess':
       return `JSONL subprocess · ${binding.command || 'no command yet'}`
+    case 'codex':
+      return `Codex in tmux · session ${binding.session}`
     case 'claude-code':
       return `Claude Code in tmux · session ${binding.session}`
     case 'toolbox':
@@ -40,7 +42,7 @@ export function bindingSummary(need: IrNeed, spec: BindingSpec | undefined): str
 }
 
 function bindingTitle(spec: BindingSpec): string {
-  return { stub: 'Built-in stub', subprocess: 'JSONL subprocess', 'claude-code': 'Claude Code in tmux', toolbox: 'This toolbox' }[spec.kind]
+  return { stub: 'Built-in stub', subprocess: 'JSONL subprocess', 'claude-code': 'Claude Code in tmux', codex: 'Codex in tmux', toolbox: 'This toolbox' }[spec.kind]
 }
 
 /** Person `ask` and `take_over` are pauses, not calls, so they are counted from the recorded pauses. */
@@ -193,7 +195,7 @@ function bindChoices(need: IrNeed): { title: string; flag: string; text: string;
   const subprocess = { title: 'Subprocess', flag: '--bind', text: 'Any command speaking JSONL on stdio. Checked against its manifest.', spec: { kind: 'subprocess', command: '' } as BindingSpec }
   switch (need.kind) {
     case 'agent':
-      return [stub, subprocess, { title: 'Claude Code', flag: 'SDK host', text: 'Runs claude in a tmux pane. All five agent verbs.', spec: { kind: 'claude-code', session: 'jevscript', idleSeconds: 20, pollMs: 1000 } }]
+      return [stub, subprocess, { title: 'Claude Code', flag: 'SDK host', text: 'Runs claude in a tmux pane. All five agent verbs.', spec: { kind: 'claude-code', session: 'jevscript', idleSeconds: 20, pollMs: 1000 } }, { title: 'Codex', flag: 'SDK host', text: 'Runs the signed-in codex CLI in a tmux pane. All five agent verbs; tool approval stays on.', spec: { kind: 'codex', session: 'jevscript', idleSeconds: 20, pollMs: 1000 } }]
     case 'person':
       return [{ title: 'This toolbox', flag: 'pause stack', text: 'ask and take_over land in the pause stack; notify shows in the run panel.', spec: { kind: 'toolbox' } }, subprocess]
     default:
@@ -242,7 +244,7 @@ function AdapterDetail({ idea, need, events, onBind }: { idea: Idea; need: IrNee
             ) : null}
           </>
         ) : null}
-        {spec.kind === 'claude-code' ? (
+        {(spec.kind === 'claude-code' || spec.kind === 'codex') ? (
           <>
             <label className="field">
               session
@@ -259,7 +261,7 @@ function AdapterDetail({ idea, need, events, onBind }: { idea: Idea; need: IrNee
           </>
         ) : null}
       </section>
-      {need.kind === 'agent' && spec.kind === 'claude-code' ? <PaneTail events={events} capability={need.name} /> : null}
+      {need.kind === 'agent' && (spec.kind === 'claude-code' || spec.kind === 'codex') ? <PaneTail events={events} capability={need.name} /> : null}
       <PauseStack />
     </aside>
   )

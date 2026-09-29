@@ -42,7 +42,7 @@ export function PlaygroundScreen({ idea }: { idea: Idea }) {
             <h2>{activeFile?.name ?? idea.fileName}</h2>
             <div className="status-line">
               <span className={`dot ${lsp === 'connected' ? 'ok' : lsp === 'connecting' ? '' : 'err'}`} />
-              {activeFile?.kind === 'host' ? 'Host source · Node syntax check · explicit Run' : lsp === 'connected'
+              {activeFile?.kind === 'host' ? activeFile.support ? 'Editable SDK support source' : 'Host source · syntax check · explicit SDK Run' : lsp === 'connected'
                 ? 'jevscript lsp · diagnostics, hover, completion'
                 : lsp === 'connecting'
                   ? 'jevscript lsp · connecting'
@@ -56,7 +56,7 @@ export function PlaygroundScreen({ idea }: { idea: Idea }) {
             {activeFile?.kind !== 'host' ? <button className="btn" onClick={() => void actions.check(idea.id).then(() => setTab('diagnostics'))}>
               Check
             </button> : null}
-            <button className="btn primary" onClick={runIt} disabled={errors || !idea.source.trim() || (run !== null && !run.ended)}>
+            <button className="btn primary" onClick={runIt} disabled={activeFile?.support || errors || !idea.source.trim() || (run !== null && !run.ended)}>
               <PlayIcon /> {activeFile?.kind === 'host' ? 'Run host' : 'Run'} <kbd>⌘↵</kbd>
             </button>
           </div>

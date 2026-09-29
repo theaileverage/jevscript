@@ -25,5 +25,10 @@ child.unref()
 closeSync(log)
 JS
 for _ in $(seq 100); do grep -q 'jevs toolbox demo:' "$evidence/demo.log" 2>/dev/null && break; sleep 0.1; done
+if ! grep -q 'jevs toolbox demo:' "$evidence/demo.log"; then
+  cat "$evidence/demo.log"
+  echo 'demo did not become ready' >&2
+  exit 1
+fi
 cat "$evidence/demo.log"
 echo "evidence: $evidence"

@@ -46,13 +46,30 @@ fixtures; source selection annotations use the selected local CLI. At a pin the 
 "ask me instead". Open the URL with
 chrome-devtools-axi.
 
-For a live Chat check, create an idea, choose an agent and a discovered model, and
-ask for a small greeting program without capability calls. Confirm the response
-names the selected CLI and model and its draft compiles. Repeat for the other CLI.
-Open host.ts from the Chat panel’s Idea files list, inspect it in Playground,
-then Check pair and Run pair. Confirm the greeting output and saved recording. Select text in both Jev and
-host source and annotate with the Harness model. Report signed-out, missing CLI or provider failures honestly. Never substitute a
-fixture response. Check that both messages and selection return after a restart.
+For live acceptance, create a New Idea with Claude Code and a discovered model;
+ask for a greeting without capability calls and use the default TypeScript host.
+Repeat with Codex and an explicit Python SDK request. Confirm truthful CLI/model
+provenance and compilation. Inspect the complete saved file sets: entry `.jev`,
+`host.ts`/`host.py`, visible `runtime.ts`/`toolbox_runtime.py`, and `runtime.json`.
+All application source must be editable and highlighted. Edit both main hosts,
+switch files and annotate selected source through the chosen CLI. Check and Run
+both pairs, confirm outputs and recordings, reload, then restart the same demo
+home and verify full source, active file, annotations, model and conversation.
+
+Export every saved file unchanged to fresh folders outside the staged runner.
+Use the actual installed SDKs and local `JEVSCRIPT_BIN` to run `node host.ts` and
+`python3 host.py`, without the embedded marker or injected config. Check that
+host load targets exist among those exact saved filenames, including after a
+chat update changes a program declaration. Use new recording paths for repeats.
+Do not count a staged alias or hidden helper as standalone portability.
+
+For Codex runtime acceptance, select its built-in adapter choice and inspect the
+installed adapter CLI's discovery. Exercise spawn, send, wait, observe and stop
+through the supported adapter with a private tmux session, read-only sandbox and
+approval policy never. Stop only that run-owned agent/session. Report signed-out,
+missing CLI, unsupported OS sandbox or provider failures honestly; no fixture
+fallback. Linux Python requires bubblewrap and must be reported separately from
+a macOS-only local pass.
 
 ## Drive
 
@@ -68,7 +85,8 @@ It runs, each into `<evidence-dir>/<step>.log`:
   output limits, timeout termination, CLI conversation restart and SQLite upgrade;
   idea-owned Jev/host source and selection annotations across restart, linked-file
   compilation, side-effect-free pair checks, explicit host task/inputs, permission
-  refusal outside its workspace, safe errors, page-owned pauses and recording replay;
+  refusal outside its workspace, safe errors, actual TypeScript/Python SDK hosts,
+  complete exported file sets after declaration changes, page-owned pauses and recording replay;
   and `check --tools`, profiles, `/judge`, runs with a JSONL subprocess adapter
   (retry, a dead adapter, a manifest refusal), run lifecycle, resend parity
   with the runtime's own request bodies and error messages, `jevscript lsp`
@@ -106,8 +124,9 @@ browser pass's screenshots. Label what it proves honestly:
   endpoints. It proves the toolbox's side of each exchange, not the live
   services.
 - Live CLI Chat is a separate manual check. The fixture suite never proves it.
-  Live API annotation, Jev answers and Claude Code panes are not covered. Report
-  them as not verified unless you actually drove them.
+  Live machine API annotation and Jev answers are not covered. Runtime agent
+  panes and standalone SDKs require the separate checks above. Report only
+  what was actually exercised.
 - The tmux check is skipped without tmux, and a skipped step is not a pass.
 
 ## Cleanup

@@ -2,8 +2,9 @@
 
 The task branch includes the stable local migration head
 `2b168f097c6e76f00a2893592389271a87044ce6`, including its configured-Origin
-allowlist and accepted review fixes. Publication and the no-mistakes pipeline
-remain disabled for this local trial.
+allowlist and accepted review fixes. The follow-up authorizes a ready review
+through direct feature-branch delivery; Firstmate owns merging. No no-mistakes
+pipeline is used for this delivery.
 
 ## Live browser evidence
 
@@ -37,10 +38,68 @@ alias and fixed Opus choice are distinct choices, so the UI labels the default
 explicitly rather than showing two identical model rows. Discovery does not prove
 that every advertised model will accept a later request.
 
+## Complete SDK hosts and editor acceptance
+
+On 2026-09-29 at 21:46–21:52 UTC, Chrome at 1440×900 drove fresh New Idea
+requests on the retained 5394 demo. **SDK Portable TypeScript acceptance** used
+Claude Code's discovered `default` choice, reported `claude-opus-5-5`, and
+produced `portable_ts.jev` plus a complete TypeScript SDK host. **SDK Portable
+Python acceptance** explicitly requested Python, selected Codex `gpt-6.1-sol`,
+and produced `portable_py.jev` plus a complete Python SDK host. Both drafts
+compiled without repairs, inputs, capability calls or Jev provider calls.
+
+The saved file contract has no hidden application source dependency:
+
+| Language | Idea-owned editable files | Actual SDK/runtime output |
+| --- | --- | --- |
+| TypeScript | `portable_ts.jev`, `host.ts`, `runtime.ts`, `runtime.json` | `Portable TypeScript works` |
+| Python | `portable_py.jev`, `host.py`, `toolbox_runtime.py`, `runtime.json` | `Portable Python works` |
+
+CodeMirror highlighted both main hosts and their support files. Browser edits
+prepended a comment in each language; selection annotations reached the chosen
+real CLI and retained exact selected text and truthful model provenance. Check
+pair and Run pair executed each complete host through its actual SDK and the
+Rust runtime. File switching, reload and demo restart preserved both full edited
+sources, active files, annotations, conversation, models and recordings. A `/ws`
+snapshot compared digests for all ten retained ideas before/after restart with
+no difference; original user ideas were left intact.
+
+Both complete saved file sets were exported unchanged to fresh folders and run
+outside the staged runner, without embedded transport or injected configuration.
+TypeScript used the built SDK installed into the clean local package tree;
+Python used the actual checkout SDK installed into an isolated local virtual
+environment. Each exited zero with the expected output, empty stderr and a new
+recording. This is local SDK execution, not a published registry-package smoke.
+Earlier Python export failed because a verification-operator change had renamed
+its Jev entry; the saved pair was restored and both exports rerun successfully.
+Chat updates now preserve existing workspace filenames and validate host load
+references against the saved entry. Separate executable integration checks change
+the declaration in both languages, repair the host reference, restart SQLite,
+export the exact saved files and run/replay them with the actual SDK/CLI.
+
+Codex is also a built-in runtime adapter choice. A clean install linked the
+built Codex and Claude Code packages; public adapter discovery reported the
+installed Codex CLI and tmux backend. The actual Codex adapter used a private tmux
+session, discovered `gpt-6.1-sol`, read-only sandbox and approvals never. Live
+spawn, wait, send, observe and stop returned `CODEX_RUNTIME_OK` followed by
+`CODEX_RUNTIME_SECOND`. Claude Code runtime panes were not exercised live.
+
+Python's macOS confinement was verified with the discovered framework interpreter
+executed directly, rather than its secondary launcher. Linux bubblewrap is a
+separate CI/platform check; it was not exercised on this Mac. Safe host errors
+remain visible; generated host stdout/stderr do not reach UI or normal logs.
+
+Evidence is retained under `apps/toolbox/.local/harness-chat/followup/` (ignored):
+`typescript-host-final.png`, `python-host-final.png`, `typescript-support-final.png`,
+`export-portable.log`, `export-live.log`, `restart-persistence.json`,
+`codex-live.json`, `codex-live.log`, `clean-codex-discovery.json`, and `final/`.
+
 ## Static and fixture evidence
 
 The project-local verification skill passed Doctor, both TypeScript checks, the
-production build, 53 integration checks and 11 browser checks. Every added
+production build, 57 integration checks and 11 browser checks. The linked SDK
+checks passed 19 JavaScript and 17 Python cases; SDK and adapter type checks
+also passed. Every added
 behavior check enters `/ws` or the browser; no isolated unit cases were added.
 The browser pass uses a 1440×900 viewport.
 
@@ -96,9 +155,8 @@ Screenshots: `review-fixed-new-idea.png`, `review-fixed-claude-chat.png`,
 
 The Idea Files interaction is functional but does not reproduce Paper's floating
 annotation popover: source selection questions and saved notes appear below the
-editor in its scroll area. Host source uses a plain editable textarea; Jev source
-retains its LSP editor. These are remaining visual differences, not live-service
-or host-execution claims.
+editor in its scroll area. Host source now uses a highlighted CodeMirror editor; Jev source
+retains its LSP editor. This is a remaining visual difference, not a live-service claim.
 
 ## Local trial and restart
 
@@ -112,7 +170,9 @@ apps/toolbox/.local/harness-chat/home/toolbox.sqlite
 Create an idea, select a discovered Harness model and send a request. Open a file
 from the right Idea files panel to edit it in Playground. On `host.ts`, Check pair
 checks syntax and Jev compilation; Run pair explicitly executes its visible
-source. Use the right Inputs JSON or pass inputs to `runIdea()`. Select source,
+source through the actual SDK. Use the right Inputs JSON and configured bindings,
+or edit the complete visible host. For standalone use, copy all four files and
+set a new recording path in `runtime.json`. Select source,
 scroll to its annotation controls and ask the selected model a question. The rail
 menu updates details or confirms deletion.
 
@@ -132,5 +192,5 @@ Verification commands:
 
 Unavailable CLI choices explain sign-in or executable failures; refresh after
 `claude auth login` or `codex login`. Provider failures remain saved errors and
-never produce a fixture fallback. No push, publication pipeline or external
-service deployment was performed.
+never produce a fixture fallback. Jev and machine annotation remain fixture
+services; no live-provider inference or deployment is claimed.

@@ -8,7 +8,7 @@ check "node >= 26 ($(node --version 2>/dev/null))" '[ "$(node -p "process.versio
 check "pnpm ($(pnpm --version 2>/dev/null))" 'pnpm --version'
 check "target/debug/jevscript" 'target/debug/jevscript --version' "cargo build"
 check "sdk/js/dist" '[ -f sdk/js/dist/index.js ]' "(cd sdk/js && pnpm install && pnpm run build)"
-check "adapters built" '[ -f adapters/claude-code/dist/index.js ] && [ -f adapters/core/dist/index.js ]' "(cd adapters && pnpm install && pnpm run build)"
+check "adapters built" '[ -f adapters/codex/dist/index.js ] && [ -f adapters/claude-code/dist/index.js ] && [ -f adapters/core/dist/index.js ]' "(cd adapters && pnpm install && pnpm run build)"
 check "apps/toolbox/node_modules" '[ -d apps/toolbox/node_modules/playwright-core ]' "(cd apps/toolbox && pnpm install)"
 check "Chrome for the browser pass" '[ -n "${JEVS_BROWSER:-}" ] || [ -d "/Applications/Google Chrome.app" ] || command -v google-chrome' "or set JEVS_BROWSER"
 check "tmux for the pane tail check" 'command -v tmux' "the check is skipped without it"

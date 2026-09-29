@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream'
 
 import type { Idea, PairCheck, RunSummary, ServerMessage } from '../shared/protocol.ts'
 import type { Jevscript } from './jevscript.ts'
+import { SdkHosts } from './sdk-hosts.ts'
 import type { RunManager } from './runs.ts'
 
 /** Private stdio bridge: host code chooses inputs/task, the trusted host owns bindings and recordings. */
@@ -37,6 +38,7 @@ interface HostProcess {
 }
 
 export class HostRunner {
+  readonly sdk: SdkHosts
   readonly #jev: Jevscript
   readonly #runs: RunManager
   readonly #home: string
@@ -45,7 +47,8 @@ export class HostRunner {
   readonly #starting = new Set<string>()
   #closed = false
 
-  constructor(jev: Jevscript, runs: RunManager, home: string, send: (message: ServerMessage) => void) {
+  constructor(jev: Jevscript, runs: RunManager, home: string, send: (message: ServerMessage) => void, ended: (ideaId: string, summary: RunSummary) => Promise<void> = async () => {}) {
+    this.sdk = new SdkHosts(jev, runs, home, send, ended)
     this.#jev = jev
     this.#runs = runs
     this.#home = join(home, 'host-work')
@@ -85,7 +88,24 @@ export class HostRunner {
     })
   }
 
+  async checkDraft(source: string, language: 'typescript' | 'python'): Promise<boolean> {
+    await mkdir(this.#home, { recursive: true })
+    const dir = await mkdtemp(join(this.#home, 'syntax-'))
+    try {
+      const file = join(dir, language === 'python' ? 'host.py' : 'host.ts')
+      await writeFile(file, source, { mode: 0o600 })
+      return await this.sdk.syntax(file)
+    } finally { await rm(dir, { recursive: true, force: true }) }
+  }
+
   async check(idea: Idea, hostFileId: string): Promise<PairCheck> {
+    if (this.sdk.supports(idea, hostFileId)) {
+      const { dir, host } = await this.sdk.files(idea, hostFileId)
+      try {
+        const [jev, ok] = await Promise.all([this.#jev.compile(idea.fileName, idea.source, idea.workspace.files), this.sdk.syntax(host)])
+        return { jev, host: { ok, message: ok ? 'Host syntax passed. Run pair checks imports and SDK behavior.' : 'The host has invalid syntax, or its interpreter is unavailable.' } }
+      } finally { await rm(dir, { recursive: true, force: true }) }
+    }
     const { dir, host } = await this.#files(idea, hostFileId)
     try {
       const [jev, ok] = await Promise.all([
@@ -97,6 +117,8 @@ export class HostRunner {
 
   async start(idea: Idea, hostFileId: string): Promise<{ runId: string; recording: string }> {
     if (this.#closed) throw new Error('The toolbox host runner is closing.')
+    if (idea.workspace.files.find(file => file.id === hostFileId)?.support) throw new Error('Select a runnable host file, not an SDK support file.')
+    if (this.sdk.supports(idea, hostFileId)) return this.sdk.start(idea, hostFileId)
     if (this.#starting.has(idea.id) || this.#live.has(idea.id)) throw new Error('This idea already has a host running.')
     this.#starting.add(idea.id)
     let dir: string | null = null
@@ -196,12 +218,13 @@ export class HostRunner {
 
   async close(): Promise<void> {
     this.#closed = true
+    await this.sdk.close()
     await Promise.all([...this.#live.values()].map(async live => {
       if (live.child.pid) { try { process.kill(-live.child.pid, 'SIGKILL') } catch { live.child.kill('SIGKILL') } }
       await live.closed
     }))
   }
   busy(ideaId: string): boolean {
-    return this.#starting.has(ideaId) || this.#live.has(ideaId)
+    return this.sdk.busy(ideaId) || this.#starting.has(ideaId) || this.#live.has(ideaId)
   }
 }

@@ -35,6 +35,12 @@ for pause in run:
         run.resume({"answer": "yes"})
 ```
 
+An embedding host that already owns the runtime may pass
+`load(path, transport=(input_stream, output_stream))` with text streams carrying
+section 11.5 JSONL. No binary is resolved or spawned in this mode. `program.close()`
+closes these streams; the embedding host owns the runtime process lifecycle.
+Without `transport`, the usual packaged or explicitly selected binary is spawned.
+
 Adapter callbacks receive the program-scoped capability identity as their last
 argument. An adapter exception may carry `retryable = True`; the runtime then
 surfaces a retryable `adapter_error` pause. `load(..., paths=[...])` supplies

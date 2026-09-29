@@ -8,7 +8,7 @@ and never shows a program that has not been compiled.
 ## Run it
 
 The toolbox needs the runtime binary, the JavaScript SDK and the agent adapter
-suite (for the Claude Code adapter) built first:
+suite (Claude Code and Codex) built first:
 
 ```sh
 cargo build                                        # target/debug/jevscript
@@ -45,7 +45,7 @@ The demo loads no `.env` file, and it
 replaces `TYPESAFE_API_KEY`, `JEVSCRIPT_PROFILES` and the `ANTHROPIC_*`
 variables in its own environment with the stand-ins' values before anything
 starts. Chat can reach Claude or OpenAI through CLI sign-in. Binding an agent
-to Claude Code on the Adapters screen also starts your real `claude` in tmux.
+to Claude Code or Codex on the Adapters screen starts the corresponding real CLI in tmux.
 
 Install and sign in to the CLIs you want to use. Run `claude auth login` or
 `codex login`, then click **Refresh agents**. No Anthropic or OpenAI API key is
@@ -84,8 +84,8 @@ entirely.
   answers, or returns an edit that the toolbox checks (errors, new warnings,
   reachability changes) before you apply it. Pins are saved with the idea.
 - **Adapters.** Each `needs` with its binding, call counts and status; bind to
-  the stub, a JSONL subprocess (spec section 11.6) or Claude Code in tmux. Check
-  manifests runs the section 9.4 comparison. An agent bound to Claude Code shows
+  the stub, a JSONL subprocess (spec section 11.6), Claude Code or Codex in tmux. Check
+  manifests runs the section 9.4 comparison. An agent bound to either CLI shows
   a live tail of its pane, labelled as agent-written and never acted on.
 
 ## Idea files and host execution
@@ -105,31 +105,51 @@ conversation and runs. **Delete idea…** asks for confirmation and atomically r
 only that idea’s database records, including resend history. Its recording files
 stay on disk. End an active run before deleting its idea.
 
-New and migrated ideas include a visible, editable `host.ts` alongside their Jev
-source. On its tab, **Check pair** compiles the selected Jev entry and syntax-checks
-the host with Node; it executes no host code. **Run pair** explicitly executes the
-selected host. Its `runIdea()` helper uses the current SDK's `Program.task().start()`
-with the idea's bindings, inputs, Jev profile and sample option. It returns the
-terminal summary, outputs and recording path after any page-owned pauses settle:
+New agent drafts include a complete TypeScript SDK host by default; an explicit
+Python request produces a Python SDK host. The editor highlights TypeScript,
+JavaScript, Python and JSON. Edits, active file and selection annotations are
+saved with the idea. Changing the program declaration in Chat preserves an
+existing entry filename; the companion is checked against that exact saved name.
 
-```ts
-import { runIdea } from './.toolbox/host.ts'
-const result = await runIdea({ task: 'main', inputs: { name: 'Ada' } })
-console.log(result.outputs)
-```
+The complete file contract is:
 
-Omit the options to use `main` and the idea's Inputs JSON. Bind capabilities on
-Adapters as for a direct Jev run. Each host launch supports one `runIdea` call;
-Jev can call its linked tasks and modules normally. Host errors appear in the page.
-Host stdout/stderr are bounded and discarded, so printing environment values does
-not put them in the UI or logs. Node's permission mode permits filesystem access
-only inside the materialized workspace and disables network, subprocesses and
-native addons. External effects go through the selected runtime bindings. The
-child inherits PATH, without provider credentials. Host startup is bounded to
-five seconds, execution to ten minutes, source/output to 1 MiB, and the helper
-request to 64 KiB. The reserved `.toolbox/host.ts` helper is provided at execution
-time; local workspace imports work, while external package imports are not bundled.
-Run/replay recordings retain the ordinary Jev runtime format.
+| Language | Saved files |
+| --- | --- |
+| TypeScript | entry `.jev`, `host.ts`, `runtime.ts`, `runtime.json` |
+| Python | entry `.jev`, `host.py`, `toolbox_runtime.py`, `runtime.json` |
+
+All application source, including support files, is visible and editable. The
+main host uses the real SDK's `load`, `task().start`, pause iteration, resume,
+result/error handling and cleanup. The context file supplies bindings, saved
+inputs, profile, sample and recording configuration. Outside the toolbox it reads
+`runtime.json` and launches the normal SDK runtime and configured JSONL adapters;
+inside it receives configuration and private stdio to the toolbox-owned runtime.
+A fixture binding is never silently treated as a real standalone adapter. Set a
+real `command` and `args` in `runtime.json` for any capability that needs one.
+
+With the SDK and required adapters installed, copy the whole saved file set into
+one folder and run `node host.ts` (Node 26+) or `python3 host.py`. Select a new
+recording path in `runtime.json` before each standalone run; the runtime refuses
+to overwrite recordings. `JEVSCRIPT_BIN` can select a local built CLI. Standalone
+hosts run under the invoking user's ordinary permissions.
+
+On a main host tab, **Check pair** compiles the selected Jev entry and syntax-checks
+the host without executing it. **Run pair** explicitly executes that saved host
+through its actual SDK. Bind capabilities on Adapters and set Inputs as for a
+direct Jev run. Pauses appear in the existing page stack, and results and JSONL
+recordings remain with the idea. Support files are editable but are not Run pair
+entry points. Existing `runIdea()` hosts remain supported for earlier ideas.
+
+Toolbox Run permits host filesystem access only in its disposable workspace and
+blocks network and child-process execution. TypeScript uses Node's permission
+mode; Python uses macOS Seatbelt or Linux bubblewrap (`bwrap` must be installed).
+Python discovery selects the actual installed interpreter, including framework
+interpreters on macOS; it does not install another Python or launch unsandboxed.
+External effects run through configured adapters in the toolbox process. Child
+hosts receive no provider credentials. Stdout/stderr are bounded and discarded;
+safe host errors appear in the page. Startup is bounded to five seconds, execution
+to ten minutes, source/output to 1 MiB and JSONL control buffering to 2 MiB.
+Ordinary Jev runtime recording and replay formats are preserved.
 
 ## Where state lives
 
@@ -182,7 +202,7 @@ from the main checkout's `.env`. Variables already set win. Nothing is copied.
 Real: compile, check and `check --tools` (the CLI); runs, pauses, resume, abort
 and recording (the SDK over `jevscript serve`); replay (`jevscript replay`, with
 no key and no adapters); profiles (the bundle plus the overlay); the language
-server; the JSONL subprocess and Claude Code adapters; resend.
+server; the JSONL subprocess, Claude Code and Codex adapters; resend.
 
 Stubbed: the Stub binding is a demonstration adapter. It follows the CLI's
 `--stub` except that typed tool verbs return a value of their declared type;
@@ -207,8 +227,9 @@ annotations on both Jev and host files reached the selected Codex CLI in the loc
 real runtime against local stand-ins for both services (`demo/services.ts`),
 which prove the toolbox's side of each exchange but nothing about the live
 services. The CLI tests use fake executables and do not prove live service access.
-A live Claude Code pane is not driven either; the adapter has its own
-tmux tests, and the toolbox's pane tail is checked against a real tmux pane.
+The Codex tmux adapter was also driven live through all five agent verbs with
+read-only sandboxing and approvals set to never. Claude Code runtime panes were
+not driven live; existing adapter integration checks use fixtures and real tmux.
 
 ## Tests
 

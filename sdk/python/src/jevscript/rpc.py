@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
-from typing import Any, Callable
+from typing import Any, Callable, TextIO
 
 from ._native import resolve_binary
 
@@ -65,21 +65,23 @@ class RpcClient:
         cwd: str | None = None,
         on_host_request: HostHandler | None = None,
         on_event: EventHandler | None = None,
+        transport: tuple[TextIO, TextIO] | None = None,
     ) -> None:
-        self._bin = resolve_binary(bin)
         self._on_host_request = on_host_request
         self._on_event = on_event
         self._next_id = 1
         self._lock = threading.Lock()
-        self._process = subprocess.Popen(  # noqa: S603 - the binary is the caller's choice
-            [self._bin, "serve"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            text=True,
-            bufsize=1,
-        )
+        self._process = None
+        if transport is not None:
+            self._input, self._output = transport
+        else:
+            self._process = subprocess.Popen(
+                [resolve_binary(bin), "serve"],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=cwd, text=True, bufsize=1,
+            )
+            assert self._process.stdout is not None and self._process.stdin is not None
+            self._input, self._output = self._process.stdout, self._process.stdin
 
     def request(self, method: str, params: Any) -> Any:
         """Send a request and wait for its result.
@@ -115,6 +117,10 @@ class RpcClient:
 
     def close(self) -> None:
         """Shut the runtime down."""
+        if self._process is None:
+            self._output.close()
+            self._input.close()
+            return
         if self._process.poll() is None:
             try:
                 if self._process.stdin is not None:
@@ -132,14 +138,12 @@ class RpcClient:
     # -- internals ---------------------------------------------------------
 
     def _write(self, message: Any) -> None:
-        assert self._process.stdin is not None
-        self._process.stdin.write(json.dumps(message) + "\n")
-        self._process.stdin.flush()
+        self._output.write(json.dumps(message) + "\n")
+        self._output.flush()
 
     def _read(self) -> dict[str, Any] | None:
-        assert self._process.stdout is not None
         while True:
-            line = self._process.stdout.readline()
+            line = self._input.readline()
             if line == "":
                 return None
             line = line.strip()

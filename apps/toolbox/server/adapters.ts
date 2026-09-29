@@ -7,6 +7,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 
 import type { Adapter, CallArgs, Handle, Observation, ToolManifest } from 'jevscript'
+import { CodexAdapter } from '@jevscript/adapter-codex'
 import { ClaudeCodeAdapter } from '@jevscript/adapter-claude-code'
 
 import type { CapabilityKind, IrNeed, IrSignature } from '../shared/ir.ts'
@@ -215,10 +216,12 @@ export function bindAdapter(need: IrNeed, spec: BindingSpec | undefined, notify:
       const adapter = new SubprocessAdapter(need.name, need.kind, binding.command, parseManifest(binding.manifest))
       return { adapter, close: () => adapter.close() }
     }
+    case 'codex':
     case 'claude-code': {
-      if (need.kind !== 'agent') throw new Error(`Claude Code binds an \`agent\`, and \`${need.name}\` is a \`${need.kind}\``)
-      const binding = spec as Extract<BindingSpec, { kind: 'claude-code' }>
-      const adapter = new ClaudeCodeAdapter({
+      if (need.kind !== 'agent') throw new Error(`A local coding CLI binds an \`agent\`, and \`${need.name}\` is a \`${need.kind}\``)
+      const binding = spec as Extract<BindingSpec, { session: string }>
+      const adapter = new (spec?.kind === 'codex' ? CodexAdapter : ClaudeCodeAdapter)({
+        backend: 'tmux',
         capability: need.name,
         session: binding.session,
         idleSeconds: binding.idleSeconds,
