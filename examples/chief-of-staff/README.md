@@ -51,13 +51,15 @@ uv run cos --home ~/.cos steer '<task-id>' 'Add a regression test'
 uv run cos --home ~/.cos playbooks list
 ```
 
-`cos status` prints a one-line count of active workers, queued items, and open
-decisions. `cos bearings` starts with the same headline, then lists owner
-decisions, active work, queued items, and recent outcomes. Queued items show
-their stored holds and dependency statuses, including completed dependencies
-in the archive; the digest does not predict dispatch readiness. Jevscript's
-`routing.ready` decides which items can dispatch. Reading bearings does not
-start a Jevscript run or add a recording or episode row.
+`cos status` prints a one-line headline with counts of active workers, queued
+items, and open decisions, or an all-quiet message when each count is zero.
+`cos bearings` starts with the same headline, then lists owner decisions,
+active work, queued items, recent outcomes, second mates, and learned
+playbooks. Queued items show stored holds and dependency statuses, including
+completed dependencies in the archive. The digest does not predict dispatch
+readiness; Jevscript's `routing.ready` decides which items can dispatch.
+Reading bearings does not start a Jevscript run or add a recording or episode
+row.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
