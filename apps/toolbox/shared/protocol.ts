@@ -224,7 +224,7 @@ export type Request =
   | { type: 'resends.list'; ideaId: string; recording: string; requestId: string }
   | { type: 'errors.reference' }
   | { type: 'runs.live' }
-  | { type: 'judge'; fileName: string; source: string; judgment: string; state: Record<string, unknown>; model: string }
+  | { type: 'judge'; fileName: string; source: string; judgment: string; state: Record<string, unknown>; model: string; files?: IdeaFile[] }
 
 export interface Replies {
   status: ServerStatus

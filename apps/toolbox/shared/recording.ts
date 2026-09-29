@@ -440,6 +440,7 @@ export function machineSteps(events: readonly RecordingEvent[], ir: Ir | null): 
       observed: state?.obs ?? null,
       requestId: request ? String(request['request_id']) : null,
     })
+    lastRequest = null
     windowPauses = []
     answer = null
   }

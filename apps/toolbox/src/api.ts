@@ -37,6 +37,7 @@ export class Api {
       for (const listener of this.#connection) listener(false)
       for (const pending of this.#pending.values()) pending.reject(new Error('the toolbox server went away'))
       this.#pending.clear()
+      this.#queue.length = 0
       setTimeout(() => this.connect(), 1000)
     }
   }

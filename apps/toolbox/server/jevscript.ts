@@ -4,9 +4,8 @@
  * (manifest comparison, section 9.4) and `replay` (section 10.4).
  */
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { dirname, join, relative } from 'node:path'
 
 import type { CheckResult, Diagnostic, IdeaFile, ReplayResult } from '../shared/protocol.ts'
 import { parseDiagnostics } from '../shared/protocol.ts'
@@ -49,51 +48,55 @@ export class Jevscript {
     this.workDir = workDir
   }
 
-  /** Write the source where the CLI can read it. Each call gets its own directory. */
-  async materialize(fileName: string, source: string, files: IdeaFile[] = []): Promise<string> {
+  /** Write linked Jev sources into one disposable workspace (spec section 3.9). */
+  async materialize(fileName: string, source: string, files: IdeaFile[] = []): Promise<{ path: string; dir: string }> {
     await mkdir(this.workDir, { recursive: true })
     const dir = await mkdtemp(join(this.workDir, 'src-'))
-    for (const file of files) {
-      if (file.kind !== 'jev') continue
-      if (!file.name.split('/').every(segment => /^[A-Za-z0-9_.-]+$/.test(segment) && !['.', '..'].includes(segment)) || !file.name.endsWith('.jev')) throw new Error('Jev workspace files need safe relative .jev names.')
-      const sibling = join(dir, file.name)
-      await mkdir(dirname(sibling), { recursive: true })
-      await writeFile(sibling, file.source)
+    try {
+      for (const file of files) {
+        if (file.kind !== 'jev') continue
+        if (!file.name.split('/').every(segment => /^[A-Za-z0-9_.-]+$/.test(segment) && !['.', '..'].includes(segment)) || !file.name.endsWith('.jev')) throw new Error('Jev workspace files need safe relative .jev names.')
+        const sibling = join(dir, file.name)
+        await mkdir(dirname(sibling), { recursive: true })
+        await writeFile(sibling, file.source)
+      }
+      const path = join(dir, programFileName(fileName))
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, source)
+      return { path, dir }
+    } catch (error) {
+      await rm(dir, { recursive: true, force: true })
+      throw error
     }
-    const path = join(dir, programFileName(fileName))
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, source)
-    return path
   }
 
   /** `jevscript compile`: the IR when it compiles, and every diagnostic, warnings included. */
   async compile(fileName: string, source: string, files: IdeaFile[] = []): Promise<CheckResult> {
-    const path = await this.materialize(fileName, source, files)
-    const result = await exec(this.bin, ['compile', path])
-    const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
-    if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
-    if (diagnostics.length === 0) {
-      throw new Error(`jevscript compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
-    }
-    return { diagnostics, ir: null }
+    const { path, dir } = await this.materialize(fileName, source, files)
+    try {
+      const result = await exec(this.bin, ['compile', path])
+      const diagnostics = relabel(parseDiagnostics(result.stderr), dir)
+      if (result.code === 0) return { diagnostics, ir: readIr(JSON.parse(result.stdout)) }
+      if (diagnostics.length === 0) throw new Error(`jevscript compile failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`)
+      return { diagnostics, ir: null }
+    } finally { await rm(dir, { recursive: true, force: true }) }
   }
 
   /** `jevscript check --tools`: each tool verb the program uses that a manifest lacks. */
   async checkTools(
-    fileName: string,
-    source: string,
-    manifests: Record<string, unknown>,
-    files: IdeaFile[] = [],
+    fileName: string, source: string, manifests: Record<string, unknown>, files: IdeaFile[] = [],
   ): Promise<{ missing: string[]; diagnostics: Diagnostic[] }> {
-    const path = await this.materialize(fileName, source, files)
-    const manifestPath = join(await mkdtemp(join(tmpdir(), 'jevs-tools-')), 'manifests.json')
-    await writeFile(manifestPath, JSON.stringify(manifests))
-    const result = await exec(this.bin, ['check', path, '--tools', manifestPath])
-    const diagnostics = relabel(parseDiagnostics(result.stderr), path, programFileName(fileName))
-    return {
-      missing: diagnostics.filter((diagnostic) => diagnostic.code === 'verb_missing').map((diagnostic) => diagnostic.message),
-      diagnostics: diagnostics.filter((diagnostic) => diagnostic.code !== 'verb_missing'),
-    }
+    const { path, dir } = await this.materialize(fileName, source, files)
+    try {
+      const manifestPath = join(dir, 'manifests.json')
+      await writeFile(manifestPath, JSON.stringify(manifests))
+      const result = await exec(this.bin, ['check', path, '--tools', manifestPath])
+      const diagnostics = relabel(parseDiagnostics(result.stderr), dir)
+      return {
+        missing: diagnostics.filter((diagnostic) => diagnostic.code === 'verb_missing').map((diagnostic) => diagnostic.message),
+        diagnostics: diagnostics.filter((diagnostic) => diagnostic.code !== 'verb_missing'),
+      }
+    } finally { await rm(dir, { recursive: true, force: true }) }
   }
 
   /**
@@ -115,6 +118,9 @@ export class Jevscript {
   }
 }
 
-function relabel(diagnostics: Diagnostic[], path: string, fileName: string): Diagnostic[] {
-  return diagnostics.map((diagnostic) => (diagnostic.file === path ? { ...diagnostic, file: fileName } : diagnostic))
+function relabel(diagnostics: Diagnostic[], dir: string): Diagnostic[] {
+  return diagnostics.map(diagnostic => {
+    const file = relative(dir, diagnostic.file)
+    return file.startsWith('..') ? diagnostic : { ...diagnostic, file }
+  })
 }

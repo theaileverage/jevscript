@@ -161,6 +161,11 @@ file plus the default host; its pins remain attached to that Jev file.
 | `JEVS_LSP_COMMAND` | `<JEVSCRIPT_BIN> lsp` | The language server, started per page connection |
 | `JEVS_TOOLBOX_HOME` | `~/.jevs-toolbox` (`~/.jevs-toolbox-demo` for `pnpm demo`) | The database and recordings |
 | `JEVS_TOOLBOX_PORT` | `5178` (`5188` for `pnpm demo`) | The server port |
+| `JEVS_TOOLBOX_ALLOWED_ORIGINS` | none | Comma-separated additional exact local page origins allowed to connect to `/ws` and `/lsp`, for example `http://localhost:5179`; the toolbox page's own origin is always allowed |
+
+WebSocket requests must send an `Origin` matching the toolbox page's scheme,
+host and port, or an explicitly listed origin. Only `http` or `https` origins
+on `localhost`, `127.0.0.1` or `[::1]` with an explicit port may be listed.
 
 Keys are read at start-up from the checkout's `.env` and, in a git worktree,
 from the main checkout's `.env`. Variables already set win. Nothing is copied.

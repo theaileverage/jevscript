@@ -205,7 +205,7 @@ async function command(idea: Idea, text: string): Promise<void> {
       }
       try {
         const state = JSON.parse(json.join(' ') || '{}') as Record<string, unknown>
-        const { answers } = await api.request('judge', { fileName: idea.fileName, source: idea.source, judgment, state, model: idea.model })
+        const { answers } = await api.request('judge', { fileName: idea.fileName, source: idea.source, judgment, state, model: idea.model, files: idea.workspace.files })
         note(`${judgment}: ${JSON.stringify(answers, null, 2)}`)
       } catch (error) {
         note(`/judge failed: ${error instanceof Error ? error.message : String(error)}`)

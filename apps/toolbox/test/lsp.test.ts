@@ -48,7 +48,7 @@ afterAll(async () => {
 })
 
 async function lsp(): Promise<{ send(message: object): void; received: Message[]; request(id: number, method: string, params: object): Promise<unknown>; close(): void }> {
-  const socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/lsp`)
+  const socket = new WebSocket(`${toolbox.url.replace('http', 'ws')}/lsp`, { origin: toolbox.url })
   const received: Message[] = []
   socket.on('message', (data) => received.push(JSON.parse(String(data)) as Message))
   await new Promise((resolve) => socket.once('open', resolve))
@@ -112,7 +112,7 @@ describe('the /lsp bridge to `jevscript lsp`', () => {
       const status = await client.request<{ lsp: { available: boolean } }>('status')
       client.close()
       expect(status.lsp.available).toBe(false)
-      const socket = new WebSocket(`${missing.url.replace('http', 'ws')}/lsp`)
+      const socket = new WebSocket(`${missing.url.replace('http', 'ws')}/lsp`, { origin: missing.url })
       const code = await new Promise<number>((resolve) => socket.once('close', resolve))
       expect(code).toBe(1011)
     } finally {
