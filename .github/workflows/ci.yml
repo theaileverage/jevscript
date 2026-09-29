@@ -91,6 +91,24 @@ jobs:
           pnpm run typecheck
           pnpm run package
 
+  # Lists and dry-runs every runbook cell without running one; see runbooks/README.md.
+  runbooks:
+    name: runbooks (Runme list and dry run)
+    runs-on: ubuntu-24.04
+    env:
+      RUNME_VERSION: 3.17.5
+      RUNME_SHA256: 14b22f01a20ba66d29c73230027f99f2d2821db48638f9328c010a448237e993
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Install the pinned Runme CLI
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/runme.tar.gz" "https://github.com/runmedev/runme/releases/download/v$RUNME_VERSION/runme_linux_x86_64.tar.gz"
+          echo "$RUNME_SHA256  $RUNNER_TEMP/runme.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/runme"
+          tar -xzf "$RUNNER_TEMP/runme.tar.gz" -C "$RUNNER_TEMP/runme" runme
+          echo "$RUNNER_TEMP/runme" >> "$GITHUB_PATH"
+      - run: python3 scripts/check_runbooks.py
+
   package-smoke:
     name: offline npm and PyPI artifact smoke (Linux x64)
     runs-on: ubuntu-24.04

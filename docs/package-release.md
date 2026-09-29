@@ -129,6 +129,9 @@ release stages 0.1.3 from a new commit and leaves those artifacts untouched.
 
 `.github/workflows/publish.yml` publishes the verified tarball and wheels from
 that bundle and rebuilds nothing.
+[runbooks/release.md](../runbooks/release.md) and
+[runbooks/publication.md](../runbooks/publication.md) run the steps below as
+named Runme cells.
 Before a release:
 
 1. Merge the reviewed release commit into protected `main`. Protect `v*`
