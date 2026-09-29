@@ -8,7 +8,10 @@ the entries with judgments.
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -112,10 +115,19 @@ class Registry:
         charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
         atomic_write(child.data / "charter.md", charter)
         # A minister shares the parent's projects, profiles and memory at creation.
-        for record_name in ("projects.json", "profiles.json", self.home.preferences_path.name):
-            source = self.home.data / record_name
-            if source.exists():
-                atomic_write(child.data / record_name, source.read_text(encoding="utf-8"))
+        sources = [self.home.data / name for name in ("projects.json", "profiles.json", self.home.preferences_path.name)]
+        legacy, current = self.home.legacy_preferences_path, self.home.preferences_path
+        if legacy.exists() and current.exists() and legacy.read_bytes() != current.read_bytes():
+            sources.append(legacy)
+        for source in sources:
+            target = child.data / source.name
+            if source.exists() and not target.exists():
+                with tempfile.NamedTemporaryFile(dir=child.data) as staged:
+                    shutil.copyfile(source, staged.name)
+                    try:
+                        os.link(staged.name, target)
+                    except FileExistsError:
+                        pass
         return record
 
     def homes(self) -> list[dict[str, Any]]:

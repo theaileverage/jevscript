@@ -286,6 +286,64 @@ def test_minister_keeps_parent_defaults_after_parent_changes(make_host, jevscrip
     assert fingerprint(child / "config.json") == child_config
 
 
+def test_minister_inherits_identity_despite_unrelated_parent_config_error(make_host, jevscript_bin: str) -> None:
+    host = make_host()
+    home = host.home.root
+    configure_identity(home, jevscript_bin)
+    parent_config = read_json(home / "config.json", {})
+    parent_config["scout"] = {"models": {"old-harness": "old-model"}}
+    (home / "config.json").write_text(json.dumps(parent_config))
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    expected = {"name": "Abigail", "principal": "Ankeeth"}
+    assert read_json(child / "config.json", {})["identity"] == expected
+    child_config = read_json(child / "config.json", {})
+    child_config["identity"] = {"name": "Beatrice"}
+    (child / "config.json").write_text(json.dumps(child_config))
+    cos(child, jevscript_bin, "status")
+    assert read_json(child / "config.json", {})["identity"] == {"name": "Beatrice", "principal": "Ankeeth"}
+
+
+def test_minister_keeps_unmerged_preferences_without_overwriting_child_files(make_host, jevscript_bin: str, tmp_path: Path) -> None:
+    host = make_host()
+    home = host.home.root
+    cli_rules(host, tmp_path, [])
+    principal, captain = home / "data" / "principal.md", home / "data" / "captain.md"
+    principal.write_bytes(b"# Preferences\n\n- Prefer small commits\n")
+    captain.write_bytes(b"# Preferences\n\n- Use British spelling\n")
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    child = home / "mates" / "ops"
+    assert (child / "data" / "principal.md").read_bytes() == principal.read_bytes()
+    assert (child / "data" / "captain.md").read_bytes() == captain.read_bytes()
+
+    parent_config = read_json(home / "config.json", {})
+    for key, value in (("jev.mode", "fake"), ("jev.fake_rules", parent_config["jev"]["fake_rules"]), ("adapters.staff", parent_config["adapters"]["staff"])):
+        cos(child, jevscript_bin, "config", "set", key, json.dumps(value))
+    cos(child, jevscript_bin, "say", "Update the guide", "--project", "proj")
+    cos(child, jevscript_bin, "tick")
+    [brief] = (child / "data").glob("*/brief.md")
+    preferences = brief.read_text().split("## Standing preferences\n", 1)[1].split("\n## Task Skills", 1)[0]
+    assert "Prefer small commits" in preferences
+    assert "### Not yet merged from captain.md\n# Preferences\n\n- Use British spelling" in preferences
+
+    child_principal, child_captain = child / "data" / "principal.md", child / "data" / "captain.md"
+    child_principal.write_bytes(b"# Child principal\n")
+    child_captain.write_bytes(b"# Child captain\n")
+    child_projects = child / "data" / "projects.json"
+    child_projects.write_bytes(b"[]\n")
+    projects_before = child_projects.read_bytes()
+    cos(home, jevscript_bin, "minister", "add", "ops", "--portfolio", "operations")
+    assert child_principal.read_bytes() == b"# Child principal\n"
+    assert child_captain.read_bytes() == b"# Child captain\n"
+    assert child_projects.read_bytes() == projects_before
+
+    captain.write_bytes(principal.read_bytes())
+    cos(home, jevscript_bin, "minister", "add", "docs", "--portfolio", "documentation")
+    docs = home / "mates" / "docs" / "data"
+    assert (docs / "principal.md").read_bytes() == principal.read_bytes()
+    assert not (docs / "captain.md").exists()
+
+
 def test_the_reviewer_brief_names_the_cos_and_the_principal(make_host, jevscript_bin: str) -> None:
     host = make_host(
         rules=[{"match": {"id": "^verdict$"}, "answer": {"choice": "approve"}}],
