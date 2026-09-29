@@ -9,6 +9,7 @@
  */
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
+import type { Readable, Writable } from 'node:stream'
 import { resolveBinary } from './native.ts'
 
 /** Methods the host calls on the runtime. */
@@ -45,7 +46,12 @@ export class JevscriptRpcError extends Error {
 /** Handles a request the runtime sent to the host. */
 export type HostHandler = (method: string, params: unknown) => Promise<unknown>
 
+/** Supplied JSONL stdio for an already-owned runtime, spec section 11.5. */
+export interface RpcTransport { input: Readable; output: Writable }
+
 export interface RpcClientOptions {
+  /** An already-owned runtime connection. No process is spawned when supplied. */
+  transport?: RpcTransport
   /**
    * The runtime binary. Defaults to `$JEVSCRIPT_BIN`, then the verified
    * release-matched binary packaged with this SDK.
@@ -66,9 +72,11 @@ interface Pending {
   reject: (error: unknown) => void
 }
 
-/** A line-delimited JSON-RPC client over a spawned `jevscript serve`. */
+/** A section 11.5 JSONL client over spawned `jevscript serve` or supplied stdio. */
 export class RpcClient {
-  #child: ChildProcessWithoutNullStreams
+  #child: ChildProcessWithoutNullStreams | undefined
+  #input: Readable
+  #output: Writable
   #lines: Interface
   #pending = new Map<number, Pending>()
   #nextId = 1
@@ -77,15 +85,24 @@ export class RpcClient {
 
   constructor(options: RpcClientOptions = {}) {
     this.#options = options
-    const bin = resolveBinary(options.bin)
-    const args = [...(options.args ?? []), 'serve']
-    this.#child = spawn(bin, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-    })
-    this.#child.on('error', (error) => this.#failAll(error))
-    this.#child.on('exit', () => this.#failAll(new Error('the runtime exited')))
-    this.#lines = createInterface({ input: this.#child.stdout })
+    if (options.transport) {
+      this.#input = options.transport.input
+      this.#output = options.transport.output
+    } else {
+      const bin = resolveBinary(options.bin)
+      this.#child = spawn(bin, [...(options.args ?? []), 'serve'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      })
+      this.#child.on('error', error => this.#failAll(error))
+      this.#child.on('exit', () => this.#failAll(new Error('the runtime exited')))
+      this.#input = this.#child.stdout
+      this.#output = this.#child.stdin
+    }
+    this.#input.on('end', () => this.#failAll(new Error('the runtime connection closed')))
+    this.#input.on('error', error => this.#failAll(error))
+    this.#output.on('error', error => this.#failAll(error))
+    this.#lines = createInterface({ input: this.#input })
     this.#lines.on('line', (line) => {
       void this.#receive(line)
     })
@@ -112,19 +129,21 @@ export class RpcClient {
     if (this.#closed) return
     this.#closed = true
     this.#lines.close()
-    this.#child.stdin.end()
+    this.#output.end()
+    const child = this.#child
+    if (!child) { this.#input.destroy(); return }
     await new Promise<void>((resolve) => {
-      if (this.#child.exitCode !== null) {
+      if (child.exitCode !== null) {
         resolve()
         return
       }
-      this.#child.once('exit', () => resolve())
-      this.#child.kill()
+      child.once('exit', () => resolve())
+      child.kill()
     })
   }
 
   #write(message: unknown): void {
-    this.#child.stdin.write(`${JSON.stringify(message)}\n`)
+    this.#output.write(`${JSON.stringify(message)}\n`)
   }
 
   async #receive(line: string): Promise<void> {

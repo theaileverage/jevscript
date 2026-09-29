@@ -40,6 +40,13 @@ for await (const pause of run) {
 await program.close()
 ```
 
+An embedding host that already owns the runtime may pass
+`load(path, { transport: { input, output } })`, where `input` is a Node readable
+stream and `output` is a writable stream carrying section 11.5 JSONL. No binary
+is resolved or spawned in this mode. `program.close()` closes the supplied
+connection; the embedding host owns the runtime process lifecycle. Without
+`transport`, the usual packaged or explicitly selected binary is spawned.
+
 Adapter `call` and `observe` callbacks receive the bound capability identity as
 their last argument. Throw an error with `retryable = true` to surface a
 retryable `adapter_error` pause. Events are delivered as the runtime appends

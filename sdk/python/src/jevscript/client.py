@@ -23,7 +23,7 @@ model endpoint.
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, TextIO
 
 from .rpc import HOST_METHODS, METHODS, JevscriptRpcError, RpcClient
 from .types import (
@@ -45,6 +45,7 @@ def load(
     bin: str | None = None,
     cwd: str | None = None,
     paths: list[str] | None = None,
+    transport: tuple[TextIO, TextIO] | None = None,
 ) -> "Program":
     """Load a program by path, or by source when ``source`` is true.
 
@@ -64,7 +65,7 @@ def load(
         if event is not None:
             events.add(event)
 
-    client = RpcClient(bin=bin, cwd=cwd, on_host_request=on_host_request, on_event=on_event)
+    client = RpcClient(bin=bin, cwd=cwd, on_host_request=on_host_request, on_event=on_event, transport=transport)
     if source:
         params: dict[str, Any] = {"source": path_or_source, "paths": paths or []}
     else:
