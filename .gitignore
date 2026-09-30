@@ -24,6 +24,7 @@ venv/
 build/
 
 # Recordings and local state
+apps/toolbox/.local/
 *.jsonl
 !**/fixtures/**/*.jsonl
 .env

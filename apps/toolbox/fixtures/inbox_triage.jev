@@ -1,0 +1,17 @@
+program triage_lane
+
+in message: text
+
+judgment triage(message):
+  urgency = message pick:
+    today   "needs a reply before end of day"
+    week    "can wait a few days"
+    ignore  "no reply expected"
+    other
+  billing = message feels "a customer asking about billing"
+
+task main:
+  t = triage(message)
+  lane = t.urgency.label
+  if t.billing > 0.5:
+    lane = "today"

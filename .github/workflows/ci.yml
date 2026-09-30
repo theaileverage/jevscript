@@ -91,6 +91,44 @@ jobs:
           pnpm run typecheck
           pnpm run package
 
+  # The toolbox server runs its TypeScript directly, which needs Node 26; its
+  # browser pass drives the runner's Chrome against fixture endpoints only.
+  toolbox:
+    name: toolbox (apps/toolbox)
+    runs-on: ubuntu-24.04
+    needs: rust
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: jevscript
+          path: target/debug
+      - run: chmod +x target/debug/jevscript
+      - uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 26
+      - name: Install runtime verification tools
+        run: sudo apt-get update && sudo apt-get install -y tmux bubblewrap libseccomp2 python3 apparmor-profiles
+      - name: Permit bubblewrap setup with restricted child capabilities
+        # Ubuntu's supplied profile permits namespace setup and strips child
+        # capabilities. Keep AppArmor enabled and the host's sandbox unchanged.
+        run: sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+      - name: SDK and agent adapters the toolbox links
+        run: |
+          (cd sdk/js && pnpm install --frozen-lockfile && pnpm run build)
+          (cd adapters && pnpm install --frozen-lockfile && pnpm run build)
+      - name: Toolbox
+        working-directory: apps/toolbox
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run typecheck
+          pnpm run verify:python-sandbox
+          pnpm test
+          JEVS_BROWSER="$(command -v google-chrome)" pnpm test:browser
+
   # Lists and dry-runs every runbook cell without running one; see runbooks/README.md.
   runbooks:
     name: runbooks (Runme list and dry run)
