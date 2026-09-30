@@ -1,11 +1,11 @@
 """Human escalation: decisions, notifications and the digest.
 
-An owner decision is durable and can be answered later; nothing blocks while
-waiting. Each decision is a row in ``state/decisions.json`` keyed
+A decision for the principal (the red box) is durable and can be answered
+later; nothing blocks while waiting. Each decision is a row in ``state/decisions.json`` keyed
 ``<subject>:<topic>``; ``cos answer`` closes
 it, and the next episode reads the answer from its snapshot. Notifications go
 to ``state/outbox.jsonl`` (and, when configured, a desktop notification);
-routine news goes to ``state/digest.jsonl`` for the next bearings.
+routine news goes to ``state/digest.jsonl`` for the next briefing.
 
 What gets said, and when, is decided in ``escalation.jev``; this module only
 stores and delivers.
@@ -20,14 +20,18 @@ from typing import Any, Callable
 
 from .home import Home, append_jsonl, iso, now, read_json, read_jsonl, write_json
 
-Notifier = Callable[[str], None]
+Notifier = Callable[[str, str], None]
 
 
-def desktop_notifier(message: str) -> None:
+def _applescript(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def desktop_notifier(message: str, title: str) -> None:
     """A macOS notification when ``osascript`` exists; silent otherwise."""
     if shutil.which("osascript"):
-        text = message.replace("\\", "\\\\").replace('"', '\\"')[:220]
-        subprocess.run(["osascript", "-e", f'display notification "{text}" with title "Chief of Staff"'], check=False, capture_output=True, timeout=10)
+        script = f'display notification "{_applescript(message[:220])}" with title "{_applescript(title[:80])}"'
+        subprocess.run(["osascript", "-e", script], check=False, capture_output=True, timeout=10)
 
 
 class Decisions:
@@ -85,11 +89,12 @@ class Decisions:
     # -- telling the person -----------------------------------------------------
 
     def notify(self, message: str) -> None:
-        append_jsonl(self.home.state / "outbox.jsonl", {"at": iso(), "ts": now(), "message": message})
+        name = self.home.identity["name"]
+        append_jsonl(self.home.state / "outbox.jsonl", {"at": iso(), "ts": now(), "name": name, "message": message})
         if self.echo:
-            print(f"cos: {message}", file=sys.stderr)
+            print(f"cos ({name}): {message}", file=sys.stderr)
         if self.notifier is not None:
-            self.notifier(message)
+            self.notifier(message, name)
 
     def digest(self, message: str) -> None:
         append_jsonl(self.home.state / "digest.jsonl", {"at": iso(), "ts": now(), "message": message})

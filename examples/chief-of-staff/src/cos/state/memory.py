@@ -1,11 +1,13 @@
-"""Memory: the owner's standing preferences and the fleet's learnings.
+"""Memory: the principal's standing preferences and the administration's learnings.
 
-The owner's preferences and fleet learnings are curated Markdown,
+The principal's preferences and the learnings are curated Markdown,
 one dated line per fact, never a duplicate. Preferences reach every worker's
 instructions; learnings record what the learning loop encoded.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from .home import Home, atomic_write, iso
 
@@ -24,16 +26,25 @@ class Memory:
         return True
 
     def remember_preference(self, text: str) -> bool:
-        return self._remember("captain.md", "Preferences", text)
+        return self._remember(self.home.preferences_path.name, "Preferences", text)
 
     def remember_learning(self, text: str) -> bool:
         return self._remember("learnings.md", "Learnings", text)
 
     def preferences(self, limit: int = 2000) -> str:
-        path = self.home.data / "captain.md"
-        text = path.read_text(encoding="utf-8") if path.exists() else "(none recorded)"
-        return text[-limit:]
+        current = _read(self.home.preferences_path)
+        text = current[-limit:] if current else "(none recorded)"
+        # A captain.md the migration could not merge still reaches workers,
+        # labelled, so no preference is lost while the principal merges it.
+        legacy = _read(self.home.legacy_preferences_path)
+        if legacy and legacy != current:
+            text += f"\n\n### Not yet merged from {self.home.legacy_preferences_path.name}\n{legacy[-limit:]}"
+        return text
 
     def learnings(self) -> str:
         path = self.home.data / "learnings.md"
         return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""

@@ -23,7 +23,7 @@ JEV_KEY_ENV = "TYPESAFE_API_KEY"
 
 
 class SetupError(RuntimeError):
-    """Something the person must fix before the Chief of Staff can run."""
+    """Something the person must fix before the CoS can run."""
 
 
 def _sdk_path() -> None:
@@ -73,7 +73,7 @@ def jev_dir() -> Path:
     for candidate in (here / "jev", here.parents[1] / "jev"):
         if (candidate / "cos.jev").exists():
             return candidate
-    raise SetupError("Cannot find the Chief of Staff .jev modules next to the package.")
+    raise SetupError("Cannot find the CoS .jev modules next to the package.")
 
 
 def keychain_key(service: str, account: str | None = None, run: Any = subprocess.run) -> str:

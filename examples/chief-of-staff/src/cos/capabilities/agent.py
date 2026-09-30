@@ -1,6 +1,6 @@
 """Binding capabilities to external adapter processes.
 
-Agent adapters are not part of the Chief of Staff: a person binds whatever
+Agent adapters are not part of the CoS: a person binds whatever
 agent they use (Claude Code, Codex, a browser agent, a fake for tests) as an
 external process that speaks the Jevscript CLI's language-neutral JSONL
 adapter protocol (``crates/jevscript-cli/README.md``). One JSON request per

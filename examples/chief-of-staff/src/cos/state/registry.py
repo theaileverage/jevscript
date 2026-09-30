@@ -1,13 +1,17 @@
-"""Project registry, delivery posture, second mates and dispatch profiles.
+"""Project registry, delivery posture, ministers and dispatch profiles.
 
-Projects, second mates and dispatch profiles are kept as JSON in a home.
+Projects, ministers (stored as ``mates``) and dispatch profiles are kept as
+JSON in a home.
 Each list reaches Jevscript as a snapshot field; the program chooses among
 the entries with judgments.
 """
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -93,7 +97,7 @@ class Registry:
             raise RuntimeError(f"`{name}` still has work under way: {', '.join(in_flight)}")
         write_json(self.projects_path, [p for p in self.projects() if p["name"] != name])
 
-    # -- second mates ---------------------------------------------------------
+    # -- ministers -------------------------------------------------------------
 
     @property
     def mates_path(self) -> Path:
@@ -103,21 +107,34 @@ class Registry:
         return read_json(self.mates_path, [])
 
     def add_mate(self, name: str, scope: str) -> dict[str, Any]:
-        child = Home(self.home.root / "mates" / name).init()
-        record = {"name": name, "scope": scope, "home": str(child.root)}
-        write_json(self.mates_path, [m for m in self.mates() if m["name"] != name] + [record])
-        charter = f"# Charter\n\nSecond mate `{name}` of {self.home.root}.\nScope: {scope}\n"
-        atomic_write(child.data / "charter.md", charter)
+        child = Home(self.home.root / "mates" / name)
+        mates = self.mates()
+        new_minister = not child.root.exists() and not any(m["name"] == name for m in mates)
         write_json(child.data / "parent.json", {"home": str(self.home.root), "name": name})
-        # A mate shares the parent's projects, profiles and memory at creation.
-        for record_name in ("projects.json", "profiles.json", "captain.md"):
-            source = self.home.data / record_name
-            if source.exists():
-                atomic_write(child.data / record_name, source.read_text(encoding="utf-8"))
+        child.init()
+        record = {"name": name, "scope": scope, "home": str(child.root)}
+        write_json(self.mates_path, [m for m in mates if m["name"] != name] + [record])
+        charter = f"# Charter\n\nMinister `{name}` of {self.home.root}.\nPortfolio: {scope}\n"
+        atomic_write(child.data / "charter.md", charter)
+        # Seed only missing child files, including on re-add; a later parent
+        # preference conflict must not enter an established minister's home.
+        sources = [self.home.data / name for name in ("projects.json", "profiles.json", self.home.preferences_path.name)]
+        legacy, current = self.home.legacy_preferences_path, self.home.preferences_path
+        if new_minister and legacy.exists() and current.exists() and legacy.read_bytes() != current.read_bytes():
+            sources.append(legacy)
+        for source in sources:
+            target = child.data / source.name
+            if source.exists() and not target.exists():
+                with tempfile.NamedTemporaryFile(dir=child.data) as staged:
+                    shutil.copyfile(source, staged.name)
+                    try:
+                        os.link(staged.name, target)
+                    except FileExistsError:
+                        pass
         return record
 
     def homes(self) -> list[dict[str, Any]]:
-        """The routing list intake picks among: this home first, then mates."""
+        """The routing list intake picks among: this home first, then ministers."""
         return [{"name": "main", "scope": "any work no second mate's scope covers"}] + [
             {"name": m["name"], "scope": m["scope"]} for m in self.mates()
         ]

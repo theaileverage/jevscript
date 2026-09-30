@@ -1,4 +1,4 @@
-"""Launch an interactive agent as the Chief of Staff's front door.
+"""Launch an interactive agent as the CoS's front door.
 
 The prompt lives beside this example, never in a project's AGENTS.md or
 CLAUDE.md. A companion watcher owns the home's single supervisor lock; the
@@ -30,7 +30,8 @@ def instructions(home: Home) -> str:
     else:
         argv = [sys.executable, "-m", "cos"]
     prefix = shlex.join([*argv, "--home", str(home.root)])
-    return path.read_text().format(home=home.root, command=prefix)
+    identity = home.identity
+    return path.read_text().format(home=home.root, command=prefix, name=identity["name"], principal=identity["principal"])
 
 
 def agent_argv(agent: str, prompt: str, home: Home) -> list[str]:
@@ -38,7 +39,7 @@ def agent_argv(agent: str, prompt: str, home: Home) -> list[str]:
     if executable is None:
         raise ValueError(f"{agent} is not installed; choose claude or codex")
     if agent == "claude":
-        return [executable, "--append-system-prompt", prompt, "Start with bearings and open decisions."]
+        return [executable, "--append-system-prompt", prompt, "Start with the briefing and the red box."]
     if agent == "codex":
         return [executable, "-C", str(home.root), prompt]
     raise ValueError("agent must be claude or codex")

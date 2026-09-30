@@ -47,7 +47,7 @@ def configure(home: Home, root: Path) -> None:
     rules.write_text(json.dumps(RULES))
     home.set_config("jev.mode", "fake")
     home.set_config("jev.fake_rules", str(rules))
-    home.set_config("adapters.crew", {
+    home.set_config("adapters.staff", {
         "command": [sys.executable, "-m", "cos.fake_agent"],
         "env": {"COS_FAKE_AGENT_STATE": str(root / "fake-agent-state.json"), "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
     })
@@ -76,7 +76,7 @@ def run_demo(root: Path) -> None:
         print(f"> cos say {text!r}\n{cos.say(text).text}")
         for _ in range(6):
             cos.tick()
-        print("\n> cos bearings")
-        print(cos.bearings().text)
+        print("\n> cos briefing")
+        print(cos.briefing().text)
         log = subprocess.run(["git", "-C", str(project), "log", "--oneline"], capture_output=True, text=True).stdout
         print(f"\nThe project's main branch now reads:\n{log}")

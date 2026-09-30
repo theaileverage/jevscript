@@ -1,6 +1,6 @@
 # Jevscript Chief of Staff
 
-A runnable Chief of Staff showcase. The policy and worker lifecycle are
+A runnable chief of staff (the CoS) showcase. The policy and worker lifecycle are
 composable Jevscript modules in [`jev/`](jev/); the Python package in
 [`src/cos/`](src/cos/) supplies I/O, durable state, terminal backends and a
 bounded watcher. This is a new harness, independent of
@@ -24,7 +24,7 @@ uv run cos --home ~/.cos doctor
 uv run cos --home ~/.cos session --agent claude  # or --agent codex
 ```
 
-The default `crew` adapter is `python -m cos.terminal_agent`; it selects
+The default staff adapter (`adapters.staff`) is `python -m cos.terminal_agent`; it selects
 Herdr when installed, then tmux, unless the current process is inside tmux or
 cmux. Choose a backend in a dispatch profile (`cos profiles file.json`) or
 set `COS_BACKEND=tmux` for the adapter process. A profile selects `harness`,
@@ -37,15 +37,15 @@ contain the terminal endpoint and reattach by name after an adapter restart.
 
 The front door starts and stops only its own watcher. Use `--no-watch` when a
 separate `cos watch` is already supervising the home. CLI access remains
-available. The chat agent starts in the Chief of Staff home, outside any
+available. The chat agent starts in the CoS home, outside any
 registered project; it reaches project work only through the commands:
 
 ```sh
 uv run cos --home ~/.cos say 'Fix the parser error in project X'
 uv run cos --home ~/.cos say 'Also cover empty input' --project my-project --channel team --message-id msg-42 --reply-to msg-17
 uv run cos --home ~/.cos status
-uv run cos --home ~/.cos bearings
-uv run cos --home ~/.cos decisions
+uv run cos --home ~/.cos briefing
+uv run cos --home ~/.cos red-box
 uv run cos --home ~/.cos answer '<decision-key>' yes
 uv run cos --home ~/.cos steer '<task-id>' 'Add a regression test'
 uv run cos --home ~/.cos playbooks list
@@ -53,13 +53,59 @@ uv run cos --home ~/.cos playbooks list
 
 `cos status` prints a one-line headline with counts of active workers, queued
 items, and open decisions, or an all-quiet message when each count is zero.
-`cos bearings` starts with the same headline, then lists owner decisions,
-active work, queued items, recent outcomes, second mates, and learned
-playbooks. Queued items show stored holds and dependency statuses, including
-completed dependencies in the archive. The digest does not predict dispatch
-readiness; Jevscript's `routing.ready` decides which items can dispatch.
-Reading bearings does not start a Jevscript run or add a recording or episode
-row.
+`cos briefing`, the daily brief, starts with `Briefing:` and the same headline
+in normal mode, or `Briefing (<mode> mode):` in away or quiet mode,
+then lists the Red box, staff at work, queued items, recent outcomes,
+ministers, and learned playbooks. Queued items show stored holds and dependency
+statuses, including completed dependencies in the archive. The digest does not
+predict dispatch readiness; Jevscript's `routing.ready` decides which items
+can dispatch. Reading the briefing does not start a Jevscript run or add a
+recording or episode row.
+
+## Identity and vocabulary
+
+A home names the CoS and the person it works for in `config.json`:
+
+```sh
+uv run cos --home ~/.cos config set identity.name Abigail          # default: Chief of Staff
+uv run cos --home ~/.cos config set identity.principal Ankeeth     # default: the principal
+```
+
+The name appears in `cos --home <home> --help`, selected-home subcommand help,
+desktop notification titles, worker and reviewer briefs, the agent session's
+instructions, and messages such as "Abigail stopped while handling ...".
+Both identity fields must be nonempty text; `config set` trims surrounding
+whitespace and prints the saved value. An invalid value is rejected before
+`config.json` changes. Operational commands report invalid stored identity
+values. Help reads the home's identity without creating or migrating the home;
+if it is invalid, help uses the defaults without checking unrelated settings.
+
+The product words are the principal (the person, whose standing preferences
+live in `data/principal.md`), ministers (`cos minister`, instances with their
+own home, each holding a portfolio), the staff (the agent adapter, configured
+as `adapters.staff`), the administration (all of it), the briefing
+(`cos briefing`) and the red box (`cos red-box`, the decisions that need the
+principal). The old verbs `cos bearings`, `cos decisions` and `cos mate`, the
+`--scope` flag and the `adapters.crew` config key still work. The Jevscript
+capability names (`crew`, `fleet`) are unchanged, so old recordings replay.
+
+Operational commands migrate an opened home in place. Repeating the migration
+changes nothing. A lone `data/captain.md` becomes `data/principal.md`, and a
+lone `adapters.crew` entry becomes `adapters.staff`. Where both the old and the
+new record exist, neither is changed. Operational CLI commands report pairs
+that differ. If both adapter keys exist, `adapters.staff` is used. Worker
+briefs carry the differing `captain.md` under a "Not yet merged" heading until
+the principal merges it by hand and deletes it.
+
+At creation, a minister copies the parent's current identity, including
+defaults. It also copies any missing projects, dispatch profiles and
+`principal.md`; re-adding a minister can fill missing files but never replaces
+existing child files. If the parent's `captain.md` differs from `principal.md`,
+only a new minister receives that file so its briefs retain the unmerged
+preferences. Re-adding a minister updates its portfolio in the registry and
+charter without copying a later `captain.md`. Migration fills missing minister
+identity fields once without replacing explicit child values; later parent
+name changes do not change the minister's identity.
 
 `JEVSCRIPT_BIN` wins; otherwise the host uses this repository's
 `target/release/jevscript` or `target/debug/jevscript`, then `PATH`. Live Jev runs fetch
@@ -78,7 +124,7 @@ returns its recorded thread and task without creating another request.
 
 The host matches native-thread and reply relations within registered projects.
 An explicit project fixes the scope; a relation found in one project selects
-that project, and matches in several projects prompt the owner to choose one.
+that project, and matches in several projects prompt the principal to choose one.
 An unknown supplied project is rejected. Once selected, the project remains
 fixed through intake clarification and playbook reassessment. A playbook that
 selects an unknown or different project is reassessed through normal intake.
@@ -90,7 +136,7 @@ requires `policy.thread_confidence` (default `0.65`) before continuing. The
 host stores message-to-thread receipts and updates the selected task or active
 worker inbox. A thread with no task keeps its identity while the incoming
 message goes through normal intake. A follow-up stays with the parent when a
-second mate cannot route the selected project with the same repository path
+minister cannot route the selected project with the same repository path
 and delivery mode. The caller sees the thread ID and any task ID in the `say`
 result. This is local message correlation; there is no provider connector or
 Discord API in this example.
@@ -159,7 +205,7 @@ These are nominal counts: a retry can still cost more.
 statement, original request and notes independently. It retains every fit
 at or above `policy.skill_fit` (default `0.7`). A fit between
 `policy.skill_uncertain` (default `0.35`) and that threshold stays uncertain;
-the brief lists its ID and description and tells the worker to ask the owner
+the brief lists its ID and description and tells the worker to ask the principal
 before work on that part of the task. Confident selections remain available.
 The host deduplicates IDs, adds declared dependencies,
 verifies pinned source bytes, and copies each complete Skill directory into the worker's
@@ -172,7 +218,7 @@ worker branch stays landable. The brief tells the worker not to commit those
 copies; if a worker stages them, the host blocks an open pull request from
 merging and asks the worker to correct it. The gate checks the forge-reported
 head commit's tree, so an unpushed local correction cannot clear it. A merged
-pull request remains visible, and the owner is notified if that head contains
+pull request remains visible, and the principal is notified if that head contains
 host Skill files or if cleanup keeps the isolated copy. A
 per-item destination collision holds only that item with retry or dismiss;
 a changed catalog source parks dispatch while other wakes continue. No model
@@ -185,8 +231,8 @@ recording cannot recover a process that crashed during an external effect,
 and a post-restart replay is one-shot. The watcher therefore snapshots one
 request or worker, runs one bounded Jevscript task, persists its `out result`
 and recording, and acknowledges that wake. The next wake reads the resulting
-state as its input. The [`episode`](src/cos/episode.py) runner parks owner
-questions durably and resumes them from the recording after restart. The
+state as its input. The [`episode`](src/cos/episode.py) runner parks the
+principal's questions durably and resumes them from the recording after restart. The
 [`effects`](src/cos/capabilities/effects.py) journal deduplicates completed
 effects when a wake is retried; ambiguous crashes during an effect require
 reconciliation with the terminal or worktree before another attempt.
@@ -209,7 +255,7 @@ The ledger additionally records episode usage and finished tasks for learning.
 The status below means the behavior is implemented in this showcase and
 covered by offline tests. Vendor CLI interactions require separate live checks.
 
-| # | Capability | Chief of Staff implementation | Status |
+| # | Capability | CoS implementation | Status |
 | --- | --- | --- | --- |
 | 1 | Session start and recovery | Home lock, `recover`, parked episode replay, agent-session watcher | Implemented |
 | 2 | Project registry and delivery posture | `Registry`, local-only / direct-PR / no-mistakes, yolo policy | Implemented |
@@ -224,8 +270,8 @@ covered by offline tests. Vendor CLI interactions require separate live checks.
 | 11 | Cleanup safety | Guarded `Fleet.cleanup`; unlanded work stays | Implemented |
 | 12 | Away and quiet modes | Home mode, Jevscript escalation policy and return digest | Implemented |
 | 13 | Preferences and learnings | `Memory`, task ledger, automatic versioned playbooks | Implemented |
-| 14 | Scoped second mates | `Mates`, child home and scoped route | Implemented |
-| 15 | Bearings fleet digest | Read-only host formatter in `bearings.py` | Implemented |
+| 14 | Ministers with portfolios | `Mates`, child home and scoped route | Implemented |
+| 15 | Briefing of the administration | Read-only host formatter in `bearings.py` | Implemented |
 
 Public-mention relay, mail and visual boards are outside this showcase.
 The TypeScript variant and TypeScript agent adapters are separate work.

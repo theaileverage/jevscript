@@ -126,7 +126,7 @@ task on_wake budget calls 50:
       if len(started) == batch_limit or planned + dispatch.reserved_calls(s.skill_plans[item.id]) > 50:
         break
       project = [p for p in s.projects if p.name == item.project][0]
-      outcome = dispatch.start(item, project, s.profiles, s.prefs, s.paths[item.id], s.skill_plans[item.id], s.scouts, s.policy)
+      outcome = dispatch.start(item, project, s.profiles, s.prefs, s.paths[item.id], s.skill_plans[item.id], s.scouts, s.policy, s.identity)
       started = started + [outcome]
       planned = planned + outcome.calls
     result = { started: started, more_ready: len(ready_items) > len(started), planned_calls: planned }

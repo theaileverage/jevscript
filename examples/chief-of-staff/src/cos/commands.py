@@ -1,7 +1,7 @@
-"""The command layer: everything the person can ask of the Chief of Staff.
+"""The command layer: everything the principal can ask of the CoS.
 
 The CLI is one front end over this class; an agent session acting as the
-chat (a Claude Code or Codex session calling the Chief of Staff as a tool) is
+chat (a Claude Code or Codex session calling the CoS as a tool) is
 meant to be another. Every method returns a ``Reply``: a short outcome summary
 for the person (written by the `llm` capability through
 ``escalation.summarize`` when it describes something that happened) plus
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from .state.backlog import Backlog
@@ -133,7 +134,7 @@ class Commands:
         if route == "status":
             return f"{self.status().text} Thread {d.get('thread_id')}."
         if route == "mate":
-            return f"Passed '{title}' to second mate {d.get('mate')} in thread {d.get('thread_id')}"
+            return f"Passed '{title}' to minister {d.get('mate')} in thread {d.get('thread_id')}"
         if route == "declined":
             return f"Dropped '{title}' as you asked"
         return f"Could not place '{title}': {d.get('reason') or 'it stayed unclear'}"
@@ -147,10 +148,23 @@ class Commands:
         text = headline(len(workers), len(queued), len(open_decisions))
         return Reply(text, {"workers": [w["id"] for w in workers], "queued": [i["id"] for i in queued], "decisions": [d["key"] for d in open_decisions]})
 
-    def bearings(self) -> Reply:
+    def briefing(self) -> Reply:
         from .bearings import render
+        from .mates import Mates
+        from .state.workers import Workers
 
-        return Reply(render(self.host))
+        # The briefing reads durable records; starting a Host would also start
+        # Jev (and write fake profiles in offline homes) before any work runs.
+        reader = SimpleNamespace(
+            home=self.home,
+            registry=self.registry,
+            backlog=self.backlog,
+            decisions=self.decisions,
+            workers=Workers(self.home),
+            learning=SimpleNamespace(playbooks=self.playbook_registry),
+        )
+        reader.mates = Mates(reader)
+        return Reply(render(reader))
 
     def decisions_open(self) -> Reply:
         rows = self.decisions.open()

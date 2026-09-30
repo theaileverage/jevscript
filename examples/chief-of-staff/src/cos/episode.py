@@ -2,7 +2,7 @@
 
 Jevscript 0.1 bounds every loop and a run's calls, cannot resume a run that
 crashed in the middle of an effect, and recovers only once after a restart.
-So the Chief of Staff never holds a long-lived run. For each wake the host
+So the CoS never holds a long-lived run. For each wake the host
 builds a snapshot, starts one task of ``cos.jev`` with it as input, records
 the run to a new JSONL file, and returns the task's ``result`` output for the
 host to persist. The wake is acknowledged only after that.
@@ -197,7 +197,7 @@ class Episodes:
                 if kind in ("escalate", "budget", "error"):
                     self.decisions.record(
                         f"{subject}:{kind}",
-                        f"The Chief of Staff stopped while handling {subject}: {problem}",
+                        f"{self.home.identity['name']} stopped while handling {subject}: {problem}",
                         ["retry", "dismiss"],
                         {"recording": meta["recording"]},
                     )

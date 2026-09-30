@@ -1,4 +1,4 @@
-"""A Chief of Staff with control logic in Jevscript and a thin Python host.
+"""A chief of staff (the CoS) with control logic in Jevscript and a thin Python host.
 
 The decisions live in ``jev/`` (intake, routing, supervision, escalation,
 learning, playbooks); this package stores state, binds capabilities, detects
