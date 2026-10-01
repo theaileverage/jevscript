@@ -22,9 +22,8 @@ documentation for the evidence available.
   web app and the [Chief of Staff](examples/chief-of-staff/README.md) example.
   [Conformance evidence](docs/conformance.md) maps tests to acceptance items of
   the specification.
-- **Published.** npm `@theaileverage/jevscript` 0.1.3 and PyPI `jevscript`
-  0.1.2, with the 0.1.3 wheels on the
-  [v0.1.3 release](https://github.com/theaileverage/jevscript/releases/tag/v0.1.3).
+- **Published.** See [Install](#install) for the npm and PyPI versions and
+  [Releases](#releases) for the GitHub release assets.
   The adapters, editor extensions, toolbox and Chief of Staff build from
   source. Current `main` includes newer SDK and Skill work than these packages.
 
