@@ -1,13 +1,62 @@
 # Jevscript
 
-https://jevscript.sh
-
 Jevscript is a small language for agent control loops. A program asks typed
 questions, and by default [Jev](https://docs.typesafe.ai), TypeSafe's System One
 model, answers them with probabilities. The program owns the loop, the thresholds,
 the budgets, and the policy. The host binds terminal agents, people, text
 models, and tools as capabilities at run time, and every run can be recorded
 and replayed with zero model calls.
+
+## Status on 2026-10-01
+
+Jevscript is early software. The language is a 0.1 draft and can change. The
+conformance suites validate language behavior and replay with scripted model
+answers and fake capabilities. Live provider quality, live agent sessions, and
+long-running production use need separate validation; consult each component's
+documentation for the evidence available.
+
+- **Implemented in source.** The compiler, runtime, CLI and
+  [language server](docs/editors.md), the [JavaScript](sdk/js/README.md) and
+  [Python](sdk/python/README.md) SDKs, the VS Code and Zed extensions, the
+  [agent adapters](adapters/README.md), the [toolbox](apps/toolbox/README.md)
+  web app and the [Chief of Staff](examples/chief-of-staff/README.md) example.
+  [Conformance evidence](docs/conformance.md) maps tests to acceptance items of
+  the specification.
+- **Published.** npm `@theaileverage/jevscript` 0.1.3 and PyPI `jevscript`
+  0.1.2, with the 0.1.3 wheels on the
+  [v0.1.3 release](https://github.com/theaileverage/jevscript/releases/tag/v0.1.3).
+  The adapters, editor extensions, toolbox and Chief of Staff build from
+  source. Current `main` includes newer SDK and Skill work than these packages.
+
+### Current focus
+
+The Chief of Staff example. Its latest merged changes select task Skills from
+a recorded shortlist ([#10](https://github.com/theaileverage/jevscript/pull/10)),
+render its briefing from read-only host facts
+([#12](https://github.com/theaileverage/jevscript/pull/12)), and make its
+identity and vocabulary configurable
+([#13](https://github.com/theaileverage/jevscript/pull/13)).
+
+### Planned next
+
+As of 2026-10-01, these steps are planned and not begun:
+
+1. Split the Chief of Staff into a core and separate delivery packs.
+2. Have its host check factual worker signals in code before any model choice
+   in the worker lifecycle.
+3. Add evidence-based learning runs and companion Skills.
+4. Apply the `jevscriptify` Skill to the refactored example.
+5. Build the project homepage and documentation with it.
+
+### Vision
+
+Models answer typed questions, and code decides. Jev returns probabilities
+over answers the program declared in advance. The program owns its loops and
+their bounds, its thresholds, its budgets and every effect, and the host grants
+each capability. A recorded run replays without model calls
+([spec section 10.4](spec/jevscript-language-specification.md#104-replay)).
+The aim is agent control loops that a person can read, bound and audit before
+trusting them with real work.
 
 ```
 program inbox_triage
@@ -146,6 +195,7 @@ spec/        the language specification
 crates/      syntax, IR, compiler, runtime, CLI, language server, conformance checker
 sdk/         the JavaScript and Python host SDKs
 adapters/    agent adapters for terminal coding agents
+apps/        the jevs toolbox, a local web app for drafting and running programs
 editors/     the VS Code and Zed extensions
 skills/      the coding-agent Skill that `jevscript setup` installs
 examples/    example programs and the Chief of Staff host
